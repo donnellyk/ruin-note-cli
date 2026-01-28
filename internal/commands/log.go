@@ -103,7 +103,7 @@ Details here..."
 			}
 
 			// Update tags index
-			if err := updateTagsIndex(vlt, n.Tags); err != nil {
+			if err := vlt.UpdateTagsIndex(n.Tags); err != nil {
 				// Non-fatal: log warning but don't fail
 				fmt.Fprintf(os.Stderr, "warning: failed to update tags index: %v\n", err)
 			}
@@ -196,35 +196,3 @@ func determineFilename(n *note.Note, titleFlag string, useH1 bool) string {
 	return t.Format("2006-01-02T15-04-05")
 }
 
-// updateTagsIndex updates the vault's tags.yml with new tags.
-func updateTagsIndex(vlt *vault.Vault, tags []string) error {
-	if len(tags) == 0 {
-		return nil
-	}
-
-	index, err := vlt.LoadTags()
-	if err != nil {
-		return err
-	}
-
-	// Build a map for quick lookup
-	tagMap := make(map[string]*vault.TagEntry)
-	for i := range index.Tags {
-		tagMap[strings.ToLower(index.Tags[i].Name)] = &index.Tags[i]
-	}
-
-	// Add or increment tags
-	for _, tag := range tags {
-		key := strings.ToLower(tag)
-		if entry, ok := tagMap[key]; ok {
-			entry.Count++
-		} else {
-			index.Tags = append(index.Tags, vault.TagEntry{
-				Name:  tag,
-				Count: 1,
-			})
-		}
-	}
-
-	return vlt.SaveTags(index)
-}

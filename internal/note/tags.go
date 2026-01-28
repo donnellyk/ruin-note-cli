@@ -186,7 +186,7 @@ func deduplicateTags(matches []TagMatch) []string {
 	var result []string
 
 	for _, m := range matches {
-		normalized := normalizeTag(m.Tag)
+		normalized := NormalizeTag(m.Tag)
 		if !seen[normalized] {
 			seen[normalized] = true
 			result = append(result, m.Tag)
@@ -196,8 +196,8 @@ func deduplicateTags(matches []TagMatch) []string {
 	return result
 }
 
-// normalizeTag normalizes a tag for comparison (lowercase).
-func normalizeTag(tag string) string {
+// NormalizeTag normalizes a tag for comparison (lowercase).
+func NormalizeTag(tag string) string {
 	return strings.ToLower(tag)
 }
 
@@ -267,7 +267,7 @@ func ClassifyTags(content string, title string) (globalTags []string, inlineTags
 		// Find which line this tag is on
 		lineIdx := findLineIndex(match.Start, lineOffsets)
 
-		normalized := normalizeTag(match.Tag)
+		normalized := NormalizeTag(match.Tag)
 		isGlobal := false
 
 		// Global if: between title and first content, or after last content
@@ -339,7 +339,7 @@ func MergeTags(globalTags, inlineTags []string) []string {
 	var result []string
 
 	for _, tag := range globalTags {
-		normalized := normalizeTag(tag)
+		normalized := NormalizeTag(tag)
 		if !seen[normalized] {
 			seen[normalized] = true
 			result = append(result, tag)
@@ -347,7 +347,7 @@ func MergeTags(globalTags, inlineTags []string) []string {
 	}
 
 	for _, tag := range inlineTags {
-		normalized := normalizeTag(tag)
+		normalized := NormalizeTag(tag)
 		if !seen[normalized] {
 			seen[normalized] = true
 			result = append(result, tag)

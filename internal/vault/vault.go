@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -187,6 +188,102 @@ func (v *Vault) SaveTags(index *TagsIndex) error {
 	}
 
 	return nil
+}
+
+// UpdateTagsIndex updates the tags index with the given tags.
+// It increments the count for existing tags and adds new ones.
+func (v *Vault) UpdateTagsIndex(tags []string) error {
+	if len(tags) == 0 {
+		return nil
+	}
+
+	index, err := v.LoadTags()
+	if err != nil {
+		return err
+	}
+
+	// Build a map for quick lookup
+	tagMap := make(map[string]*TagEntry)
+	for i := range index.Tags {
+		tagMap[strings.ToLower(index.Tags[i].Name)] = &index.Tags[i]
+	}
+
+	// Add or increment tags
+	for _, tag := range tags {
+		key := strings.ToLower(tag)
+		if entry, ok := tagMap[key]; ok {
+			entry.Count++
+		} else {
+			index.Tags = append(index.Tags, TagEntry{
+				Name:  tag,
+				Count: 1,
+			})
+			tagMap[key] = &index.Tags[len(index.Tags)-1]
+		}
+	}
+
+	return v.SaveTags(index)
+}
+
+// DecrementTagsIndex decrements the count for the given tags.
+// Tags with count <= 0 are removed from the index.
+func (v *Vault) DecrementTagsIndex(tags []string) error {
+	if len(tags) == 0 {
+		return nil
+	}
+
+	index, err := v.LoadTags()
+	if err != nil {
+		return err
+	}
+
+	// Build a map for quick lookup
+	tagMap := make(map[string]int) // index position
+	for i := range index.Tags {
+		tagMap[strings.ToLower(index.Tags[i].Name)] = i
+	}
+
+	// Decrement tags
+	toRemove := make(map[int]bool)
+	for _, tag := range tags {
+		key := strings.ToLower(tag)
+		if idx, ok := tagMap[key]; ok {
+			index.Tags[idx].Count--
+			if index.Tags[idx].Count <= 0 {
+				toRemove[idx] = true
+			}
+		}
+	}
+
+	// Remove tags with count <= 0
+	if len(toRemove) > 0 {
+		newTags := make([]TagEntry, 0, len(index.Tags)-len(toRemove))
+		for i, tag := range index.Tags {
+			if !toRemove[i] {
+				newTags = append(newTags, tag)
+			}
+		}
+		index.Tags = newTags
+	}
+
+	return v.SaveTags(index)
+}
+
+// RebuildTagsIndex rebuilds the entire tags index from all notes.
+// This is useful for the doctor command.
+func (v *Vault) RebuildTagsIndex(tagCounts map[string]int) error {
+	index := &TagsIndex{Tags: make([]TagEntry, 0, len(tagCounts))}
+
+	for tag, count := range tagCounts {
+		if count > 0 {
+			index.Tags = append(index.Tags, TagEntry{
+				Name:  tag,
+				Count: count,
+			})
+		}
+	}
+
+	return v.SaveTags(index)
 }
 
 // QueryEntry represents a saved query.
