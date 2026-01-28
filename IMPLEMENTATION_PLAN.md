@@ -12,11 +12,11 @@
   - [x] 2.3 Tag extraction
 - [x] **Phase 3**: `log` Command
 - [x] **Phase 4**: `search` Command
-- [ ] **Phase 5**: `update` Command
-- [ ] **Phase 6**: Additional Commands
-  - [ ] 6.1 `init` command
-  - [ ] 6.2 `config` command
-  - [ ] 6.3 `doctor` command
+- [x] **Phase 5**: `update` Command
+- [x] **Phase 6**: Additional Commands
+  - [x] 6.1 `init` command
+  - [x] 6.2 `config` command
+  - [x] 6.3 `doctor` command
 - [ ] **Phase 7**: Metadata Management
   - [ ] 7.1 Tags index
   - [ ] 7.2 Saved queries (deferred)

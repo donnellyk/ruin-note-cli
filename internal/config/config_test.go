@@ -8,9 +8,9 @@ import (
 
 func TestLoad_DefaultsWhenNoFile(t *testing.T) {
 	// Use a non-existent config path
-	cfg, err := Load("/nonexistent/path/config")
+	cfg, err := LoadFrom("/nonexistent/path/config")
 	if err != nil {
-		t.Fatalf("Load() error = %v", err)
+		t.Fatalf("LoadFrom() error = %v", err)
 	}
 
 	if cfg.VaultPath != "" {
@@ -28,9 +28,9 @@ func TestLoad_ReadsConfigFile(t *testing.T) {
 		t.Fatalf("failed to write test config: %v", err)
 	}
 
-	cfg, err := Load(configPath)
+	cfg, err := LoadFrom(configPath)
 	if err != nil {
-		t.Fatalf("Load() error = %v", err)
+		t.Fatalf("LoadFrom() error = %v", err)
 	}
 
 	if cfg.VaultPath != "/my/notes" {
@@ -51,9 +51,9 @@ func TestLoad_EnvOverridesFile(t *testing.T) {
 	// Set env var
 	t.Setenv("RUIN_VAULT", "/env/path")
 
-	cfg, err := Load(configPath)
+	cfg, err := LoadFrom(configPath)
 	if err != nil {
-		t.Fatalf("Load() error = %v", err)
+		t.Fatalf("LoadFrom() error = %v", err)
 	}
 
 	if cfg.VaultPath != "/env/path" {
@@ -66,14 +66,14 @@ func TestConfig_Save(t *testing.T) {
 	configPath := filepath.Join(tmpDir, "subdir", "config")
 
 	cfg := &Config{VaultPath: "/my/vault"}
-	if err := cfg.Save(configPath); err != nil {
+	if err := cfg.SaveTo(configPath); err != nil {
 		t.Fatalf("Save() error = %v", err)
 	}
 
 	// Read it back
-	loaded, err := Load(configPath)
+	loaded, err := LoadFrom(configPath)
 	if err != nil {
-		t.Fatalf("Load() error = %v", err)
+		t.Fatalf("LoadFrom() error = %v", err)
 	}
 
 	if loaded.VaultPath != cfg.VaultPath {

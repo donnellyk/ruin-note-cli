@@ -23,12 +23,20 @@ func DefaultConfigPath() (string, error) {
 	return filepath.Join(home, ".config", "ruin"), nil
 }
 
-// Load reads the configuration from the specified path.
+// Load reads the configuration using the default path.
+// Environment variables override file values:
+//   - RUIN_CONFIG: overrides config file path
+//   - RUIN_VAULT: overrides vault_path
+func Load() (*Config, error) {
+	return LoadFrom("")
+}
+
+// LoadFrom reads the configuration from the specified path.
 // If configPath is empty, it uses the default path.
 // Environment variables override file values:
 //   - RUIN_CONFIG: overrides config file path
 //   - RUIN_VAULT: overrides vault_path
-func Load(configPath string) (*Config, error) {
+func LoadFrom(configPath string) (*Config, error) {
 	// Determine config file path
 	if envConfig := os.Getenv("RUIN_CONFIG"); envConfig != "" {
 		configPath = envConfig
@@ -64,9 +72,14 @@ func Load(configPath string) (*Config, error) {
 	return cfg, nil
 }
 
-// Save writes the configuration to the specified path.
+// Save writes the configuration to the default path.
+func Save(c *Config) error {
+	return c.SaveTo("")
+}
+
+// SaveTo writes the configuration to the specified path.
 // If configPath is empty, it uses the default path.
-func (c *Config) Save(configPath string) error {
+func (c *Config) SaveTo(configPath string) error {
 	if configPath == "" {
 		var err error
 		configPath, err = DefaultConfigPath()
