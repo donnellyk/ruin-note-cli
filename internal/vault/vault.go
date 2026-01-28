@@ -288,8 +288,8 @@ func (v *Vault) RebuildTagsIndex(tagCounts map[string]int) error {
 
 // QueryEntry represents a saved query.
 type QueryEntry struct {
-	Name  string `yaml:"name"`
-	Query string `yaml:"query"`
+	Name  string `yaml:"name" json:"name"`
+	Query string `yaml:"query" json:"query"`
 }
 
 // QueriesIndex represents the contents of queries.yml.

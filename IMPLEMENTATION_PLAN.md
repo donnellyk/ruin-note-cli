@@ -17,13 +17,13 @@
   - [x] 6.1 `init` command
   - [x] 6.2 `config` command
   - [x] 6.3 `doctor` command
-- [ ] **Phase 7**: Metadata Management
-  - [ ] 7.1 Tags index
-  - [ ] 7.2 Saved queries (deferred)
-- [ ] **Phase 8**: CLI Polish
-  - [ ] 8.1 Root command flags
-  - [ ] 8.2 Error handling
-  - [ ] 8.3 Testing
+- [x] **Phase 7**: Metadata Management
+  - [x] 7.1 Tags index
+  - [x] 7.2 `query` command
+- [x] **Phase 8**: CLI Polish
+  - [x] 8.1 Root command flags
+  - [x] 8.2 Error handling
+  - [x] 8.3 Testing
 
 ---
 
@@ -426,15 +426,119 @@ tags:
 - Add/remove tags on note save/delete
 - Maintain usage counts
 
-### 7.2 Saved Queries (`internal/metadata/queries.go`)
+### 7.2 `query` Command
+
+```
+ruin query <subcommand> [args] [flags]
+```
+
+#### 7.2.1 `query save` Subcommand
+
+```
+ruin query save <name> <query> [flags]
+```
+
+| Flag | Short | Type | Default | Description |
+|------|-------|------|---------|-------------|
+| `--force` | `-f` | bool | false | Skip confirmation prompt |
+
+**Behavior**:
+1. Run the query against the vault to get matching notes
+2. Display count of matching notes to stderr
+3. If not `--force` and stderr is TTY, prompt for confirmation
+4. Save to `.ruin/queries.yml`
+
+**Confirmation prompt** (stderr):
+```
+Query "#daily && #work" matches 12 notes.
+Save as "daily-work"? [y/N]
+```
+
+**Output**:
+- Default: `Saved query "daily-work"`
+- `--json`: `{"name": "daily-work", "query": "#daily && #work", "matches": 12}`
+
+**Exit codes**:
+- `0`: query saved successfully
+- `1`: error (invalid query, write error, etc.)
+- `3`: user aborted (declined confirmation)
+
+**Non-interactive mode**:
+- If stderr is not a TTY and `--force` not provided, exit with code 3
+- Scripts must use `--force` to save without confirmation
+
+#### 7.2.2 `query list` Subcommand
+
+```
+ruin query list [flags]
+```
+
+**Output**:
+- Default: one query per line (`name: query`)
+- `--json`: `[{"name": "...", "query": "..."}]`
+
+#### 7.2.3 `query delete` Subcommand
+
+```
+ruin query delete <name> [flags]
+```
+
+| Flag | Short | Type | Default | Description |
+|------|-------|------|---------|-------------|
+| `--force` | `-f` | bool | false | Skip confirmation prompt |
+
+**Behavior**: Remove named query from `.ruin/queries.yml`
+
+#### 7.2.4 `query run` Subcommand
+
+```
+ruin query run <name> [flags]
+```
+
+**Behavior**: Look up named query and execute it (equivalent to `ruin search <query>`)
+
+Supports same flags as `search`: `--bulk`, `--first`, `--edit`, `--sort`, `--limit`
+
+#### 7.2.5 Storage Format (`internal/metadata/queries.go`)
+
 ```yaml
 # .ruin/queries.yml
 queries:
   - name: "daily-notes"
     query: "#daily && #2025"
+  - name: "work-meetings"
+    query: "#work && #meeting notes#"
 ```
-- CRUD operations for queries
-- (Implementation deferred - query syntax TBD)
+
+#### 7.2.6 Examples
+
+```bash
+# Save a query (interactive)
+ruin query save daily-work "#daily && #work"
+# Output: Query "#daily && #work" matches 12 notes.
+#         Save as "daily-work"? [y/N] y
+#         Saved query "daily-work"
+
+# Save a query (scripting)
+ruin query save daily-work "#daily && #work" --force
+
+# Save with JSON output
+ruin query save daily-work "#daily && #work" -f --json
+# Output: {"name": "daily-work", "query": "#daily && #work", "matches": 12}
+
+# List saved queries
+ruin query list
+# Output:
+#   daily-work: #daily && #work
+#   meetings: #meeting notes#
+
+# Run a saved query
+ruin query run daily-work
+ruin query run daily-work --bulk > export.txt
+
+# Delete a query
+ruin query delete daily-work
+```
 
 ---
 
@@ -498,7 +602,6 @@ queries:
 
 - **Shell completions**: `ruin completion bash/zsh/fish`
 - **`ruin tags`**: list/manage tags directly
-- **`ruin query`**: saved query management
 - **Extended search syntax**:
   - OR: `||`
   - NOT: `!`

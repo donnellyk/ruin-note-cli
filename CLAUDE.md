@@ -46,6 +46,7 @@ ruin-note-cli/
 │   │   └── tags.go           # Tag extraction logic
 │   ├── commands/
 │   │   ├── log.go            # log command implementation
+│   │   ├── query.go          # query command (save, list, delete, run)
 │   │   ├── search.go         # search command implementation
 │   │   └── update.go         # update command implementation
 │   └── metadata/
