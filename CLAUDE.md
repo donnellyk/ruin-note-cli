@@ -103,6 +103,21 @@ golangci-lint run
 go fmt ./...
 ```
 
+### Test Vault
+Use the helper script to create a test vault for manual testing:
+```bash
+./scripts/test-vault.sh create           # Create at /tmp/ruin-test-vault
+./scripts/test-vault.sh create ~/my-vault # Create at custom path
+./scripts/test-vault.sh clean            # Remove test vault
+./scripts/test-vault.sh reset            # Clean and recreate
+```
+
+Then test commands against it:
+```bash
+./ruin --vault /tmp/ruin-test-vault log
+./ruin --vault /tmp/ruin-test-vault search "#daily"
+```
+
 ## Implementation Status
 
 See `IMPLEMENTATION_PLAN.md` for the detailed implementation plan and progress checklist.
