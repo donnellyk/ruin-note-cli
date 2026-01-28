@@ -3,7 +3,9 @@ package note
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"strings"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
@@ -77,12 +79,12 @@ func parseFrontmatterYAML(yamlContent string) (*Frontmatter, error) {
 		fm.UUID = v
 		delete(raw, "uuid")
 	}
-	if v, ok := raw["created"].(string); ok {
-		fm.Created = v
+	if v := raw["created"]; v != nil {
+		fm.Created = valueToString(v)
 		delete(raw, "created")
 	}
-	if v, ok := raw["updated"].(string); ok {
-		fm.Updated = v
+	if v := raw["updated"]; v != nil {
+		fm.Updated = valueToString(v)
 		delete(raw, "updated")
 	}
 	if v, ok := raw["tags"]; ok {
@@ -98,6 +100,18 @@ func parseFrontmatterYAML(yamlContent string) (*Frontmatter, error) {
 	fm.Extra = raw
 
 	return fm, nil
+}
+
+// valueToString converts various types to string (handles time.Time from YAML)
+func valueToString(v interface{}) string {
+	switch val := v.(type) {
+	case string:
+		return val
+	case time.Time:
+		return val.Format(time.RFC3339)
+	default:
+		return fmt.Sprintf("%v", val)
+	}
 }
 
 func toStringSlice(v interface{}) []string {

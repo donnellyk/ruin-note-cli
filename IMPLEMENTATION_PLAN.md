@@ -6,10 +6,10 @@
   - [x] 1.1 Initialize Go module
   - [x] 1.2 Config system
   - [x] 1.3 Vault initialization
-- [ ] **Phase 2**: Note Data Model
-  - [ ] 2.1 Frontmatter parsing
-  - [ ] 2.2 Note struct
-  - [ ] 2.3 Tag extraction
+- [x] **Phase 2**: Note Data Model
+  - [x] 2.1 Frontmatter parsing
+  - [x] 2.2 Note struct
+  - [x] 2.3 Tag extraction
 - [ ] **Phase 3**: `log` Command
 - [ ] **Phase 4**: `search` Command
 - [ ] **Phase 5**: `update` Command
