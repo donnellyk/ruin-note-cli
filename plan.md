@@ -80,7 +80,7 @@ Wrote the spec, but I need to #followup on the precise elements
 ### Search
 `search` — Searches files for substring or tag
 #### Arguments
-- `--bulk-export or -b` — A flag, command should return a single output with each note preceded by `***<uuid>***`. Frontmatter should be omitted. 
+- `--bulk-export or -b` — A flag, command should return a single output with each note preceded by `%%%% <uuid> %%%%`. Frontmatter should be omitted. 
 - `--first` or `-f` — A flag, command should return the contents of the first item of the search. Frontmatter should be omitted. 
 - `--edit` or `-e` — A flag, Omits return value and opens content in $EDITOR instead. On save, [[/Update]] should be called to save to disk.
 - `--sort` or `-s` — will sort the results, format of sorting argument to be defined later.
@@ -101,7 +101,7 @@ $ ruin search #log && spec
 - `--updated`: The updated text. Required.
 
 #### Other Logic
-- Deleted notes should be removed from disk. A note is considered ‘deleted’ if `***<uuid>***` appears in `original` but not `updated`.
+- Deleted notes should be removed from disk. A note is considered 'deleted' if `%%%% <uuid> %%%%` appears in `original` but not `updated`.
 - Metadata should be updated on save, just like `log`
 ### Doctor
 `doctor` — Scans all markdown files in the vault and corrects/updates frontmatter as needed

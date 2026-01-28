@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"regexp"
 	"sort"
 	"strings"
 
@@ -166,7 +165,7 @@ Examples:
 		},
 	}
 
-	cmd.Flags().BoolVarP(&bulk, "bulk", "b", false, "output content with ***<uuid>*** separators")
+	cmd.Flags().BoolVarP(&bulk, "bulk", "b", false, "output content with %%%% <uuid> %%%% separators")
 	cmd.Flags().BoolVarP(&first, "first", "f", false, "output first match content only")
 	cmd.Flags().BoolVarP(&edit, "edit", "e", false, "open matches in $EDITOR")
 	cmd.Flags().StringVarP(&sortBy, "sort", "s", "", "sort order: field:dir (e.g., created:desc)")
@@ -313,10 +312,10 @@ func parseTermMatcher(term string) (QueryMatcher, error) {
 
 // tagMatcher returns a matcher that checks if a note has the given tag.
 func tagMatcher(tag string) QueryMatcher {
-	tagLower := strings.ToLower(tag)
+	tagNorm := note.NormalizeTag(tag)
 	return func(n *note.Note) bool {
 		for _, t := range n.Tags {
-			if strings.ToLower(t) == tagLower {
+			if note.NormalizeTag(t) == tagNorm {
 				return true
 			}
 		}
@@ -479,20 +478,16 @@ func outputJSON(results []SearchResult) error {
 	return enc.Encode(output)
 }
 
-// outputBulk outputs results in bulk format with ***<uuid>*** separators.
+// outputBulk outputs results in bulk format with %%%% <uuid> %%%% separators.
 func outputBulk(results []SearchResult) error {
+	entries := make([]note.BulkEntry, len(results))
 	for i, r := range results {
-		if i > 0 {
-			fmt.Println()
-		}
-		fmt.Printf("***%s***\n", r.UUID)
-		// Output content without frontmatter
-		fmt.Print(r.note.Content)
-		if !strings.HasSuffix(r.note.Content, "\n") {
-			fmt.Println()
+		entries[i] = note.BulkEntry{
+			UUID:    r.UUID,
+			Content: r.note.Content,
 		}
 	}
-	return nil
+	return note.FormatBulk(entries, os.Stdout)
 }
 
 // outputFirst outputs the first result's content.
@@ -524,16 +519,18 @@ func handleEdit(vlt *vault.Vault, results []SearchResult) error {
 	defer os.Remove(tmpPath)
 
 	// Write original content
-	var original strings.Builder
+	entries := make([]note.BulkEntry, len(results))
 	for i, r := range results {
-		if i > 0 {
-			original.WriteString("\n")
+		entries[i] = note.BulkEntry{
+			UUID:    r.UUID,
+			Content: r.note.Content,
 		}
-		original.WriteString(fmt.Sprintf("***%s***\n", r.UUID))
-		original.WriteString(r.note.Content)
-		if !strings.HasSuffix(r.note.Content, "\n") {
-			original.WriteString("\n")
-		}
+	}
+
+	var original strings.Builder
+	if err := note.FormatBulk(entries, &original); err != nil {
+		tmpFile.Close()
+		return fmt.Errorf("failed to format bulk content: %w", err)
 	}
 
 	if _, err := tmpFile.WriteString(original.String()); err != nil {
@@ -575,8 +572,8 @@ func handleEdit(vlt *vault.Vault, results []SearchResult) error {
 // applyBulkChanges applies changes from bulk edit.
 func applyBulkChanges(vlt *vault.Vault, original, modified string, results []SearchResult) error {
 	// Parse original into uuid -> content map
-	originalMap := parseBulkContent(original)
-	modifiedMap := parseBulkContent(modified)
+	originalMap := note.ParseBulk(original)
+	modifiedMap := note.ParseBulk(modified)
 
 	// Build uuid -> result map
 	resultMap := make(map[string]SearchResult)
@@ -617,7 +614,7 @@ func applyBulkChanges(vlt *vault.Vault, original, modified string, results []Sea
 			}
 
 			// Update tags index
-			updateTagsIndex(vlt, result.note.Tags)
+			vlt.UpdateTagsIndex(result.note.Tags)
 			modifiedCount++
 		}
 	}
@@ -644,34 +641,3 @@ func applyBulkChanges(vlt *vault.Vault, original, modified string, results []Sea
 	return nil
 }
 
-// parseBulkContent parses bulk format content into uuid -> content map.
-var bulkSeparatorPattern = regexp.MustCompile(`\*\*\*([a-zA-Z0-9-]+)\*\*\*\n?`)
-
-func parseBulkContent(content string) map[string]string {
-	result := make(map[string]string)
-
-	matches := bulkSeparatorPattern.FindAllStringSubmatchIndex(content, -1)
-	if len(matches) == 0 {
-		return result
-	}
-
-	for i, match := range matches {
-		uuid := content[match[2]:match[3]]
-		contentStart := match[1]
-
-		var contentEnd int
-		if i+1 < len(matches) {
-			contentEnd = matches[i+1][0]
-		} else {
-			contentEnd = len(content)
-		}
-
-		noteContent := content[contentStart:contentEnd]
-		// Trim trailing newline that we added for separation
-		noteContent = strings.TrimSuffix(noteContent, "\n")
-
-		result[uuid] = noteContent
-	}
-
-	return result
-}

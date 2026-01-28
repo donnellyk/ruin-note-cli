@@ -245,8 +245,8 @@ func TestSearchCmd_BulkOutput(t *testing.T) {
 	buf.ReadFrom(r)
 	output := buf.String()
 
-	if !strings.Contains(output, "***uuid-3***") {
-		t.Error("bulk output should contain ***uuid-3*** separator")
+	if !strings.Contains(output, "%%%% uuid-3 %%%%") {
+		t.Error("bulk output should contain %%%% uuid-3 %%%% separator")
 	}
 
 	if !strings.Contains(output, "Project Alpha") {
@@ -288,7 +288,7 @@ func TestSearchCmd_FirstOutput(t *testing.T) {
 	}
 
 	// Should NOT contain uuid separator
-	if strings.Contains(output, "***") {
+	if strings.Contains(output, "%%%%") {
 		t.Error("first output should not contain separator")
 	}
 }
@@ -494,20 +494,20 @@ func TestSplitTerms(t *testing.T) {
 	}
 }
 
-func TestParseBulkContent(t *testing.T) {
-	content := `***uuid-1***
+func TestParseBulk(t *testing.T) {
+	content := `%%%% uuid-1 %%%%
 # Note 1
 Content 1
 
-***uuid-2***
+%%%% uuid-2 %%%%
 # Note 2
 Content 2
 `
 
-	result := parseBulkContent(content)
+	result := note.ParseBulk(content)
 
 	if len(result) != 2 {
-		t.Errorf("parseBulkContent() returned %d entries, want 2", len(result))
+		t.Errorf("note.ParseBulk() returned %d entries, want 2", len(result))
 	}
 
 	if !strings.Contains(result["uuid-1"], "Note 1") {

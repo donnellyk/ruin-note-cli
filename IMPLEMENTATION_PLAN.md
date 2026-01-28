@@ -188,7 +188,7 @@ ruin search <query> [flags]
 
 | Flag | Short | Type | Default | Description |
 |------|-------|------|---------|-------------|
-| `--bulk` | `-b` | bool | false | Output content with `***<uuid>***` separators |
+| `--bulk` | `-b` | bool | false | Output content with `%%%% <uuid> %%%%` separators |
 | `--first` | `-f` | bool | false | Output first match content only |
 | `--edit` | `-e` | bool | false | Open matches in `$EDITOR`, pipe to update |
 | `--sort` | `-s` | string | — | Sort order: `field:dir` |
@@ -239,7 +239,7 @@ For MVP, support:
 ### 4.5 Output Formats
 - Default: one filepath per line
 - `--json`: `[{"path": "...", "uuid": "...", "title": "...", "tags": [...]}]`
-- `--bulk`: content blocks separated by `***<uuid>***` (no frontmatter)
+- `--bulk`: content blocks separated by `%%%% <uuid> %%%%` (no frontmatter)
 - `--first`: raw content of first match (no frontmatter)
 
 ### 4.6 Exit Codes
