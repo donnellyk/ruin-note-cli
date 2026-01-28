@@ -11,7 +11,7 @@
   - [x] 2.2 Note struct
   - [x] 2.3 Tag extraction
 - [x] **Phase 3**: `log` Command
-- [ ] **Phase 4**: `search` Command
+- [x] **Phase 4**: `search` Command
 - [ ] **Phase 5**: `update` Command
 - [ ] **Phase 6**: Additional Commands
   - [ ] 6.1 `init` command
