@@ -10,7 +10,7 @@
   - [x] 2.1 Frontmatter parsing
   - [x] 2.2 Note struct
   - [x] 2.3 Tag extraction
-- [ ] **Phase 3**: `log` Command
+- [x] **Phase 3**: `log` Command
 - [ ] **Phase 4**: `search` Command
 - [ ] **Phase 5**: `update` Command
 - [ ] **Phase 6**: Additional Commands
