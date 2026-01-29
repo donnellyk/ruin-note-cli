@@ -760,8 +760,8 @@ func handleEdit(vlt *vault.Vault, results []SearchResult) error {
 	// Save original for comparison
 	originalContent := original.String()
 
-	// Open editor
-	cmd := exec.Command(editor, tmpPath)
+	// Open editor - use shell to handle $EDITOR with arguments (e.g., "code --wait")
+	cmd := exec.Command("sh", "-c", editor+" \"$1\"", "sh", tmpPath)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
