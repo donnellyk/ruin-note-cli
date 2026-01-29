@@ -1,0 +1,20 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/kevin/ruin-note-cli/internal/commands
+cpu: Apple M3 Pro
+BenchmarkSearch_TagOnly_100-12                   	    4435	    831380 ns/op	 1121186 B/op	   11442 allocs/op
+BenchmarkSearch_TagOnly_500-12                   	     867	   4140119 ns/op	 5578461 B/op	   57048 allocs/op
+BenchmarkSearch_TagOnly_1000-12                  	     429	   8392801 ns/op	11150320 B/op	  114052 allocs/op
+BenchmarkSearch_TextSearch_100-12                	    3364	   1113562 ns/op	 1490957 B/op	   13469 allocs/op
+BenchmarkSearch_TextSearch_500-12                	     658	   5656352 ns/op	 7472984 B/op	   67190 allocs/op
+BenchmarkSearch_TextSearch_1000-12               	     333	  10761816 ns/op	14644778 B/op	  134289 allocs/op
+BenchmarkSearch_TagOnly_10000-12                 	      34	  98782774 ns/op	112596449 B/op	 1140083 allocs/op
+BenchmarkSearch_TextSearch_10000-12              	      36	  97792457 ns/op	136278527 B/op	 1340506 allocs/op
+BenchmarkSearch_TagOnly_1000_LargeNotes-12       	     406	   8864063 ns/op	11999076 B/op	  114053 allocs/op
+BenchmarkSearch_TextSearch_1000_LargeNotes-12    	     265	  13617137 ns/op	56356727 B/op	  134223 allocs/op
+BenchmarkSearch_TagOnly_1000_Realistic-12        	     416	  10232502 ns/op	11240484 B/op	  112552 allocs/op
+BenchmarkSearch_TextSearch_1000_Realistic-12     	     307	  11809059 ns/op	18618238 B/op	  133411 allocs/op
+BenchmarkSearch_TagOnly_5000_Realistic-12        	      69	  49851992 ns/op	56382505 B/op	  562572 allocs/op
+BenchmarkSearch_TextSearch_5000_Realistic-12     	      74	  45784463 ns/op	87842490 B/op	  665912 allocs/op
+PASS
+ok  	github.com/kevin/ruin-note-cli/internal/commands	74.682s

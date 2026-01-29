@@ -101,35 +101,35 @@ test-vault-clean:
 BENCH_DIR := ./benchmarks
 BENCH_TIME := 3s
 
-# Run benchmarks
+# Run benchmarks (skip tests with -run=^$)
 .PHONY: bench
 bench:
-	$(GOTEST) -bench=. -benchtime=$(BENCH_TIME) -benchmem ./internal/commands/... 2>&1 | grep -v "^goos\|^goarch\|^pkg\|^cpu"
+	$(GOTEST) -run=^$$ -bench=. -benchtime=$(BENCH_TIME) -benchmem ./internal/commands/...
 
 # Run realistic benchmarks only
 .PHONY: bench-realistic
 bench-realistic:
-	$(GOTEST) -bench=Realistic -benchtime=$(BENCH_TIME) -benchmem ./internal/commands/...
+	$(GOTEST) -run=^$$ -bench=Realistic -benchtime=$(BENCH_TIME) -benchmem ./internal/commands/...
 
 # Run benchmarks and save with timestamp
 .PHONY: bench-save
 bench-save:
 	@mkdir -p $(BENCH_DIR)
-	$(GOTEST) -bench=. -benchtime=$(BENCH_TIME) -benchmem ./internal/commands/... > $(BENCH_DIR)/$$(date +%Y-%m-%d-%H%M%S).txt
+	$(GOTEST) -run=^$$ -bench=. -benchtime=$(BENCH_TIME) -benchmem ./internal/commands/... > $(BENCH_DIR)/$$(date +%Y-%m-%d-%H%M%S).txt
 	@echo "Saved to $(BENCH_DIR)/$$(date +%Y-%m-%d-%H%M%S).txt"
 
 # Save current results as baseline
 .PHONY: bench-baseline
 bench-baseline:
 	@mkdir -p $(BENCH_DIR)
-	$(GOTEST) -bench=. -benchtime=$(BENCH_TIME) -benchmem ./internal/commands/... > $(BENCH_DIR)/baseline.txt
+	$(GOTEST) -run=^$$ -bench=. -benchtime=$(BENCH_TIME) -benchmem ./internal/commands/... > $(BENCH_DIR)/baseline.txt
 	@echo "Baseline saved to $(BENCH_DIR)/baseline.txt"
 
 # Compare to baseline (requires benchstat: go install golang.org/x/perf/cmd/benchstat@latest)
 .PHONY: bench-compare
 bench-compare:
 	@if [ ! -f $(BENCH_DIR)/baseline.txt ]; then echo "No baseline. Run 'make bench-baseline' first."; exit 1; fi
-	@$(GOTEST) -bench=. -benchtime=$(BENCH_TIME) -benchmem ./internal/commands/... > $(BENCH_DIR)/current.txt
+	@$(GOTEST) -run=^$$ -bench=. -benchtime=$(BENCH_TIME) -benchmem ./internal/commands/... > $(BENCH_DIR)/current.txt
 	@echo "Comparing baseline vs current:"
 	@benchstat $(BENCH_DIR)/baseline.txt $(BENCH_DIR)/current.txt || echo "Install benchstat: go install golang.org/x/perf/cmd/benchstat@latest"
 
