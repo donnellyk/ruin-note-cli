@@ -679,3 +679,61 @@ func TestParseQuery_WithFilters(t *testing.T) {
 		})
 	}
 }
+
+func TestIsTagOnlyQuery(t *testing.T) {
+	tests := []struct {
+		query string
+		want  bool
+	}{
+		{"#daily", true},
+		{"#daily #work", true},
+		{"#daily && #work", true},
+		{"#spaced tag#", true},
+		{"#daily && #spaced tag#", true},
+		{"hello", false},
+		{"#daily hello", false},
+		{"#daily && created:today", false},
+		{"title:meeting", false},
+		{"", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.query, func(t *testing.T) {
+			if got := isTagOnlyQuery(tt.query); got != tt.want {
+				t.Errorf("isTagOnlyQuery(%q) = %v, want %v", tt.query, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestSearchOptions_EarlyTermination(t *testing.T) {
+	vlt := setupTestVault(t)
+
+	// Test that early termination works with limit and no sorting
+	jsonOut := false
+	cmd := NewSearchCmd(func() *vault.Vault { return vlt }, &jsonOut)
+
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	// Search with limit, should return exactly 1 result
+	cmd.SetArgs([]string{"--limit", "1", "#daily"})
+	err := cmd.Execute()
+
+	w.Close()
+	os.Stdout = oldStdout
+
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+
+	var buf bytes.Buffer
+	buf.ReadFrom(r)
+	output := buf.String()
+
+	lines := strings.Split(strings.TrimSpace(output), "\n")
+	if len(lines) != 1 {
+		t.Errorf("with limit=1, found %d results, want 1", len(lines))
+	}
+}

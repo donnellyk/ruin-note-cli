@@ -1,6 +1,8 @@
 package note
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -226,5 +228,70 @@ func TestFrontmatter_Merge(t *testing.T) {
 
 	if fm1.Extra["key2"] != "val2" {
 		t.Error("Extra[key2] should be merged")
+	}
+}
+
+func TestParseFrontmatterOnly(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	tests := []struct {
+		name     string
+		content  string
+		wantUUID string
+		wantTags []string
+	}{
+		{
+			name: "with frontmatter",
+			content: `---
+uuid: test-uuid-123
+tags:
+  - "#daily"
+  - "#work"
+created: 2025-01-28T10:00:00-05:00
+---
+# Note Title
+
+Content here that should not be parsed.`,
+			wantUUID: "test-uuid-123",
+			wantTags: []string{"#daily", "#work"},
+		},
+		{
+			name:     "no frontmatter",
+			content:  "# Just a note\n\nNo frontmatter here.",
+			wantUUID: "",
+			wantTags: nil,
+		},
+		{
+			name: "unclosed frontmatter",
+			content: `---
+uuid: orphan
+# Missing closing delimiter
+Content`,
+			wantUUID: "",
+			wantTags: nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Write test file
+			path := filepath.Join(tmpDir, tt.name+".md")
+			if err := os.WriteFile(path, []byte(tt.content), 0644); err != nil {
+				t.Fatalf("failed to write test file: %v", err)
+			}
+
+			fm, err := ParseFrontmatterOnly(path)
+			if err != nil {
+				t.Fatalf("ParseFrontmatterOnly() error = %v", err)
+			}
+
+			if fm.UUID != tt.wantUUID {
+				t.Errorf("UUID = %q, want %q", fm.UUID, tt.wantUUID)
+			}
+
+			if len(fm.Tags) != len(tt.wantTags) {
+				t.Errorf("Tags = %v, want %v", fm.Tags, tt.wantTags)
+			}
+		})
 	}
 }

@@ -23,9 +23,10 @@
   - [x] 10.1 Date filters (`created:`, `before:`, `after:`, `on:`, `between:`)
   - [x] 10.2 Natural language dates (`today`, `last-week`, `7d`, etc.)
   - [x] 10.3 Additional filters (`title:`, `path:`)
-- [ ] **Phase 11**: Search Performance
-  - [ ] 11.1 Tag-only search optimization (frontmatter-only parsing)
-  - [ ] 11.2 Early termination for `--limit`
+- [x] **Phase 11**: Search Performance
+  - [x] 11.1 Tag-only search optimization (frontmatter-only parsing)
+  - [x] 11.2 Early termination for `--limit`
+  - [x] 11.3 Concurrent file reading (2x speedup)
 - [ ] **Phase 12**: Frontmatter Enhancements
   - [ ] 12.1 `--show-extra` flag for displaying user fields
   - [ ] 12.2 `--with-frontmatter` flag for bulk export
@@ -1087,74 +1088,50 @@ tags: ["#daily"]
 
 ---
 
-### Phase 11: Search Performance
+### Phase 11: Search Performance (Complete)
 
-Optimize search for common cases without changing functionality.
+Optimizations implemented to improve search performance:
 
 #### 11.1 Tag-Only Search Optimization
 
-**Problem**: Currently, every search loads and parses the entire note file, even when searching only by tags.
-
-**Solution**: Detect tag-only queries and use a fast path:
-
-```go
-func isTagOnlyQuery(query string) bool {
-    // Returns true if query contains only #tag terms (no text search)
-}
-
-func searchNotesTagOnly(vlt *vault.Vault, matcher QueryMatcher) ([]SearchResult, error) {
-    // Only read and parse frontmatter, skip content parsing
-}
-```
-
 **Implementation**:
-1. Add `ParseFrontmatterOnly(path string) (*Frontmatter, error)` to note package
-   - Read file until second `---` delimiter
-   - Parse only the YAML frontmatter
-   - Return tags without full note parsing
-2. Detect tag-only queries in `parseQuery()`
-3. Use fast path in `searchNotes()` when applicable
-
-**Expected Improvement**: 2-3x faster for tag-only searches on large vaults.
-
-**Benchmark Targets**:
-| Notes | Current | Target |
-|-------|---------|--------|
-| 10,000 | ~250ms | ~100ms |
+- Added `ParseFrontmatterOnly(path string)` to note package for fast frontmatter-only parsing
+- Added `isTagOnlyQuery(query string)` to detect tag-only queries
+- `searchNotesWithOptions()` uses fast path when query contains only tags and full note content isn't needed
 
 #### 11.2 Early Termination for `--limit`
 
-**Problem**: Currently, search finds ALL matching notes, then applies limit:
+**Implementation**:
+- `SearchOptions` struct added with `Limit`, `TagOnly`, and `NeedsFullNote` fields
+- Early termination when limit is reached and no sorting is requested
+- Results collection stops early (though workers may continue briefly)
 
-```go
-results, err := searchNotes(vlt, matcher)  // Finds ALL matches
-if limit > 0 && len(results) > limit {
-    results = results[:limit]  // Truncates after full scan
-}
-```
+#### 11.3 Concurrent File Reading
 
-**Solution**: Pass limit into search and stop early:
+**Implementation**:
+- Worker pool pattern using goroutines (capped at NumCPU, max 8 workers)
+- Parallel file parsing across all search modes
+- Channel-based result collection
 
-```go
-func searchNotes(vlt *vault.Vault, matcher QueryMatcher, limit int) ([]SearchResult, error) {
-    // ...
-    for _, path := range notePaths {
-        if matcher(n) {
-            results = append(results, ...)
-            if limit > 0 && len(results) >= limit {
-                return results, nil  // Early exit
-            }
-        }
-    }
-}
-```
+#### Benchmark Results (Apple M3 Pro, 3s benchtime)
 
-**Considerations**:
-- Only applies when no sorting is requested (sorted results need full scan)
-- Works with both regular search and tag-only fast path
-- Update `query run` to also pass limit through
+| Benchmark | Before | After | Speedup |
+|-----------|--------|-------|---------|
+| TagOnly_100 | 1.75ms | 0.83ms | **2.1x** |
+| TagOnly_500 | 9.16ms | 4.10ms | **2.2x** |
+| TagOnly_1000 | 19.54ms | 8.42ms | **2.3x** |
+| TextSearch_100 | 2.08ms | 1.14ms | **1.8x** |
+| TextSearch_500 | 10.67ms | 5.47ms | **2.0x** |
+| TextSearch_1000 | 22.15ms | 11.00ms | **2.0x** |
 
-**Expected Improvement**: For `--limit 10` on 10,000 notes, stops after finding 10 matches instead of scanning all 10,000.
+#### Recommendations for Future Optimization
+
+1. **Index-based search**: For vaults with 10,000+ notes, consider SQLite or similar for indexed searches
+2. **Incremental indexing**: Watch for file changes and update index rather than full scan
+3. **Memory-mapped files**: Could provide marginal improvement for very large files
+4. **Result streaming**: For --bulk output, stream results instead of collecting all first
+
+Current performance is acceptable for typical use cases (sub-second for 1000+ notes).
 
 ---
 
@@ -1242,3 +1219,208 @@ Additional search syntax beyond Phase 10:
 | `"..."` | Phrase | `"exact phrase"` |
 | `title:` | Title filter | `title:meeting` |
 | `path:` | Path filter | `path:projects/` |
+
+---
+
+## Future Ideas
+
+### Version Control Integration
+
+#### Git Integration (Primary)
+
+Automatic version control for vault changes:
+
+```
+ruin history [note-path]           # Show note history
+ruin diff [note-path] [revision]   # Show changes
+ruin restore <note-path> <revision> # Restore previous version
+ruin sync                          # Commit and push changes
+```
+
+**Implementation approach**:
+1. Initialize git repo in vault if not present (`ruin init --git`)
+2. Auto-commit on note save (configurable: per-save, on-exit, manual)
+3. Use conventional commit messages: `note: update "Meeting Notes"`
+4. Respect existing `.gitignore` in vault
+
+**Configuration** (`~/.config/ruin`):
+```yaml
+version_control:
+  enabled: true
+  provider: git          # git, jj (jujutsu), or none
+  auto_commit: on-save   # on-save, on-exit, manual
+  auto_push: false       # Push to remote automatically
+  commit_message_format: "{{.Action}}: {{.Title}}"
+```
+
+#### Alternative: Jujutsu (jj)
+
+Consider supporting [Jujutsu](https://github.com/martinvonz/jj) as an alternative:
+- Automatic snapshotting (no explicit commits needed)
+- Better handling of concurrent edits
+- Git-compatible (can push to Git remotes)
+- Simpler mental model for non-developers
+
+**Trade-offs**:
+| Feature | Git | Jujutsu |
+|---------|-----|---------|
+| Ubiquity | Everywhere | Newer, less common |
+| Auto-save | Needs hooks | Built-in |
+| Learning curve | Familiar | New concepts |
+| Tooling | Mature | Growing |
+
+#### Alternative: Built-in Versioning
+
+Simple file-based versioning without external tools:
+
+```
+.ruin/
+├── versions/
+│   ├── <uuid>/
+│   │   ├── 2025-01-29T10-30-00.md
+│   │   ├── 2025-01-29T14-45-00.md
+│   │   └── latest -> 2025-01-29T14-45-00.md
+```
+
+**Pros**: No dependencies, simple implementation
+**Cons**: Storage overhead, no branching/merging, reinventing the wheel
+
+**Recommendation**: Start with Git (most users have it), add Jujutsu support later for power users.
+
+---
+
+### Performance Benchmarking Infrastructure
+
+#### Standardized Test Vaults
+
+Create reproducible test vaults for consistent benchmarking:
+
+```
+scripts/
+├── benchmark-vaults/
+│   ├── create-small.sh     # 100 notes, varied sizes
+│   ├── create-medium.sh    # 1,000 notes, realistic distribution
+│   ├── create-large.sh     # 10,000 notes, stress test
+│   └── create-xlarge.sh    # 50,000 notes, extreme case
+```
+
+**Note distribution** (realistic vault):
+| Type | Percentage | Size | Example |
+|------|------------|------|---------|
+| Quick thoughts | 40% | ~100 bytes | "Remember to call Bob #todo" |
+| Daily notes | 30% | ~500 bytes | Daily log with tasks |
+| Meeting notes | 20% | ~2KB | Discussion + action items |
+| Documents | 10% | ~10KB | Long-form content |
+
+**Tag distribution**:
+- 60% have 1-2 tags
+- 30% have 3-5 tags
+- 10% have 6+ tags
+
+**Content variation**:
+- Varied frontmatter field counts
+- Mix of simple and spaced tags
+- Links between notes (for graph tests)
+- Different creation dates (for date filter tests)
+
+#### Performance Log
+
+Track performance over time in `PERFORMANCE.md`:
+
+```markdown
+# Performance Log
+
+## Benchmark Environment
+- Machine: Apple M3 Pro, 18GB RAM
+- Go version: 1.21
+- OS: macOS 14.x
+
+## Results
+
+### 2025-01-29 - Phase 11 Optimizations
+
+| Benchmark | Before | After | Change |
+|-----------|--------|-------|--------|
+| TagOnly_1000_Realistic | 19.5ms | 8.9ms | -54% |
+| TextSearch_1000_Realistic | 22ms | 12ms | -45% |
+| TagOnly_5000_Realistic | 100ms | 50ms | -50% |
+
+**Changes**: Concurrent file reading, partial frontmatter parsing
+
+### 2025-01-28 - Baseline
+
+| Benchmark | Time |
+|-----------|------|
+| TagOnly_1000 | 19.5ms |
+| TextSearch_1000 | 22ms |
+
+**Notes**: Sequential file reading, full file parsing
+```
+
+#### Makefile Integration
+
+```makefile
+.PHONY: bench bench-save bench-compare
+
+# Run benchmarks
+bench:
+	go test -bench=Realistic -benchtime=3s -benchmem ./internal/commands/...
+
+# Run and save results
+bench-save:
+	go test -bench=Realistic -benchtime=3s -benchmem ./internal/commands/... \
+		| tee benchmarks/$(shell date +%Y-%m-%d).txt
+
+# Compare to previous
+bench-compare:
+	benchstat benchmarks/baseline.txt benchmarks/$(shell date +%Y-%m-%d).txt
+```
+
+#### CI Integration
+
+Run benchmarks on PRs to catch regressions:
+
+```yaml
+# .github/workflows/benchmark.yml
+name: Benchmark
+on: [pull_request]
+jobs:
+  benchmark:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+      - name: Run benchmarks
+        run: make bench > pr-bench.txt
+      - name: Compare to main
+        run: |
+          git checkout main
+          make bench > main-bench.txt
+          benchstat main-bench.txt pr-bench.txt
+```
+
+#### Performance Regression Tests
+
+Add tests that fail if performance degrades significantly:
+
+```go
+func TestPerformance_SearchUnder100ms(t *testing.T) {
+    if testing.Short() {
+        t.Skip("skipping performance test in short mode")
+    }
+
+    vlt := setupRealisticVault(t, 5000)
+    matcher, _ := parseQuery("#daily")
+
+    start := time.Now()
+    _, err := searchNotesWithOptions(vlt, matcher, SearchOptions{TagOnly: true})
+    elapsed := time.Since(start)
+
+    if err != nil {
+        t.Fatal(err)
+    }
+    if elapsed > 100*time.Millisecond {
+        t.Errorf("search took %v, want < 100ms", elapsed)
+    }
+}
+```

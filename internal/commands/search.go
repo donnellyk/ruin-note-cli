@@ -5,8 +5,11 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"runtime"
 	"sort"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/kevin/ruin-note-cli/internal/dateparse"
 	"github.com/kevin/ruin-note-cli/internal/note"
@@ -140,20 +143,36 @@ Other filters:
 				}
 			}
 
+			// Determine if we need full note content
+			needsFullNote := bulk || first || edit
+
+			// Determine search options for optimization
+			opts := SearchOptions{
+				TagOnly:       isTagOnlyQuery(query),
+				NeedsFullNote: needsFullNote,
+			}
+
+			// Only enable early termination if:
+			// 1. Limit is set
+			// 2. No sorting is requested (sorting requires full results)
+			if limit > 0 && len(sortFields) == 0 {
+				opts.Limit = limit
+			}
+
 			// Find matching notes
-			results, err := searchNotes(vlt, matcher)
+			results, err := searchNotesWithOptions(vlt, matcher, opts)
 			if err != nil {
 				return fmt.Errorf("search failed: %w", err)
 			}
 
-			// Sort results
+			// Sort results (if sorting requested)
 			if len(sortFields) > 0 {
 				sortResults(results, sortFields)
-			}
 
-			// Apply limit
-			if limit > 0 && len(results) > limit {
-				results = results[:limit]
+				// Apply limit after sorting (early termination wasn't possible)
+				if limit > 0 && len(results) > limit {
+					results = results[:limit]
+				}
 			}
 
 			// No results
@@ -520,34 +539,191 @@ func parseSort(s string) ([]SortField, error) {
 	return fields, nil
 }
 
+// SearchOptions controls search behavior for performance optimizations.
+type SearchOptions struct {
+	// Limit is the maximum number of results to return (0 = unlimited).
+	// When set and no sorting is requested, enables early termination.
+	Limit int
+
+	// TagOnly indicates the query only contains tag matchers.
+	// Enables fast path using frontmatter-only parsing.
+	TagOnly bool
+
+	// NeedsFullNote indicates whether full note content is needed for output.
+	// When false and TagOnly is true, we can use the fast path.
+	NeedsFullNote bool
+}
+
 // searchNotes finds all notes matching the query.
 func searchNotes(vlt *vault.Vault, matcher QueryMatcher) ([]SearchResult, error) {
+	return searchNotesWithOptions(vlt, matcher, SearchOptions{})
+}
+
+// searchNotesWithOptions finds notes with performance optimizations.
+// Uses concurrent file reading for improved performance.
+func searchNotesWithOptions(vlt *vault.Vault, matcher QueryMatcher, opts SearchOptions) ([]SearchResult, error) {
 	notePaths, err := vlt.ListNotes()
 	if err != nil {
 		return nil, err
 	}
 
-	var results []SearchResult
+	numWorkers := runtime.NumCPU()
+	if numWorkers > 8 {
+		numWorkers = 8 // Cap at 8 workers to avoid excessive parallelism
+	}
+	if len(notePaths) < numWorkers {
+		numWorkers = len(notePaths)
+	}
+	if numWorkers < 1 {
+		numWorkers = 1
+	}
 
+	// Channel for paths to process
+	pathsChan := make(chan string, len(notePaths))
 	for _, path := range notePaths {
-		n, err := note.Load(path)
-		if err != nil {
-			// Skip notes that can't be parsed
-			continue
-		}
+		pathsChan <- path
+	}
+	close(pathsChan)
 
-		if matcher(n) {
-			results = append(results, SearchResult{
-				Path:  path,
-				UUID:  n.UUID,
-				Title: n.Title,
-				Tags:  n.Tags,
-				note:  n,
-			})
+	// Channel for results
+	resultsChan := make(chan SearchResult, len(notePaths))
+
+	// Worker function
+	var wg sync.WaitGroup
+	processNote := func() {
+		defer wg.Done()
+		for path := range pathsChan {
+			var result *SearchResult
+
+			if opts.TagOnly && !opts.NeedsFullNote {
+				// Fast path: frontmatter-only parsing
+				fm, err := note.ParseFrontmatterOnly(path)
+				if err != nil {
+					continue
+				}
+
+				n := &note.Note{
+					UUID:     fm.UUID,
+					Tags:     fm.Tags,
+					FilePath: path,
+				}
+
+				if fm.Created != "" {
+					if t, err := parseTime(fm.Created); err == nil {
+						n.Created = t
+					}
+				}
+				if fm.Updated != "" {
+					if t, err := parseTime(fm.Updated); err == nil {
+						n.Updated = t
+					}
+				}
+
+				if matcher(n) {
+					result = &SearchResult{
+						Path: path,
+						UUID: n.UUID,
+						Tags: n.Tags,
+						note: n,
+					}
+				}
+			} else {
+				// Standard path: full note parsing
+				n, err := note.Load(path)
+				if err != nil {
+					continue
+				}
+
+				if matcher(n) {
+					result = &SearchResult{
+						Path:  path,
+						UUID:  n.UUID,
+						Title: n.Title,
+						Tags:  n.Tags,
+						note:  n,
+					}
+				}
+			}
+
+			if result != nil {
+				resultsChan <- *result
+			}
 		}
 	}
 
+	// Start workers
+	wg.Add(numWorkers)
+	for i := 0; i < numWorkers; i++ {
+		go processNote()
+	}
+
+	// Close results channel when all workers are done
+	go func() {
+		wg.Wait()
+		close(resultsChan)
+	}()
+
+	// Collect results
+	var results []SearchResult
+	for result := range resultsChan {
+		results = append(results, result)
+
+		// Early termination (only effective when limit is set and no sorting)
+		if opts.Limit > 0 && len(results) >= opts.Limit {
+			// Note: We can't truly stop workers early with buffered channels,
+			// but we stop collecting more results than needed
+			break
+		}
+	}
+
+	// If we broke early due to limit, drain remaining results
+	// This ensures goroutines can finish
+	if opts.Limit > 0 && len(results) >= opts.Limit {
+		go func() {
+			for range resultsChan {
+				// Drain
+			}
+		}()
+	}
+
 	return results, nil
+}
+
+// parseTime parses a timestamp string.
+func parseTime(s string) (time.Time, error) {
+	return time.Parse(note.TimeFormat, s)
+}
+
+// isTagOnlyQuery returns true if the query contains only tag matchers.
+// This allows us to use the fast path with frontmatter-only parsing.
+func isTagOnlyQuery(query string) bool {
+	query = strings.TrimSpace(query)
+	if query == "" {
+		return false
+	}
+
+	// Split by && first
+	parts := strings.Split(query, "&&")
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+
+		// Split by space for implicit AND
+		terms := splitTerms(part)
+		for _, term := range terms {
+			term = strings.TrimSpace(term)
+			if term == "" {
+				continue
+			}
+			// Only tags are allowed for tag-only optimization
+			if !strings.HasPrefix(term, "#") {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 // sortResults sorts the results by the given fields.
