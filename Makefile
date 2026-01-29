@@ -97,6 +97,61 @@ test-vault:
 test-vault-clean:
 	./scripts/test-vault.sh clean
 
+# Benchmarking
+BENCH_DIR := ./benchmarks
+BENCH_TIME := 3s
+
+# Run benchmarks
+.PHONY: bench
+bench:
+	$(GOTEST) -bench=. -benchtime=$(BENCH_TIME) -benchmem ./internal/commands/... 2>&1 | grep -v "^goos\|^goarch\|^pkg\|^cpu"
+
+# Run realistic benchmarks only
+.PHONY: bench-realistic
+bench-realistic:
+	$(GOTEST) -bench=Realistic -benchtime=$(BENCH_TIME) -benchmem ./internal/commands/...
+
+# Run benchmarks and save with timestamp
+.PHONY: bench-save
+bench-save:
+	@mkdir -p $(BENCH_DIR)
+	$(GOTEST) -bench=. -benchtime=$(BENCH_TIME) -benchmem ./internal/commands/... > $(BENCH_DIR)/$$(date +%Y-%m-%d-%H%M%S).txt
+	@echo "Saved to $(BENCH_DIR)/$$(date +%Y-%m-%d-%H%M%S).txt"
+
+# Save current results as baseline
+.PHONY: bench-baseline
+bench-baseline:
+	@mkdir -p $(BENCH_DIR)
+	$(GOTEST) -bench=. -benchtime=$(BENCH_TIME) -benchmem ./internal/commands/... > $(BENCH_DIR)/baseline.txt
+	@echo "Baseline saved to $(BENCH_DIR)/baseline.txt"
+
+# Compare to baseline (requires benchstat: go install golang.org/x/perf/cmd/benchstat@latest)
+.PHONY: bench-compare
+bench-compare:
+	@if [ ! -f $(BENCH_DIR)/baseline.txt ]; then echo "No baseline. Run 'make bench-baseline' first."; exit 1; fi
+	@$(GOTEST) -bench=. -benchtime=$(BENCH_TIME) -benchmem ./internal/commands/... > $(BENCH_DIR)/current.txt
+	@echo "Comparing baseline vs current:"
+	@benchstat $(BENCH_DIR)/baseline.txt $(BENCH_DIR)/current.txt || echo "Install benchstat: go install golang.org/x/perf/cmd/benchstat@latest"
+
+# Create benchmark vaults
+.PHONY: bench-vault-small bench-vault-medium bench-vault-large
+bench-vault-small:
+	./scripts/create-benchmark-vault.sh small /tmp/ruin-bench-small
+
+bench-vault-medium:
+	./scripts/create-benchmark-vault.sh medium /tmp/ruin-bench-medium
+
+bench-vault-large:
+	./scripts/create-benchmark-vault.sh large /tmp/ruin-bench-large
+
+# Run search benchmark against real vault
+.PHONY: bench-vault
+bench-vault:
+	@if [ ! -d /tmp/ruin-bench-medium ]; then $(MAKE) bench-vault-medium; fi
+	@echo "Benchmarking against /tmp/ruin-bench-medium..."
+	@time ./$(BINARY_NAME) --vault /tmp/ruin-bench-medium search "#daily" > /dev/null
+	@time ./$(BINARY_NAME) --vault /tmp/ruin-bench-medium search "lorem" > /dev/null
+
 # Build for multiple platforms
 .PHONY: build-all
 build-all: clean
@@ -130,6 +185,15 @@ help:
 	@echo "    vet          Run go vet"
 	@echo "    lint         Run golangci-lint"
 	@echo "    check        Run fmt-check, vet, and test"
+	@echo ""
+	@echo "  Benchmarking:"
+	@echo "    bench            Run all benchmarks"
+	@echo "    bench-realistic  Run realistic vault benchmarks"
+	@echo "    bench-save       Run benchmarks and save with timestamp"
+	@echo "    bench-baseline   Save current results as baseline"
+	@echo "    bench-compare    Compare current to baseline (needs benchstat)"
+	@echo "    bench-vault-*    Create benchmark vault (small/medium/large)"
+	@echo "    bench-vault      Run search on benchmark vault"
 	@echo ""
 	@echo "  Test Vault:"
 	@echo "    test-vault       Create/reset test vault at /tmp/ruin-test-vault"
