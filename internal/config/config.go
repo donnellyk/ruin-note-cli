@@ -73,13 +73,20 @@ func LoadFrom(configPath string) (*Config, error) {
 }
 
 // Save writes the configuration to the default path.
+// Respects RUIN_CONFIG environment variable.
 func Save(c *Config) error {
 	return c.SaveTo("")
 }
 
 // SaveTo writes the configuration to the specified path.
-// If configPath is empty, it uses the default path.
+// If configPath is empty, uses RUIN_CONFIG env var or default path.
 func (c *Config) SaveTo(configPath string) error {
+	// Check environment variable first
+	if configPath == "" {
+		if envConfig := os.Getenv("RUIN_CONFIG"); envConfig != "" {
+			configPath = envConfig
+		}
+	}
 	if configPath == "" {
 		var err error
 		configPath, err = DefaultConfigPath()
