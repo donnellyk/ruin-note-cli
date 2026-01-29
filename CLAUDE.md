@@ -15,18 +15,23 @@ go mod init github.com/kevin/ruin-note-cli
 
 ### Build & Run
 ```bash
-go build -o ruin ./cmd/ruin
+make build    # or: go build -o ruin ./cmd/ruin
 ./ruin --help
 ```
 
 ### Run Tests
 ```bash
-go test ./...
+make test     # or: go test ./...
 ```
 
 ### Install Locally
 ```bash
-go install ./cmd/ruin
+make install  # or: go install ./cmd/ruin
+```
+
+### All Make Targets
+```bash
+make help     # Show all available targets
 ```
 
 ## Project Structure
@@ -39,23 +44,27 @@ ruin-note-cli/
 │   ├── config/
 │   │   └── config.go         # Config file handling (~/.config/ruin)
 │   ├── vault/
-│   │   └── vault.go          # Vault directory operations
+│   │   └── vault.go          # Vault operations + tags/queries index
 │   ├── note/
 │   │   ├── note.go           # Note struct and operations
 │   │   ├── frontmatter.go    # YAML frontmatter parsing/writing
+│   │   ├── bulk.go           # Bulk export/import format
 │   │   └── tags.go           # Tag extraction logic
-│   ├── commands/
-│   │   ├── log.go            # log command implementation
-│   │   ├── query.go          # query command (save, list, delete, run)
-│   │   ├── search.go         # search command implementation
-│   │   └── update.go         # update command implementation
-│   └── metadata/
-│       ├── tags.go           # .ruin/tags.yml management
-│       └── queries.go        # .ruin/queries.yml management
+│   └── commands/
+│       ├── log.go            # log command implementation
+│       ├── search.go         # search command implementation
+│       ├── update.go         # update command implementation
+│       ├── query.go          # query command (save, list, delete, run)
+│       ├── init.go           # init command implementation
+│       ├── config.go         # config command implementation
+│       └── doctor.go         # doctor command implementation
+├── scripts/
+│   └── test-vault.sh         # Test vault helper script
 ├── go.mod
 ├── go.sum
+├── Makefile
 ├── CLAUDE.md
-└── plan.md
+└── IMPLEMENTATION_PLAN.md
 ```
 
 ## Key Dependencies
