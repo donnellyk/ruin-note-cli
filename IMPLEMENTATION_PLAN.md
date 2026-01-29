@@ -2,28 +2,55 @@
 
 ## Progress Checklist
 
-- [x] **Phase 1**: Project Setup & Foundation
-  - [x] 1.1 Initialize Go module
-  - [x] 1.2 Config system
-  - [x] 1.3 Vault initialization
-- [x] **Phase 2**: Note Data Model
-  - [x] 2.1 Frontmatter parsing
-  - [x] 2.2 Note struct
-  - [x] 2.3 Tag extraction
+### Milestone 1: Core CLI (Complete)
+
+- [x] **Phase 1**: Project Setup & Foundation (config, vault init)
+- [x] **Phase 2**: Note Data Model (frontmatter, tags, note struct)
 - [x] **Phase 3**: `log` Command
 - [x] **Phase 4**: `search` Command
 - [x] **Phase 5**: `update` Command
-- [x] **Phase 6**: Additional Commands
-  - [x] 6.1 `init` command
-  - [x] 6.2 `config` command
-  - [x] 6.3 `doctor` command
-- [x] **Phase 7**: Metadata Management
-  - [x] 7.1 Tags index
-  - [x] 7.2 `query` command
-- [x] **Phase 8**: CLI Polish
-  - [x] 8.1 Root command flags
-  - [x] 8.2 Error handling
-  - [x] 8.3 Testing
+- [x] **Phase 6**: Additional Commands (`init`, `config`, `doctor`)
+- [x] **Phase 7**: Metadata Management (tags index, `query` command)
+- [x] **Phase 8**: CLI Polish (flags, error handling, testing)
+
+### Milestone 2: Enhanced Features
+
+- [ ] **Phase 9**: Date Utilities
+  - [ ] 9.1 Date parsing library (`internal/dateparse`)
+  - [ ] 9.2 `today` command
+  - [ ] 9.3 `yesterday` command
+- [ ] **Phase 10**: Enhanced Search
+  - [ ] 10.1 Date filters (`created:`, `before:`, `after:`, `on:`, `between:`)
+  - [ ] 10.2 Natural language dates (`today`, `last-week`, `7d`, etc.)
+  - [ ] 10.3 Additional filters (`title:`, `path:`)
+- [ ] **Phase 11**: Search Performance
+  - [ ] 11.1 Tag-only search optimization (frontmatter-only parsing)
+  - [ ] 11.2 Early termination for `--limit`
+- [ ] **Phase 12**: Frontmatter Enhancements
+  - [ ] 12.1 `--show-extra` flag for displaying user fields
+  - [ ] 12.2 `--with-frontmatter` flag for bulk export
+  - [ ] 12.3 Frontmatter editing in `update` command
+- [ ] **Phase 13**: Tag Management
+  - [ ] 13.1 `tags list` subcommand
+  - [ ] 13.2 `tags rename` subcommand
+  - [ ] 13.3 `tags delete` subcommand
+- [ ] **Phase 14**: Documentation
+  - [ ] 14.1 Man page generation (`cobra-doc`)
+  - [ ] 14.2 Markdown documentation (`docs/`)
+  - [ ] 14.3 Enhanced `--help` with examples
+- [ ] **Phase 15**: Developer Experience
+  - [ ] 15.1 Shell completions (`completion` command)
+  - [ ] 15.2 Note templates (`--template` flag)
+
+### Milestone 3: Advanced Features (Future)
+
+- [ ] **Phase 16**: Graph & Links
+  - [ ] 16.1 Backlinks command
+  - [ ] 16.2 Graph export (DOT format)
+- [ ] **Phase 17**: Extended Functionality
+  - [ ] 17.1 Custom sort order (`order` field)
+  - [ ] 17.2 Note archiving
+  - [ ] 17.3 Extended search operators (OR, NOT, grouping, phrase)
 
 ---
 
@@ -598,15 +625,620 @@ ruin query delete daily-work
 
 ---
 
-## v2 Roadmap (Deferred)
+## Technical Debt / Refactoring
 
-- **Shell completions**: `ruin completion bash/zsh/fish`
-- **`ruin tags`**: list/manage tags directly
-- **Extended search syntax**:
-  - OR: `||`
-  - NOT: `!`
-  - Grouping: `()`
-  - Date filters: `created:2025-01`, `updated:7d`
-  - Phrase search: `"exact phrase"`
-  - Title filter: `title:foo`
-- **Custom order field**: `order` for manual sorting
+### High Priority
+
+#### 1. DRY Violation: `query run` duplicates search logic
+**Location**: `internal/commands/query.go` lines 338-412
+
+The `query run` subcommand copy-pastes almost all of the search command's core logic:
+- Mutual exclusivity check for `--bulk`, `--first`, `--edit`
+- Query parsing and sort parsing
+- Note searching, sorting, and limiting
+- Output handling (bulk/first/json/default)
+
+**Problem**: Bug fixes or enhancements to search won't automatically apply to `query run`.
+
+**Solution**: Extract search execution into a shared `ExecuteSearch()` function that both commands use.
+
+### Medium Priority
+
+#### 2. Direct `os.Exit(3)` in update command
+**Location**: `internal/commands/update.go` line 145
+
+The update command calls `os.Exit(3)` directly when user aborts deletion confirmation, instead of returning `ErrUserAborted`.
+
+**Problems**:
+- Bypasses normal error handling flow
+- Makes the command untestable for the abort case
+- Inconsistent with how `query` command handles user aborts
+
+**Solution**: Return `ErrUserAborted` and let `main.go` handle the exit code.
+
+### Low Priority
+
+#### 3. Confirmation prompt duplication
+**Locations**:
+- `internal/commands/query.go` (save and delete subcommands)
+- `internal/commands/update.go` (deletion confirmation)
+
+All three locations have similar logic: TTY check → print prompt → read response → check y/yes.
+
+**Solution**: Extract a `confirmAction(prompt string) (bool, error)` helper function.
+
+#### 4. Documentation mismatch
+**Location**: `CLAUDE.md` project structure
+
+The documented structure shows:
+```
+internal/metadata/
+├── tags.go
+└── queries.go
+```
+
+These files don't exist. The functionality lives in `internal/vault/vault.go`.
+
+**Solution**: Update `CLAUDE.md` to reflect actual structure, or create the metadata package if separation is desired.
+
+---
+
+## Milestone 2 Specifications
+
+Detailed specifications for Milestone 2 phases.
+
+### Phase 9: Date Utilities
+
+#### 9.1 `today` Command
+
+Quick shortcuts to view notes from specific days without constructing date queries.
+
+#### 1.1 `today` Command
+
+```
+ruin today [flags]
+```
+
+**Behavior**: Show all notes where `created` timestamp is today (local timezone).
+
+| Flag | Short | Type | Default | Description |
+|------|-------|------|---------|-------------|
+| `--bulk` | `-b` | bool | false | Output with `%%%% <uuid> %%%%` separators |
+| `--first` | `-f` | bool | false | Output first match content only |
+| `--edit` | `-e` | bool | false | Open matches in `$EDITOR` |
+| `--sort` | `-s` | string | `created:desc` | Sort order (default newest first) |
+| `--limit` | `-l` | int | 0 | Max results |
+| `--updated` | `-u` | bool | false | Match on `updated` instead of `created` |
+
+**Examples**:
+```bash
+ruin today                    # List today's notes
+ruin today --bulk             # Bulk export today's notes
+ruin today -u                 # Notes updated today
+ruin today --json             # JSON output for scripting
+```
+
+#### 9.2 `yesterday` Command
+
+```
+ruin yesterday [flags]
+```
+
+Same flags as `today`. Matches notes from the previous calendar day.
+
+#### 9.3 Implementation Notes
+
+- Both commands should internally construct a date filter and delegate to search logic
+- Consider a generalized `ruin recent [days]` command in future
+- Timezone handling: use local timezone, document this behavior
+- Could also add `--all-day` vs `--last-24h` distinction (default: calendar day)
+
+---
+
+### Phase 10: Enhanced Search
+
+Extend the search query language with powerful date filtering and additional operators.
+
+#### 10.1 Date Filter Syntax
+
+| Filter | Description | Examples |
+|--------|-------------|----------|
+| `created:YYYY-MM-DD` | Exact date match | `created:2025-01-28` |
+| `created:YYYY-MM` | Month match | `created:2025-01` |
+| `created:YYYY` | Year match | `created:2025` |
+| `before:DATE` | Before date (exclusive) | `before:2025-01-28` |
+| `after:DATE` | After date (exclusive) | `after:2025-01-01` |
+| `on:DATE` | On date (alias for exact) | `on:2025-01-28` |
+| `between:DATE,DATE` | Date range (inclusive) | `between:2025-01-01,2025-01-31` |
+| `updated:...` | Same filters for updated field | `updated:2025-01` |
+
+#### 10.2 Natural Language Date Support
+
+Support human-readable relative dates:
+
+| Input | Resolves To |
+|-------|-------------|
+| `today` | Current date |
+| `yesterday` | Previous date |
+| `tomorrow` | Next date (for `before:`) |
+| `this-week` | Monday-Sunday of current week |
+| `last-week` | Previous week |
+| `this-month` | Current calendar month |
+| `last-month` | Previous calendar month |
+| `this-year` | Current year |
+| `Nd` or `N-days` | N days ago (e.g., `7d`, `30-days`) |
+| `Nw` or `N-weeks` | N weeks ago |
+| `Nm` or `N-months` | N months ago |
+
+**Examples**:
+```bash
+ruin search "#daily && created:today"
+ruin search "#meeting && after:last-week"
+ruin search "created:this-month"
+ruin search "#project && between:2025-01-01,today"
+ruin search "updated:7d"                    # Updated in last 7 days
+ruin search "#draft && before:last-month"   # Old drafts
+```
+
+#### 10.3 Implementation Notes
+
+- Parse dates in local timezone
+- Support ISO 8601 formats: `YYYY-MM-DD`, `YYYY-MM-DDTHH:MM:SS`
+- Natural language parsing should be simple/predictable, not AI-powered
+- Consider a `internal/dateparse` package for reuse
+- Error clearly on ambiguous or invalid date formats
+
+---
+
+### Phase 12: Frontmatter Enhancements
+
+#### 12.1 Display Extra Frontmatter Fields
+
+Show user-defined frontmatter fields that aren't managed by the CLI.
+
+**Problem**
+
+Users may have custom frontmatter fields (e.g., `author`, `status`, `project`, `due`). Currently these are preserved but invisible in CLI output.
+
+**Solution**
+
+**Option A: Automatic detection**
+- When outputting notes (search, log), detect if `Extra` frontmatter exists
+- Show in a separate section or inline
+
+**Option B: Explicit flag**
+```
+--show-extra    Show user-defined frontmatter fields
+```
+
+**Output Formats**
+
+**Default output** (with `--show-extra`):
+```
+/path/to/note.md
+  extra: author=kevin, status=draft
+```
+
+**JSON output**:
+```json
+{
+  "path": "/path/to/note.md",
+  "uuid": "...",
+  "extra": {
+    "author": "kevin",
+    "status": "draft"
+  }
+}
+```
+
+**Implementation Notes**
+
+- The `Note.Extra` map already preserves these fields
+- Add `Extra map[string]interface{}` to `SearchResult` JSON output
+- Consider filtering: `--extra-fields author,status` to show only specific fields
+- Useful for workflows like: `ruin search "status:draft"` (future filter)
+
+#### 12.2 Frontmatter in Bulk Edit
+
+Allow viewing and editing frontmatter in bulk export format.
+
+**New Flag**
+
+```
+--with-frontmatter    Include frontmatter in bulk output
+```
+
+Applies to:
+- `ruin search --bulk --with-frontmatter`
+- `ruin query run <name> --bulk --with-frontmatter`
+- `ruin today --bulk --with-frontmatter`
+
+**Output Format**
+
+**Current bulk format** (content only):
+```
+%%%% uuid-1 %%%%
+# Note Title
+
+Content here...
+
+%%%% uuid-2 %%%%
+...
+```
+
+**With `--with-frontmatter`**:
+```
+%%%% uuid-1 %%%%
+---
+uuid: uuid-1
+created: 2025-01-28T10:00:00-08:00
+updated: 2025-01-28T10:00:00-08:00
+tags: ["#daily", "#work"]
+author: kevin
+---
+
+# Note Title
+
+Content here...
+
+%%%% uuid-2 %%%%
+...
+```
+
+#### 12.3 Update Command Frontmatter Handling
+
+When `update` receives bulk content with frontmatter:
+- Parse frontmatter from each section
+- Apply frontmatter changes (merge with existing)
+- Protect managed fields: `uuid` changes are errors, `created` is immutable
+- Allow changes to: `tags` (overrides extraction), user fields
+
+**Implementation Notes**
+
+- Modify `note.FormatBulk()` to accept `withFrontmatter bool` parameter
+- Modify `note.ParseBulk()` to detect and extract frontmatter
+- Add validation in `update` command for frontmatter changes
+- Document that manually editing `tags` in frontmatter overrides auto-extraction
+
+---
+
+### Phase 13: Tag Management
+
+#### 13.1 `tags list` Subcommand
+
+```
+ruin tags list [flags]
+```
+
+| Flag | Short | Type | Default | Description |
+|------|-------|------|---------|-------------|
+| `--sort` | `-s` | string | `count:desc` | Sort by `name` or `count` |
+| `--min` | | int | 0 | Only show tags with at least N uses |
+
+**Output**:
+```
+#daily (15)
+#work (12)
+#project (8)
+#idea (3)
+```
+
+**JSON output**: `[{"name": "#daily", "count": 15}, ...]`
+
+#### 13.2 `tags rename` Subcommand
+
+```
+ruin tags rename <old> <new> [flags]
+```
+
+| Flag | Short | Type | Default | Description |
+|------|-------|------|---------|-------------|
+| `--force` | `-f` | bool | false | Skip confirmation |
+| `--dry-run` | `-n` | bool | false | Show changes without applying |
+
+**Behavior**:
+- Find all notes containing `<old>` tag
+- Replace with `<new>` tag in content and frontmatter
+- Update tags index
+
+#### 13.3 `tags delete` Subcommand
+
+```
+ruin tags delete <tag> [flags]
+```
+
+| Flag | Short | Type | Default | Description |
+|------|-------|------|---------|-------------|
+| `--force` | `-f` | bool | false | Skip confirmation |
+| `--dry-run` | `-n` | bool | false | Show changes without applying |
+
+**Behavior**:
+- Find all notes containing `<tag>`
+- Remove tag from content and frontmatter
+- Update tags index
+
+---
+
+### Phase 14: Documentation
+
+Create comprehensive, user-friendly documentation.
+
+#### 14.1 Documentation Types
+
+| Type | Location | Purpose |
+|------|----------|---------|
+| Man pages | `docs/man/` | Traditional Unix documentation |
+| Markdown docs | `docs/` | GitHub-friendly, detailed guides |
+| Built-in help | `--help` | Quick reference |
+| Examples | `docs/examples/` | Real-world usage patterns |
+
+#### 14.2 Man Pages
+
+Generate man pages using `cobra-doc` or similar:
+
+```
+ruin(1)       - Main command overview
+ruin-log(1)   - Creating notes
+ruin-search(1) - Searching notes
+ruin-query(1) - Saved queries
+ruin-update(1) - Bulk editing
+...
+```
+
+**Makefile target**:
+```makefile
+.PHONY: docs
+docs:
+    go run ./cmd/gendocs   # Generate man pages and markdown
+```
+
+#### 14.3 Markdown Documentation Structure
+
+```
+docs/
+├── README.md           # Documentation index
+├── getting-started.md  # Installation, first vault, first note
+├── commands/
+│   ├── log.md
+│   ├── search.md
+│   ├── query.md
+│   ├── update.md
+│   ├── init.md
+│   ├── config.md
+│   └── doctor.md
+├── concepts/
+│   ├── vault.md        # Vault structure, .ruin/ directory
+│   ├── frontmatter.md  # Managed fields, user fields
+│   ├── tags.md         # Tag syntax, spaced tags, inline tags
+│   └── bulk-format.md  # Bulk export/import format
+├── guides/
+│   ├── daily-notes.md  # Workflow for daily logging
+│   ├── scripting.md    # Using ruin in scripts
+│   ├── editor-integration.md  # Vim, Emacs, VS Code
+│   └── migration.md    # From other note systems
+└── examples/
+    ├── bash-snippets.md
+    └── workflows.md
+```
+
+#### 14.4 Enhanced `--help` Output
+
+Ensure every command has:
+- Clear one-line description
+- Detailed `Long` description with use cases
+- Multiple `Example` entries showing common patterns
+- Flag descriptions that explain *why*, not just *what*
+
+#### 14.5 Implementation Notes
+
+- Use `cobra/doc` package to generate man pages from command definitions
+- Add a `cmd/gendocs/main.go` tool for documentation generation
+- Consider `goreleaser` integration for packaging docs with releases
+- Add `make docs` target to Makefile
+- Host docs on GitHub Pages or similar
+
+---
+
+### Phase 15: Developer Experience
+
+#### 15.1 Shell Completions
+
+```
+ruin completion <shell>
+```
+
+Generate shell completion scripts for:
+- `bash`
+- `zsh`
+- `fish`
+- `powershell`
+
+**Implementation**: Use Cobra's built-in completion generation.
+
+#### 15.2 Note Templates
+
+```
+ruin log --template <name> [content]
+```
+
+**Template Location**: `.ruin/templates/<name>.md`
+
+**Template Syntax**:
+```markdown
+---
+tags: ["#daily"]
+---
+
+# {{.Date}}
+
+## Plan
+
+## Done
+
+## Notes
+{{.Content}}
+```
+
+**Variables**:
+- `{{.Date}}` - Current date (YYYY-MM-DD)
+- `{{.DateTime}}` - Current datetime
+- `{{.Content}}` - Content passed to log command
+- `{{.Title}}` - Title from `--title` flag
+
+---
+
+### Phase 11: Search Performance
+
+Optimize search for common cases without changing functionality.
+
+#### 11.1 Tag-Only Search Optimization
+
+**Problem**: Currently, every search loads and parses the entire note file, even when searching only by tags.
+
+**Solution**: Detect tag-only queries and use a fast path:
+
+```go
+func isTagOnlyQuery(query string) bool {
+    // Returns true if query contains only #tag terms (no text search)
+}
+
+func searchNotesTagOnly(vlt *vault.Vault, matcher QueryMatcher) ([]SearchResult, error) {
+    // Only read and parse frontmatter, skip content parsing
+}
+```
+
+**Implementation**:
+1. Add `ParseFrontmatterOnly(path string) (*Frontmatter, error)` to note package
+   - Read file until second `---` delimiter
+   - Parse only the YAML frontmatter
+   - Return tags without full note parsing
+2. Detect tag-only queries in `parseQuery()`
+3. Use fast path in `searchNotes()` when applicable
+
+**Expected Improvement**: 2-3x faster for tag-only searches on large vaults.
+
+**Benchmark Targets**:
+| Notes | Current | Target |
+|-------|---------|--------|
+| 10,000 | ~250ms | ~100ms |
+
+#### 11.2 Early Termination for `--limit`
+
+**Problem**: Currently, search finds ALL matching notes, then applies limit:
+
+```go
+results, err := searchNotes(vlt, matcher)  // Finds ALL matches
+if limit > 0 && len(results) > limit {
+    results = results[:limit]  // Truncates after full scan
+}
+```
+
+**Solution**: Pass limit into search and stop early:
+
+```go
+func searchNotes(vlt *vault.Vault, matcher QueryMatcher, limit int) ([]SearchResult, error) {
+    // ...
+    for _, path := range notePaths {
+        if matcher(n) {
+            results = append(results, ...)
+            if limit > 0 && len(results) >= limit {
+                return results, nil  // Early exit
+            }
+        }
+    }
+}
+```
+
+**Considerations**:
+- Only applies when no sorting is requested (sorted results need full scan)
+- Works with both regular search and tag-only fast path
+- Update `query run` to also pass limit through
+
+**Expected Improvement**: For `--limit 10` on 10,000 notes, stops after finding 10 matches instead of scanning all 10,000.
+
+---
+
+## Milestone 3 Specifications
+
+Detailed specifications for Milestone 3 (future) phases.
+
+### Phase 16: Graph & Links
+
+#### 16.1 Backlinks Command
+
+```
+ruin backlinks <note-path-or-uuid> [flags]
+```
+
+Find all notes that contain links to the specified note.
+
+**Link Detection**:
+- Markdown links: `[text](note.md)`
+- Wiki-style links: `[[Note Title]]`
+- UUID references: `uuid:abc-123`
+
+**Output**: Same as search (paths, JSON, bulk)
+
+#### 16.2 Graph Export
+
+```
+ruin graph [flags]
+```
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--format` | string | `dot` | Output format: `dot`, `json`, `mermaid` |
+| `--filter` | string | | Only include notes matching query |
+
+**DOT Output**:
+```dot
+digraph vault {
+  "uuid-1" [label="Note Title 1"];
+  "uuid-2" [label="Note Title 2"];
+  "uuid-1" -> "uuid-2";
+}
+```
+
+---
+
+### Phase 17: Extended Functionality
+
+#### 17.1 Custom Sort Order
+
+Add `order` frontmatter field for manual sorting:
+
+```yaml
+---
+uuid: abc-123
+order: 10
+---
+```
+
+**Sort syntax**: `ruin search "#project" --sort order:asc`
+
+#### 17.2 Note Archiving
+
+```
+ruin archive <query> [flags]
+```
+
+Move matching notes to `.ruin/archive/` directory.
+
+```
+ruin unarchive <query> [flags]
+```
+
+Restore archived notes.
+
+#### 17.3 Extended Search Operators
+
+Additional search syntax beyond Phase 10:
+
+| Operator | Description | Example |
+|----------|-------------|---------|
+| `\|\|` | OR | `#work \|\| #personal` |
+| `!` or `-` | NOT | `#draft !#published` |
+| `()` | Grouping | `(#work \|\| #personal) && #urgent` |
+| `"..."` | Phrase | `"exact phrase"` |
+| `title:` | Title filter | `title:meeting` |
+| `path:` | Path filter | `path:projects/` |
