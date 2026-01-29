@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/kevin/ruin-note-cli/internal/dateparse"
 	"github.com/kevin/ruin-note-cli/internal/note"
 	"github.com/kevin/ruin-note-cli/internal/vault"
 	"github.com/spf13/cobra"
@@ -47,16 +48,29 @@ func NewSearchCmd(getVault func() *vault.Vault, jsonOutput *bool) *cobra.Command
 		Short: "Search for notes",
 		Long: `Search for notes matching the given query.
 
-Query syntax (MVP):
+Query syntax:
   - Tag search: #tagname
   - Text search: word (case-insensitive)
   - AND (explicit): term1 && term2
   - AND (implicit): term1 term2 (space-separated)
 
-Examples:
-  ruin search "#daily"
-  ruin search "#meeting project-alpha"
-  ruin search "#todo && urgent"`,
+Date filters:
+  - created:DATE     Notes created on date
+  - updated:DATE     Notes updated on date
+  - on:DATE          Alias for created:DATE
+  - before:DATE      Notes created before date (exclusive)
+  - after:DATE       Notes created after date (exclusive)
+  - between:D1,D2    Notes created between dates (inclusive)
+
+Date formats:
+  - Exact: 2025-01-28, 2025-01, 2025
+  - Natural: today, yesterday, tomorrow
+  - Relative: this-week, last-week, this-month, last-month
+  - Duration: 7d, 2w, 3m (last N days/weeks/months)
+
+Other filters:
+  - title:TEXT       Notes with title containing text
+  - path:TEXT        Notes with path containing text`,
 		Example: `  # Tag search
   ruin search "#daily"
 
@@ -76,7 +90,18 @@ Examples:
   ruin search "#blog" --edit
 
   # Sorted by newest
-  ruin search "#log" -s created:desc -l 10`,
+  ruin search "#log" -s created:desc -l 10
+
+  # Date filters
+  ruin search "created:today"
+  ruin search "#daily && created:this-week"
+  ruin search "updated:7d"
+  ruin search "between:2025-01-01,2025-01-31"
+  ruin search "before:last-month"
+
+  # Title and path filters
+  ruin search "title:meeting"
+  ruin search "path:projects/"`,
 		Args: cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			vlt := getVault()
@@ -306,6 +331,32 @@ func parseTermMatcher(term string) (QueryMatcher, error) {
 		return tagMatcher(term), nil
 	}
 
+	// Check for filter prefixes (field:value)
+	if idx := strings.Index(term, ":"); idx > 0 {
+		field := strings.ToLower(term[:idx])
+		value := term[idx+1:]
+
+		switch field {
+		case "created":
+			return createdDateMatcher(value)
+		case "updated":
+			return updatedDateMatcher(value)
+		case "before":
+			return beforeDateMatcher(value)
+		case "after":
+			return afterDateMatcher(value)
+		case "on":
+			return createdDateMatcher(value) // alias for created:
+		case "between":
+			return betweenDateMatcher(value)
+		case "title":
+			return titleMatcher(value), nil
+		case "path":
+			return pathMatcher(value), nil
+		}
+		// If not a recognized filter, fall through to text search
+	}
+
 	// Text search (case-insensitive)
 	return textMatcher(term), nil
 }
@@ -337,6 +388,93 @@ func textMatcher(text string) QueryMatcher {
 		}
 		return false
 	}
+}
+
+// titleMatcher returns a matcher that checks if a note's title contains the given text.
+func titleMatcher(text string) QueryMatcher {
+	textLower := strings.ToLower(text)
+	return func(n *note.Note) bool {
+		return strings.Contains(strings.ToLower(n.Title), textLower)
+	}
+}
+
+// pathMatcher returns a matcher that checks if a note's path contains the given text.
+func pathMatcher(text string) QueryMatcher {
+	textLower := strings.ToLower(text)
+	return func(n *note.Note) bool {
+		return strings.Contains(strings.ToLower(n.FilePath), textLower)
+	}
+}
+
+// createdDateMatcher returns a matcher for created date filter.
+// Supports exact dates, months, years, and natural language dates.
+func createdDateMatcher(value string) (QueryMatcher, error) {
+	r, err := dateparse.Parse(value)
+	if err != nil {
+		return nil, fmt.Errorf("invalid date for created filter: %w", err)
+	}
+	return func(n *note.Note) bool {
+		return r.Contains(n.Created)
+	}, nil
+}
+
+// updatedDateMatcher returns a matcher for updated date filter.
+func updatedDateMatcher(value string) (QueryMatcher, error) {
+	r, err := dateparse.Parse(value)
+	if err != nil {
+		return nil, fmt.Errorf("invalid date for updated filter: %w", err)
+	}
+	return func(n *note.Note) bool {
+		return r.Contains(n.Updated)
+	}, nil
+}
+
+// beforeDateMatcher returns a matcher for notes created before a date.
+func beforeDateMatcher(value string) (QueryMatcher, error) {
+	r, err := dateparse.Parse(value)
+	if err != nil {
+		return nil, fmt.Errorf("invalid date for before filter: %w", err)
+	}
+	// Before the start of the parsed range
+	return func(n *note.Note) bool {
+		return n.Created.Before(r.Start)
+	}, nil
+}
+
+// afterDateMatcher returns a matcher for notes created after a date.
+func afterDateMatcher(value string) (QueryMatcher, error) {
+	r, err := dateparse.Parse(value)
+	if err != nil {
+		return nil, fmt.Errorf("invalid date for after filter: %w", err)
+	}
+	// After the end of the parsed range
+	return func(n *note.Note) bool {
+		return !n.Created.Before(r.End)
+	}, nil
+}
+
+// betweenDateMatcher returns a matcher for notes created between two dates.
+// Format: DATE,DATE (e.g., "2025-01-01,2025-01-31" or "last-month,today")
+func betweenDateMatcher(value string) (QueryMatcher, error) {
+	parts := strings.SplitN(value, ",", 2)
+	if len(parts) != 2 {
+		return nil, fmt.Errorf("between filter requires two dates separated by comma (e.g., between:2025-01-01,2025-01-31)")
+	}
+
+	startRange, err := dateparse.Parse(strings.TrimSpace(parts[0]))
+	if err != nil {
+		return nil, fmt.Errorf("invalid start date for between filter: %w", err)
+	}
+
+	endRange, err := dateparse.Parse(strings.TrimSpace(parts[1]))
+	if err != nil {
+		return nil, fmt.Errorf("invalid end date for between filter: %w", err)
+	}
+
+	// Range is from start of first date to end of second date (inclusive)
+	return func(n *note.Note) bool {
+		return !n.Created.Before(startRange.Start) && n.Created.Before(endRange.End)
+	}, nil
 }
 
 // parseSort parses a sort specification string.

@@ -4,7 +4,7 @@
 *.dll
 *.so
 *.dylib
-ruin
+/ruin
 
 # Test binary
 *.test

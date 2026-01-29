@@ -570,3 +570,112 @@ func TestTextMatcher(t *testing.T) {
 		})
 	}
 }
+
+func TestTitleMatcher(t *testing.T) {
+	n := &note.Note{
+		Title:   "Meeting Notes",
+		Content: "Some content",
+	}
+
+	tests := []struct {
+		text string
+		want bool
+	}{
+		{"meeting", true},
+		{"NOTES", true},
+		{"content", false}, // in content, not title
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.text, func(t *testing.T) {
+			matcher := titleMatcher(tt.text)
+			if got := matcher(n); got != tt.want {
+				t.Errorf("titleMatcher(%q) = %v, want %v", tt.text, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestPathMatcher(t *testing.T) {
+	n := &note.Note{
+		FilePath: "/vault/projects/alpha/notes.md",
+	}
+
+	tests := []struct {
+		text string
+		want bool
+	}{
+		{"projects", true},
+		{"alpha", true},
+		{"NOTES", true},
+		{"beta", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.text, func(t *testing.T) {
+			matcher := pathMatcher(tt.text)
+			if got := matcher(n); got != tt.want {
+				t.Errorf("pathMatcher(%q) = %v, want %v", tt.text, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestDateFilters(t *testing.T) {
+	// Test parsing of date filter terms
+	tests := []struct {
+		name    string
+		term    string
+		wantErr bool
+	}{
+		{"created:date", "created:2025-01-28", false},
+		{"created:month", "created:2025-01", false},
+		{"created:year", "created:2025", false},
+		{"created:today", "created:today", false},
+		{"created:yesterday", "created:yesterday", false},
+		{"created:7d", "created:7d", false},
+		{"updated:date", "updated:2025-01-28", false},
+		{"before:date", "before:2025-01-28", false},
+		{"after:date", "after:2025-01-28", false},
+		{"on:date", "on:2025-01-28", false},
+		{"between:dates", "between:2025-01-01,2025-01-31", false},
+		{"between:natural", "between:last-month,today", false},
+		{"title:text", "title:meeting", false},
+		{"path:text", "path:projects/", false},
+		{"created:invalid", "created:invalid-date", true},
+		{"between:missing-comma", "between:2025-01-01", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := parseTermMatcher(tt.term)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("parseTermMatcher(%q) error = %v, wantErr %v", tt.term, err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestParseQuery_WithFilters(t *testing.T) {
+	tests := []struct {
+		name    string
+		query   string
+		wantErr bool
+	}{
+		{"tag with date filter", "#daily && created:today", false},
+		{"date filter only", "created:2025-01", false},
+		{"multiple filters", "title:meeting && path:projects/", false},
+		{"tag and title filter", "#work title:report", false},
+		{"between filter", "between:2025-01-01,2025-01-31", false},
+		{"duration filter", "updated:7d", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := parseQuery(tt.query)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("parseQuery(%q) error = %v, wantErr %v", tt.query, err, tt.wantErr)
+			}
+		})
+	}
+}

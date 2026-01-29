@@ -15,14 +15,14 @@
 
 ### Milestone 2: Enhanced Features
 
-- [ ] **Phase 9**: Date Utilities
-  - [ ] 9.1 Date parsing library (`internal/dateparse`)
-  - [ ] 9.2 `today` command
-  - [ ] 9.3 `yesterday` command
-- [ ] **Phase 10**: Enhanced Search
-  - [ ] 10.1 Date filters (`created:`, `before:`, `after:`, `on:`, `between:`)
-  - [ ] 10.2 Natural language dates (`today`, `last-week`, `7d`, etc.)
-  - [ ] 10.3 Additional filters (`title:`, `path:`)
+- [x] **Phase 9**: Date Utilities
+  - [x] 9.1 Date parsing library (`internal/dateparse`)
+  - [x] 9.2 `today` command
+  - [x] 9.3 `yesterday` command
+- [x] **Phase 10**: Enhanced Search
+  - [x] 10.1 Date filters (`created:`, `before:`, `after:`, `on:`, `between:`)
+  - [x] 10.2 Natural language dates (`today`, `last-week`, `7d`, etc.)
+  - [x] 10.3 Additional filters (`title:`, `path:`)
 - [ ] **Phase 11**: Search Performance
   - [ ] 11.1 Tag-only search optimization (frontmatter-only parsing)
   - [ ] 11.2 Early termination for `--limit`
