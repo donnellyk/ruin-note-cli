@@ -291,6 +291,7 @@ func newQueryRunCmd(getVault func() *vault.Vault, jsonOutput *bool) *cobra.Comma
 		bulk   bool
 		first  bool
 		edit   bool
+		force  bool
 		sortBy string
 		limit  int
 	)
@@ -391,7 +392,7 @@ This is equivalent to running "ruin search <query>" with the saved query string.
 
 			// Output based on mode
 			if edit {
-				return handleEdit(vlt, results)
+				return handleEdit(vlt, results, force)
 			}
 
 			if bulk {
@@ -417,6 +418,7 @@ This is equivalent to running "ruin search <query>" with the saved query string.
 	cmd.Flags().BoolVarP(&bulk, "bulk", "b", false, "output content with %%%% <uuid> %%%% separators")
 	cmd.Flags().BoolVarP(&first, "first", "f", false, "output first match content only")
 	cmd.Flags().BoolVarP(&edit, "edit", "e", false, "open matches in $EDITOR")
+	cmd.Flags().BoolVar(&force, "force", false, "skip confirmation for deletions in edit mode")
 	cmd.Flags().StringVarP(&sortBy, "sort", "s", "", "sort order: field:dir (e.g., created:desc)")
 	cmd.Flags().IntVarP(&limit, "limit", "l", 0, "max results (0 = unlimited)")
 

@@ -41,6 +41,7 @@ func NewSearchCmd(getVault func() *vault.Vault, jsonOutput *bool) *cobra.Command
 		bulk   bool
 		first  bool
 		edit   bool
+		force  bool
 		sortBy string
 		limit  int
 	)
@@ -176,7 +177,7 @@ Other filters:
 
 			// Output based on mode
 			if edit {
-				return handleEdit(vlt, results)
+				return handleEdit(vlt, results, force)
 			}
 
 			if bulk {
@@ -202,6 +203,7 @@ Other filters:
 	cmd.Flags().BoolVarP(&bulk, "bulk", "b", false, "output content with %%%% <uuid> %%%% separators")
 	cmd.Flags().BoolVarP(&first, "first", "f", false, "output first match content only")
 	cmd.Flags().BoolVarP(&edit, "edit", "e", false, "open matches in $EDITOR")
+	cmd.Flags().BoolVar(&force, "force", false, "skip confirmation for deletions in edit mode")
 	cmd.Flags().StringVarP(&sortBy, "sort", "s", "", "sort order: field:dir (e.g., created:desc)")
 	cmd.Flags().IntVarP(&limit, "limit", "l", 0, "max results (0 = unlimited)")
 
@@ -722,7 +724,7 @@ func outputFirst(results []SearchResult) error {
 }
 
 // handleEdit opens results in $EDITOR and saves changes.
-func handleEdit(vlt *vault.Vault, results []SearchResult) error {
+func handleEdit(vlt *vault.Vault, results []SearchResult, force bool) error {
 	editor := os.Getenv("EDITOR")
 	if editor == "" {
 		editor = "vi"
@@ -784,11 +786,11 @@ func handleEdit(vlt *vault.Vault, results []SearchResult) error {
 	}
 
 	// Parse and apply changes
-	return applyBulkChanges(vlt, originalContent, modifiedContent, results)
+	return applyBulkChanges(vlt, originalContent, modifiedContent, results, force)
 }
 
 // applyBulkChanges applies changes from bulk edit.
-func applyBulkChanges(vlt *vault.Vault, original, modified string, results []SearchResult) error {
+func applyBulkChanges(vlt *vault.Vault, original, modified string, results []SearchResult, force bool) error {
 	// Parse original into uuid -> content map
 	originalMap := note.ParseBulk(original)
 	modifiedMap := note.ParseBulk(modified)
@@ -799,56 +801,100 @@ func applyBulkChanges(vlt *vault.Vault, original, modified string, results []Sea
 		resultMap[r.UUID] = r
 	}
 
-	var modifiedCount, deletedCount int
-	var errors []string
+	// First pass: collect modifications and deletions
+	var toModify []string
+	var toDelete []string
 
-	// Check for modifications and deletions
 	for uuid, origContent := range originalMap {
 		modContent, exists := modifiedMap[uuid]
 
 		if !exists {
-			// Note was deleted - we would need --force confirmation
-			// For now, just report it
-			fmt.Fprintf(os.Stderr, "Note deleted (UUID: %s) - deletion requires --force\n", uuid)
-			continue
-		}
-
-		if modContent != origContent {
-			// Note was modified
-			result, ok := resultMap[uuid]
-			if !ok {
-				errors = append(errors, fmt.Sprintf("UUID not found: %s", uuid))
-				continue
-			}
-
-			// Update the note
-			result.note.Content = modContent
-			result.note.RefreshTags()
-			result.note.SetTimestamps()
-
-			if err := result.note.Save(); err != nil {
-				errors = append(errors, fmt.Sprintf("Failed to save %s: %v", result.Path, err))
-				continue
-			}
-
-			// Update tags index
-			vlt.UpdateTagsIndex(result.note.Tags)
-			modifiedCount++
+			toDelete = append(toDelete, uuid)
+		} else if modContent != origContent {
+			toModify = append(toModify, uuid)
 		}
 	}
 
 	// Check for new UUIDs (error case)
+	var errors []string
 	for uuid := range modifiedMap {
 		if _, exists := originalMap[uuid]; !exists {
 			errors = append(errors, fmt.Sprintf("New UUID found: %s (use 'log' to create new notes)", uuid))
 		}
 	}
 
-	// Report results
-	fmt.Fprintf(os.Stderr, "Modified: %d\n", modifiedCount)
-	if deletedCount > 0 {
-		fmt.Fprintf(os.Stderr, "Deleted: %d (skipped - use update --force)\n", deletedCount)
+	// Handle deletions - require confirmation or --force
+	if len(toDelete) > 0 && !force {
+		// Check if stderr is a TTY for interactive confirmation
+		if !isTerminal(os.Stderr) {
+			return fmt.Errorf("deletions require --force in non-interactive mode")
+		}
+
+		fmt.Fprintf(os.Stderr, "The following %d note(s) will be deleted:\n", len(toDelete))
+		for _, uuid := range toDelete {
+			result, ok := resultMap[uuid]
+			if ok {
+				fmt.Fprintf(os.Stderr, "  - %s\n", result.Path)
+			} else {
+				fmt.Fprintf(os.Stderr, "  - UUID: %s (path not found)\n", uuid)
+			}
+		}
+		fmt.Fprint(os.Stderr, "Continue? [y/N]: ")
+
+		var response string
+		fmt.Scanln(&response)
+		response = strings.ToLower(strings.TrimSpace(response))
+		if response != "y" && response != "yes" {
+			fmt.Fprintln(os.Stderr, "Aborted.")
+			return nil
+		}
 	}
+
+	// Apply modifications
+	var modifiedCount int
+	for _, uuid := range toModify {
+		result, ok := resultMap[uuid]
+		if !ok {
+			errors = append(errors, fmt.Sprintf("UUID not found: %s", uuid))
+			continue
+		}
+
+		// Update the note
+		result.note.Content = modifiedMap[uuid]
+		result.note.RefreshTags()
+		result.note.SetTimestamps()
+
+		if err := result.note.Save(); err != nil {
+			errors = append(errors, fmt.Sprintf("Failed to save %s: %v", result.Path, err))
+			continue
+		}
+
+		// Update tags index
+		vlt.UpdateTagsIndex(result.note.Tags)
+		modifiedCount++
+	}
+
+	// Apply deletions
+	var deletedCount int
+	for _, uuid := range toDelete {
+		result, ok := resultMap[uuid]
+		if !ok {
+			errors = append(errors, fmt.Sprintf("UUID not found in vault: %s", uuid))
+			continue
+		}
+
+		if err := os.Remove(result.Path); err != nil {
+			errors = append(errors, fmt.Sprintf("Failed to delete %s: %v", result.Path, err))
+			continue
+		}
+
+		// Decrement tags for deleted note
+		vlt.DecrementTagsIndex(result.note.Tags)
+		deletedCount++
+	}
+
+	// Report results
+	fmt.Fprintf(os.Stderr, "Modified: %d, Deleted: %d\n", modifiedCount, deletedCount)
 	if len(errors) > 0 {
 		fmt.Fprintf(os.Stderr, "Errors:\n")
 		for _, e := range errors {
