@@ -24,9 +24,9 @@
   - [x] 10.2 Natural language dates (`today`, `last-week`, `7d`, etc.)
   - [x] 10.3 Additional filters (`title:`, `path:`)
 - [x] **Phase 11**: Search Performance
-  - [x] 11.1 Tag-only search optimization (frontmatter-only parsing)
+  - [x] 11.1 Concurrent file reading (2x speedup)
   - [x] 11.2 Early termination for `--limit`
-  - [x] 11.3 Concurrent file reading (2x speedup)
+  - [~] 11.3 Tag-only optimization (tried, removed - minimal benefit)
 - [ ] **Phase 12**: Frontmatter Enhancements
   - [ ] 12.1 `--show-extra` flag for displaying user fields
   - [ ] 12.2 `--with-frontmatter` flag for bulk export
@@ -1092,44 +1092,44 @@ tags: ["#daily"]
 
 Optimizations implemented to improve search performance:
 
-#### 11.1 Tag-Only Search Optimization
-
-**Implementation**:
-- Added `ParseFrontmatterOnly(path string)` to note package for fast frontmatter-only parsing
-- Added `isTagOnlyQuery(query string)` to detect tag-only queries
-- `searchNotesWithOptions()` uses fast path when query contains only tags and full note content isn't needed
-
-#### 11.2 Early Termination for `--limit`
-
-**Implementation**:
-- `SearchOptions` struct added with `Limit`, `TagOnly`, and `NeedsFullNote` fields
-- Early termination when limit is reached and no sorting is requested
-- Results collection stops early (though workers may continue briefly)
-
-#### 11.3 Concurrent File Reading
+#### 11.1 Concurrent File Reading
 
 **Implementation**:
 - Worker pool pattern using goroutines (capped at NumCPU, max 8 workers)
 - Parallel file parsing across all search modes
 - Channel-based result collection
 
+#### 11.2 Early Termination for `--limit`
+
+**Implementation**:
+- `SearchOptions` struct with `Limit` field
+- Early termination when limit is reached and no sorting is requested
+- Results collection stops early (though workers may continue briefly)
+
 #### Benchmark Results (Apple M3 Pro, 3s benchtime)
 
 | Benchmark | Before | After | Speedup |
 |-----------|--------|-------|---------|
-| TagOnly_100 | 1.75ms | 0.83ms | **2.1x** |
-| TagOnly_500 | 9.16ms | 4.10ms | **2.2x** |
-| TagOnly_1000 | 19.54ms | 8.42ms | **2.3x** |
-| TextSearch_100 | 2.08ms | 1.14ms | **1.8x** |
-| TextSearch_500 | 10.67ms | 5.47ms | **2.0x** |
-| TextSearch_1000 | 22.15ms | 11.00ms | **2.0x** |
+| TagOnly_1000 | 19.5ms | 8.4ms | **2.3x** |
+| TextSearch_1000 | 22.1ms | 10.8ms | **2.0x** |
+| TagOnly_10000 | 254ms | 98ms | **2.6x** |
+| TextSearch_10000 | 249ms | 98ms | **2.5x** |
+
+#### Removed: Tag-Only Optimization
+
+We initially implemented a tag-only optimization that parsed only frontmatter (first 1KB) for tag-only queries. This was removed because:
+- Benchmarks showed minimal benefit (~10% at best) over full file parsing
+- At 10,000 notes, tag-only and text search had nearly identical performance (~98ms each)
+- OS file caching made full-file reads almost as fast as partial reads
+- The optimization added complexity without meaningful improvement
+
+The concurrent I/O (worker pool) provides the majority of the speedup (~2x).
 
 #### Recommendations for Future Optimization
 
 1. **Index-based search**: For vaults with 10,000+ notes, consider SQLite or similar for indexed searches
 2. **Incremental indexing**: Watch for file changes and update index rather than full scan
-3. **Memory-mapped files**: Could provide marginal improvement for very large files
-4. **Result streaming**: For --bulk output, stream results instead of collecting all first
+3. **Result streaming**: For --bulk output, stream results instead of collecting all first
 
 Current performance is acceptable for typical use cases (sub-second for 1000+ notes).
 

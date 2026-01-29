@@ -680,32 +680,6 @@ func TestParseQuery_WithFilters(t *testing.T) {
 	}
 }
 
-func TestIsTagOnlyQuery(t *testing.T) {
-	tests := []struct {
-		query string
-		want  bool
-	}{
-		{"#daily", true},
-		{"#daily #work", true},
-		{"#daily && #work", true},
-		{"#spaced tag#", true},
-		{"#daily && #spaced tag#", true},
-		{"hello", false},
-		{"#daily hello", false},
-		{"#daily && created:today", false},
-		{"title:meeting", false},
-		{"", false},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.query, func(t *testing.T) {
-			if got := isTagOnlyQuery(tt.query); got != tt.want {
-				t.Errorf("isTagOnlyQuery(%q) = %v, want %v", tt.query, got, tt.want)
-			}
-		})
-	}
-}
-
 func TestSearchOptions_EarlyTermination(t *testing.T) {
 	vlt := setupTestVault(t)
 

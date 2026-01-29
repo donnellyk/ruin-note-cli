@@ -9,7 +9,6 @@ import (
 	"sort"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/kevin/ruin-note-cli/internal/dateparse"
 	"github.com/kevin/ruin-note-cli/internal/note"
@@ -143,18 +142,9 @@ Other filters:
 				}
 			}
 
-			// Determine if we need full note content
-			needsFullNote := bulk || first || edit
-
 			// Determine search options for optimization
-			opts := SearchOptions{
-				TagOnly:       isTagOnlyQuery(query),
-				NeedsFullNote: needsFullNote,
-			}
-
-			// Only enable early termination if:
-			// 1. Limit is set
-			// 2. No sorting is requested (sorting requires full results)
+			// Only enable early termination if limit is set and no sorting requested
+			var opts SearchOptions
 			if limit > 0 && len(sortFields) == 0 {
 				opts.Limit = limit
 			}
@@ -544,14 +534,6 @@ type SearchOptions struct {
 	// Limit is the maximum number of results to return (0 = unlimited).
 	// When set and no sorting is requested, enables early termination.
 	Limit int
-
-	// TagOnly indicates the query only contains tag matchers.
-	// Enables fast path using frontmatter-only parsing.
-	TagOnly bool
-
-	// NeedsFullNote indicates whether full note content is needed for output.
-	// When false and TagOnly is true, we can use the fast path.
-	NeedsFullNote bool
 }
 
 // searchNotes finds all notes matching the query.
@@ -593,60 +575,19 @@ func searchNotesWithOptions(vlt *vault.Vault, matcher QueryMatcher, opts SearchO
 	processNote := func() {
 		defer wg.Done()
 		for path := range pathsChan {
-			var result *SearchResult
-
-			if opts.TagOnly && !opts.NeedsFullNote {
-				// Fast path: frontmatter-only parsing
-				fm, err := note.ParseFrontmatterOnly(path)
-				if err != nil {
-					continue
-				}
-
-				n := &note.Note{
-					UUID:     fm.UUID,
-					Tags:     fm.Tags,
-					FilePath: path,
-				}
-
-				if fm.Created != "" {
-					if t, err := parseTime(fm.Created); err == nil {
-						n.Created = t
-					}
-				}
-				if fm.Updated != "" {
-					if t, err := parseTime(fm.Updated); err == nil {
-						n.Updated = t
-					}
-				}
-
-				if matcher(n) {
-					result = &SearchResult{
-						Path: path,
-						UUID: n.UUID,
-						Tags: n.Tags,
-						note: n,
-					}
-				}
-			} else {
-				// Standard path: full note parsing
-				n, err := note.Load(path)
-				if err != nil {
-					continue
-				}
-
-				if matcher(n) {
-					result = &SearchResult{
-						Path:  path,
-						UUID:  n.UUID,
-						Title: n.Title,
-						Tags:  n.Tags,
-						note:  n,
-					}
-				}
+			n, err := note.Load(path)
+			if err != nil {
+				continue
 			}
 
-			if result != nil {
-				resultsChan <- *result
+			if matcher(n) {
+				resultsChan <- SearchResult{
+					Path:  path,
+					UUID:  n.UUID,
+					Title: n.Title,
+					Tags:  n.Tags,
+					note:  n,
+				}
 			}
 		}
 	}
@@ -687,43 +628,6 @@ func searchNotesWithOptions(vlt *vault.Vault, matcher QueryMatcher, opts SearchO
 	}
 
 	return results, nil
-}
-
-// parseTime parses a timestamp string.
-func parseTime(s string) (time.Time, error) {
-	return time.Parse(note.TimeFormat, s)
-}
-
-// isTagOnlyQuery returns true if the query contains only tag matchers.
-// This allows us to use the fast path with frontmatter-only parsing.
-func isTagOnlyQuery(query string) bool {
-	query = strings.TrimSpace(query)
-	if query == "" {
-		return false
-	}
-
-	// Split by && first
-	parts := strings.Split(query, "&&")
-	for _, part := range parts {
-		part = strings.TrimSpace(part)
-		if part == "" {
-			continue
-		}
-
-		// Split by space for implicit AND
-		terms := splitTerms(part)
-		for _, term := range terms {
-			term = strings.TrimSpace(term)
-			if term == "" {
-				continue
-			}
-			// Only tags are allowed for tag-only optimization
-			if !strings.HasPrefix(term, "#") {
-				return false
-			}
-		}
-	}
-	return true
 }
 
 // sortResults sorts the results by the given fields.

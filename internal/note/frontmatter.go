@@ -4,8 +4,6 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
-	"io"
-	"os"
 	"strings"
 	"time"
 
@@ -226,57 +224,3 @@ func (fm *Frontmatter) Merge(other *Frontmatter) {
 
 // ErrInvalidFrontmatter indicates malformed frontmatter.
 var ErrInvalidFrontmatter = errors.New("invalid frontmatter")
-
-// frontmatterBufSize is the initial read size for frontmatter-only parsing.
-// Most frontmatter is under 512 bytes; we read more only if needed.
-const frontmatterBufSize = 1024
-
-// ParseFrontmatterOnly reads a file and parses only the frontmatter, avoiding
-// reading large note content for tag-only searches. Uses a single read for
-// most files, with fallback to full read for large frontmatter.
-func ParseFrontmatterOnly(path string) (*Frontmatter, error) {
-	file, err := os.Open(path)
-	if err != nil {
-		return nil, err
-	}
-	defer file.Close()
-
-	// Read initial chunk - enough for most frontmatter
-	buf := make([]byte, frontmatterBufSize)
-	n, err := file.Read(buf)
-	if err != nil && err != io.EOF {
-		return nil, err
-	}
-	if n == 0 {
-		return &Frontmatter{Extra: make(map[string]interface{})}, nil
-	}
-
-	data := buf[:n]
-
-	// Check for opening delimiter
-	if !bytes.HasPrefix(bytes.TrimLeft(data, "\n\r"), []byte(frontmatterDelimiter)) {
-		return &Frontmatter{Extra: make(map[string]interface{})}, nil
-	}
-
-	// Find closing delimiter in what we read
-	content := string(data)
-	start := strings.Index(content, frontmatterDelimiter)
-	rest := content[start+len(frontmatterDelimiter):]
-	closeIdx := strings.Index(rest, "\n"+frontmatterDelimiter)
-
-	if closeIdx == -1 {
-		// Closing delimiter not in first chunk - fall back to full read
-		// This is rare for typical frontmatter
-		allData, err := io.ReadAll(file)
-		if err != nil {
-			return nil, err
-		}
-		content = string(data) + string(allData)
-		fm, _, err := ParseFrontmatter(content)
-		return fm, err
-	}
-
-	// Found complete frontmatter in first chunk
-	yamlContent := rest[:closeIdx]
-	return parseFrontmatterYAML(yamlContent)
-}

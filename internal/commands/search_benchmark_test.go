@@ -324,14 +324,10 @@ func BenchmarkSearch_TextSearch_5000_Realistic(b *testing.B) {
 
 func benchmarkTagSearch(b *testing.B, vlt *vault.Vault) {
 	matcher, _ := parseQuery("#daily")
-	opts := SearchOptions{
-		TagOnly:       true,
-		NeedsFullNote: false,
-	}
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, err := searchNotesWithOptions(vlt, matcher, opts)
+		_, err := searchNotesWithOptions(vlt, matcher, SearchOptions{})
 		if err != nil {
 			b.Fatalf("search failed: %v", err)
 		}
@@ -340,14 +336,10 @@ func benchmarkTagSearch(b *testing.B, vlt *vault.Vault) {
 
 func benchmarkTextSearch(b *testing.B, vlt *vault.Vault) {
 	matcher, _ := parseQuery("lorem")
-	opts := SearchOptions{
-		TagOnly:       false,
-		NeedsFullNote: true,
-	}
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, err := searchNotesWithOptions(vlt, matcher, opts)
+		_, err := searchNotesWithOptions(vlt, matcher, SearchOptions{})
 		if err != nil {
 			b.Fatalf("search failed: %v", err)
 		}
