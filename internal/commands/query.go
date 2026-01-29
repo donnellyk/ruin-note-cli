@@ -288,12 +288,13 @@ func newQueryDeleteCmd(getVault func() *vault.Vault, jsonOutput *bool) *cobra.Co
 // newQueryRunCmd creates the "query run" subcommand.
 func newQueryRunCmd(getVault func() *vault.Vault, jsonOutput *bool) *cobra.Command {
 	var (
-		bulk   bool
-		first  bool
-		edit   bool
-		force  bool
-		sortBy string
-		limit  int
+		bulk        bool
+		first       bool
+		edit        bool
+		force       bool
+		frontmatter string
+		sortBy      string
+		limit       int
 	)
 
 	cmd := &cobra.Command{
@@ -351,6 +352,12 @@ This is equivalent to running "ruin search <query>" with the saved query string.
 				return fmt.Errorf("--bulk, --first, and --edit are mutually exclusive")
 			}
 
+			// Parse frontmatter mode
+			fmMode := FrontmatterMode(frontmatter)
+			if frontmatter != "" && frontmatter != "none" && frontmatter != "extra" && frontmatter != "full" {
+				return fmt.Errorf("invalid frontmatter mode: %s (use: none, extra, full)", frontmatter)
+			}
+
 			// Parse query
 			matcher, err := parseQuery(query)
 			if err != nil {
@@ -392,26 +399,23 @@ This is equivalent to running "ruin search <query>" with the saved query string.
 
 			// Output based on mode
 			if edit {
-				return handleEdit(vlt, results, force)
+				return handleEdit(vlt, results, force, fmMode)
 			}
 
 			if bulk {
-				return outputBulk(results)
+				return outputBulk(results, fmMode)
 			}
 
 			if first {
-				return outputFirst(results)
+				return outputFirst(results, fmMode)
 			}
 
 			if *jsonOutput {
-				return outputJSON(results)
+				return outputJSON(results, fmMode)
 			}
 
-			// Default: list of paths
-			for _, r := range results {
-				fmt.Println(r.Path)
-			}
-			return nil
+			// Default: list of paths (with optional frontmatter)
+			return outputPaths(results, fmMode)
 		},
 	}
 
@@ -419,6 +423,8 @@ This is equivalent to running "ruin search <query>" with the saved query string.
 	cmd.Flags().BoolVarP(&first, "first", "f", false, "output first match content only")
 	cmd.Flags().BoolVarP(&edit, "edit", "e", false, "open matches in $EDITOR")
 	cmd.Flags().BoolVar(&force, "force", false, "skip confirmation for deletions in edit mode")
+	cmd.Flags().StringVar(&frontmatter, "frontmatter", "", "include frontmatter in output (modes: extra, full, none)")
+	cmd.Flag("frontmatter").NoOptDefVal = "extra"
 	cmd.Flags().StringVarP(&sortBy, "sort", "s", "", "sort order: field:dir (e.g., created:desc)")
 	cmd.Flags().IntVarP(&limit, "limit", "l", 0, "max results (0 = unlimited)")
 

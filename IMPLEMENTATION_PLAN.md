@@ -27,13 +27,13 @@
   - [x] 11.1 Concurrent file reading (2x speedup)
   - [x] 11.2 Early termination for `--limit`
   - [~] 11.3 Tag-only optimization (tried, removed - minimal benefit)
-- [ ] **Phase 12**: Frontmatter Enhancements
-  - [ ] 12.1 `--frontmatter[=MODE]` flag (extra, full, none)
-  - [ ] 12.2 Frontmatter editing in `update` command
-- [ ] **Phase 13**: Tag Management
-  - [ ] 13.1 `tags list` subcommand
-  - [ ] 13.2 `tags rename` subcommand
-  - [ ] 13.3 `tags delete` subcommand
+- [x] **Phase 12**: Frontmatter Enhancements
+  - [x] 12.1 `--frontmatter[=MODE]` flag (extra, full, none)
+  - [x] 12.2 Frontmatter editing in `update` command
+- [x] **Phase 13**: Tag Management
+  - [x] 13.1 `tags list` subcommand
+  - [x] 13.2 `tags rename` subcommand
+  - [x] 13.3 `tags delete` subcommand
 - [ ] **Phase 14**: Documentation
   - [ ] 14.1 Man page generation (`cobra-doc`)
   - [ ] 14.2 Markdown documentation (`docs/`)

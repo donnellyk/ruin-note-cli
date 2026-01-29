@@ -20,6 +20,15 @@ import (
 // This allows the caller to distinguish between errors and no matches.
 var ErrNoMatches = fmt.Errorf("no matches found")
 
+// FrontmatterMode controls how frontmatter is included in output.
+type FrontmatterMode string
+
+const (
+	FrontmatterNone  FrontmatterMode = "none"  // Hide frontmatter (default)
+	FrontmatterExtra FrontmatterMode = "extra" // Show only user-defined fields
+	FrontmatterFull  FrontmatterMode = "full"  // Show complete frontmatter
+)
+
 // SearchResult represents a single search result.
 type SearchResult struct {
 	Path  string   `json:"path"`
@@ -38,12 +47,13 @@ type SortField struct {
 // NewSearchCmd creates the search command.
 func NewSearchCmd(getVault func() *vault.Vault, jsonOutput *bool) *cobra.Command {
 	var (
-		bulk   bool
-		first  bool
-		edit   bool
-		force  bool
-		sortBy string
-		limit  int
+		bulk        bool
+		first       bool
+		edit        bool
+		force       bool
+		frontmatter string
+		sortBy      string
+		limit       int
 	)
 
 	cmd := &cobra.Command{
@@ -175,28 +185,31 @@ Other filters:
 				return ErrNoMatches
 			}
 
+			// Parse frontmatter mode
+			fmMode := FrontmatterMode(frontmatter)
+			if frontmatter != "" && frontmatter != "none" && frontmatter != "extra" && frontmatter != "full" {
+				return fmt.Errorf("invalid frontmatter mode: %s (use: none, extra, full)", frontmatter)
+			}
+
 			// Output based on mode
 			if edit {
-				return handleEdit(vlt, results, force)
+				return handleEdit(vlt, results, force, fmMode)
 			}
 
 			if bulk {
-				return outputBulk(results)
+				return outputBulk(results, fmMode)
 			}
 
 			if first {
-				return outputFirst(results)
+				return outputFirst(results, fmMode)
 			}
 
 			if *jsonOutput {
-				return outputJSON(results)
+				return outputJSON(results, fmMode)
 			}
 
-			// Default: list of paths
-			for _, r := range results {
-				fmt.Println(r.Path)
-			}
-			return nil
+			// Default: list of paths (with optional frontmatter)
+			return outputPaths(results, fmMode)
 		},
 	}
 
@@ -204,6 +217,8 @@ Other filters:
 	cmd.Flags().BoolVarP(&first, "first", "f", false, "output first match content only")
 	cmd.Flags().BoolVarP(&edit, "edit", "e", false, "open matches in $EDITOR")
 	cmd.Flags().BoolVar(&force, "force", false, "skip confirmation for deletions in edit mode")
+	cmd.Flags().StringVar(&frontmatter, "frontmatter", "", "include frontmatter in output (modes: extra, full, none)")
+	cmd.Flag("frontmatter").NoOptDefVal = "extra" // --frontmatter without value defaults to "extra"
 	cmd.Flags().StringVarP(&sortBy, "sort", "s", "", "sort order: field:dir (e.g., created:desc)")
 	cmd.Flags().IntVarP(&limit, "limit", "l", 0, "max results (0 = unlimited)")
 
@@ -673,24 +688,70 @@ func compareResults(a, b SearchResult, field string) int {
 	return 0
 }
 
+// outputPaths outputs results as paths with optional frontmatter info.
+func outputPaths(results []SearchResult, fmMode FrontmatterMode) error {
+	for _, r := range results {
+		fmt.Println(r.Path)
+		if fmMode == FrontmatterExtra && len(r.note.Extra) > 0 {
+			fmt.Printf("  %s\n", formatExtraFields(r.note.Extra))
+		} else if fmMode == FrontmatterFull {
+			fmt.Printf("  uuid=%s, created=%s, updated=%s\n",
+				r.UUID,
+				r.note.Created.Format("2006-01-02"),
+				r.note.Updated.Format("2006-01-02"))
+			if len(r.note.Extra) > 0 {
+				fmt.Printf("  %s\n", formatExtraFields(r.note.Extra))
+			}
+		}
+	}
+	return nil
+}
+
+// formatExtraFields formats extra frontmatter fields as key=value pairs.
+func formatExtraFields(extra map[string]interface{}) string {
+	if len(extra) == 0 {
+		return ""
+	}
+	pairs := make([]string, 0, len(extra))
+	for k, v := range extra {
+		pairs = append(pairs, fmt.Sprintf("%s=%v", k, v))
+	}
+	return strings.Join(pairs, ", ")
+}
+
 // outputJSON outputs results as JSON.
-func outputJSON(results []SearchResult) error {
-	// Create output without the internal note field
+func outputJSON(results []SearchResult, fmMode FrontmatterMode) error {
+	// Create output with optional frontmatter fields
 	type jsonResult struct {
-		Path  string   `json:"path"`
-		UUID  string   `json:"uuid"`
-		Title string   `json:"title,omitempty"`
-		Tags  []string `json:"tags,omitempty"`
+		Path    string                 `json:"path"`
+		UUID    string                 `json:"uuid"`
+		Title   string                 `json:"title,omitempty"`
+		Tags    []string               `json:"tags,omitempty"`
+		Created string                 `json:"created,omitempty"`
+		Updated string                 `json:"updated,omitempty"`
+		Extra   map[string]interface{} `json:"extra,omitempty"`
 	}
 
 	output := make([]jsonResult, len(results))
 	for i, r := range results {
-		output[i] = jsonResult{
+		jr := jsonResult{
 			Path:  r.Path,
 			UUID:  r.UUID,
 			Title: r.Title,
 			Tags:  r.Tags,
 		}
+
+		if fmMode == FrontmatterExtra && len(r.note.Extra) > 0 {
+			jr.Extra = r.note.Extra
+		} else if fmMode == FrontmatterFull {
+			jr.Created = r.note.Created.Format(note.TimeFormat)
+			jr.Updated = r.note.Updated.Format(note.TimeFormat)
+			if len(r.note.Extra) > 0 {
+				jr.Extra = r.note.Extra
+			}
+		}
+
+		output[i] = jr
 	}
 
 	enc := json.NewEncoder(os.Stdout)
@@ -699,32 +760,52 @@ func outputJSON(results []SearchResult) error {
 }
 
 // outputBulk outputs results in bulk format with %%%% <uuid> %%%% separators.
-func outputBulk(results []SearchResult) error {
+func outputBulk(results []SearchResult, fmMode FrontmatterMode) error {
 	entries := make([]note.BulkEntry, len(results))
 	for i, r := range results {
+		content := r.note.Content
+		if fmMode == FrontmatterFull {
+			// Include full frontmatter in the content
+			serialized, err := r.note.Serialize()
+			if err == nil {
+				content = serialized
+			}
+		}
 		entries[i] = note.BulkEntry{
 			UUID:    r.UUID,
-			Content: r.note.Content,
+			Content: content,
 		}
 	}
 	return note.FormatBulk(entries, os.Stdout)
 }
 
 // outputFirst outputs the first result's content.
-func outputFirst(results []SearchResult) error {
+func outputFirst(results []SearchResult, fmMode FrontmatterMode) error {
 	if len(results) == 0 {
 		return nil
 	}
-	// Output content without frontmatter
-	fmt.Print(results[0].note.Content)
-	if !strings.HasSuffix(results[0].note.Content, "\n") {
+
+	var output string
+	if fmMode == FrontmatterFull {
+		serialized, err := results[0].note.Serialize()
+		if err == nil {
+			output = serialized
+		} else {
+			output = results[0].note.Content
+		}
+	} else {
+		output = results[0].note.Content
+	}
+
+	fmt.Print(output)
+	if !strings.HasSuffix(output, "\n") {
 		fmt.Println()
 	}
 	return nil
 }
 
 // handleEdit opens results in $EDITOR and saves changes.
-func handleEdit(vlt *vault.Vault, results []SearchResult, force bool) error {
+func handleEdit(vlt *vault.Vault, results []SearchResult, force bool, fmMode FrontmatterMode) error {
 	editor := os.Getenv("EDITOR")
 	if editor == "" {
 		editor = "vi"
@@ -741,9 +822,17 @@ func handleEdit(vlt *vault.Vault, results []SearchResult, force bool) error {
 	// Write original content
 	entries := make([]note.BulkEntry, len(results))
 	for i, r := range results {
+		content := r.note.Content
+		if fmMode == FrontmatterFull {
+			// Include full frontmatter in the content for editing
+			serialized, err := r.note.Serialize()
+			if err == nil {
+				content = serialized
+			}
+		}
 		entries[i] = note.BulkEntry{
 			UUID:    r.UUID,
-			Content: r.note.Content,
+			Content: content,
 		}
 	}
 
@@ -859,9 +948,50 @@ func applyBulkChanges(vlt *vault.Vault, original, modified string, results []Sea
 			continue
 		}
 
-		// Update the note
-		result.note.Content = modifiedMap[uuid]
-		result.note.RefreshTags()
+		modContent := modifiedMap[uuid]
+
+		// Check if modified content includes frontmatter
+		if strings.HasPrefix(strings.TrimLeft(modContent, "\n\r"), "---") {
+			// Parse frontmatter from modified content
+			fm, body, err := note.ParseFrontmatter(modContent)
+			if err != nil {
+				errors = append(errors, fmt.Sprintf("Failed to parse frontmatter for %s: %v", result.Path, err))
+				continue
+			}
+
+			// Protect immutable fields
+			if fm.UUID != "" && fm.UUID != result.note.UUID {
+				errors = append(errors, fmt.Sprintf("Cannot change UUID for %s", result.Path))
+				continue
+			}
+
+			// Apply allowed frontmatter changes
+			// Extra fields can be modified
+			if len(fm.Extra) > 0 {
+				if result.note.Extra == nil {
+					result.note.Extra = make(map[string]interface{})
+				}
+				for k, v := range fm.Extra {
+					result.note.Extra[k] = v
+				}
+			}
+
+			// Tags from frontmatter override extracted tags if explicitly set
+			if len(fm.Tags) > 0 {
+				result.note.Tags = fm.Tags
+			}
+
+			// Set content (without frontmatter)
+			result.note.Content = body
+		} else {
+			// No frontmatter - just update content
+			result.note.Content = modContent
+		}
+
+		// Refresh tags from content (unless overridden by frontmatter)
+		if !strings.HasPrefix(strings.TrimLeft(modContent, "\n\r"), "---") {
+			result.note.RefreshTags()
+		}
 		result.note.SetTimestamps()
 
 		if err := result.note.Save(); err != nil {

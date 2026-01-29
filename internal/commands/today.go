@@ -12,13 +12,14 @@ import (
 // NewTodayCmd creates the today command.
 func NewTodayCmd(getVault func() *vault.Vault, jsonOutput *bool) *cobra.Command {
 	var (
-		bulk       bool
-		first      bool
-		edit       bool
-		force      bool
-		sortBy     string
-		limit      int
-		useUpdated bool
+		bulk        bool
+		first       bool
+		edit        bool
+		force       bool
+		frontmatter string
+		sortBy      string
+		limit       int
+		useUpdated  bool
 	)
 
 	cmd := &cobra.Command{
@@ -48,6 +49,7 @@ Use --updated to match on the updated timestamp instead of created.`,
 				first,
 				edit,
 				force,
+				frontmatter,
 				sortBy,
 				limit,
 			)
@@ -58,6 +60,8 @@ Use --updated to match on the updated timestamp instead of created.`,
 	cmd.Flags().BoolVarP(&first, "first", "f", false, "output first match content only")
 	cmd.Flags().BoolVarP(&edit, "edit", "e", false, "open matches in $EDITOR")
 	cmd.Flags().BoolVar(&force, "force", false, "skip confirmation for deletions in edit mode")
+	cmd.Flags().StringVar(&frontmatter, "frontmatter", "", "include frontmatter in output (modes: extra, full, none)")
+	cmd.Flag("frontmatter").NoOptDefVal = "extra"
 	cmd.Flags().StringVarP(&sortBy, "sort", "s", "created:desc", "sort order: field:dir (default newest first)")
 	cmd.Flags().IntVarP(&limit, "limit", "l", 0, "max results (0 = unlimited)")
 	cmd.Flags().BoolVarP(&useUpdated, "updated", "u", false, "match on updated timestamp instead of created")
@@ -68,13 +72,14 @@ Use --updated to match on the updated timestamp instead of created.`,
 // NewYesterdayCmd creates the yesterday command.
 func NewYesterdayCmd(getVault func() *vault.Vault, jsonOutput *bool) *cobra.Command {
 	var (
-		bulk       bool
-		first      bool
-		edit       bool
-		force      bool
-		sortBy     string
-		limit      int
-		useUpdated bool
+		bulk        bool
+		first       bool
+		edit        bool
+		force       bool
+		frontmatter string
+		sortBy      string
+		limit       int
+		useUpdated  bool
 	)
 
 	cmd := &cobra.Command{
@@ -104,6 +109,7 @@ Use --updated to match on the updated timestamp instead of created.`,
 				first,
 				edit,
 				force,
+				frontmatter,
 				sortBy,
 				limit,
 			)
@@ -114,6 +120,8 @@ Use --updated to match on the updated timestamp instead of created.`,
 	cmd.Flags().BoolVarP(&first, "first", "f", false, "output first match content only")
 	cmd.Flags().BoolVarP(&edit, "edit", "e", false, "open matches in $EDITOR")
 	cmd.Flags().BoolVar(&force, "force", false, "skip confirmation for deletions in edit mode")
+	cmd.Flags().StringVar(&frontmatter, "frontmatter", "", "include frontmatter in output (modes: extra, full, none)")
+	cmd.Flag("frontmatter").NoOptDefVal = "extra"
 	cmd.Flags().StringVarP(&sortBy, "sort", "s", "created:desc", "sort order: field:dir (default newest first)")
 	cmd.Flags().IntVarP(&limit, "limit", "l", 0, "max results (0 = unlimited)")
 	cmd.Flags().BoolVarP(&useUpdated, "updated", "u", false, "match on updated timestamp instead of created")
@@ -128,6 +136,7 @@ func runDateCommand(
 	dateRange dateparse.DateRange,
 	useUpdated bool,
 	bulk, first, edit, force bool,
+	frontmatter string,
 	sortBy string,
 	limit int,
 ) error {
@@ -149,6 +158,12 @@ func runDateCommand(
 	}
 	if modeCount > 1 {
 		return fmt.Errorf("--bulk, --first, and --edit are mutually exclusive")
+	}
+
+	// Parse frontmatter mode
+	fmMode := FrontmatterMode(frontmatter)
+	if frontmatter != "" && frontmatter != "none" && frontmatter != "extra" && frontmatter != "full" {
+		return fmt.Errorf("invalid frontmatter mode: %s (use: none, extra, full)", frontmatter)
 	}
 
 	// Create date matcher
@@ -199,24 +214,21 @@ func runDateCommand(
 
 	// Output based on mode
 	if edit {
-		return handleEdit(vlt, results, force)
+		return handleEdit(vlt, results, force, fmMode)
 	}
 
 	if bulk {
-		return outputBulk(results)
+		return outputBulk(results, fmMode)
 	}
 
 	if first {
-		return outputFirst(results)
+		return outputFirst(results, fmMode)
 	}
 
 	if *jsonOutput {
-		return outputJSON(results)
+		return outputJSON(results, fmMode)
 	}
 
-	// Default: list of paths
-	for _, r := range results {
-		fmt.Println(r.Path)
-	}
-	return nil
+	// Default: list of paths (with optional frontmatter)
+	return outputPaths(results, fmMode)
 }
