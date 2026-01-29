@@ -28,9 +28,8 @@
   - [x] 11.2 Early termination for `--limit`
   - [~] 11.3 Tag-only optimization (tried, removed - minimal benefit)
 - [ ] **Phase 12**: Frontmatter Enhancements
-  - [ ] 12.1 `--show-extra` flag for displaying user fields
-  - [ ] 12.2 `--with-frontmatter` flag for bulk export
-  - [ ] 12.3 Frontmatter editing in `update` command
+  - [ ] 12.1 `--frontmatter[=MODE]` flag (extra, full, none)
+  - [ ] 12.2 Frontmatter editing in `update` command
 - [ ] **Phase 13**: Tag Management
   - [ ] 13.1 `tags list` subcommand
   - [ ] 13.2 `tags rename` subcommand
@@ -793,34 +792,47 @@ ruin search "#draft && before:last-month"   # Old drafts
 
 ### Phase 12: Frontmatter Enhancements
 
-#### 12.1 Display Extra Frontmatter Fields
+#### 12.1 `--frontmatter` Flag
 
-Show user-defined frontmatter fields that aren't managed by the CLI.
+Unified flag for controlling frontmatter visibility in output.
 
 **Problem**
 
-Users may have custom frontmatter fields (e.g., `author`, `status`, `project`, `due`). Currently these are preserved but invisible in CLI output.
+Users may have custom frontmatter fields (e.g., `author`, `status`, `project`, `due`). Currently these are preserved but invisible in CLI output. Additionally, bulk editing workflows may need to view/edit frontmatter.
 
 **Solution**
 
-**Option A: Automatic detection**
-- When outputting notes (search, log), detect if `Extra` frontmatter exists
-- Show in a separate section or inline
-
-**Option B: Explicit flag**
 ```
---show-extra    Show user-defined frontmatter fields
+--frontmatter[=MODE]   Include frontmatter in output
+                       Modes: extra (default), full, none
 ```
 
-**Output Formats**
+| Mode | Description |
+|------|-------------|
+| `extra` | Show only user-defined fields (default when flag present) |
+| `full` | Show complete frontmatter block |
+| `none` | Hide frontmatter (default when flag absent) |
 
-**Default output** (with `--show-extra`):
+**Applies to**: `search`, `query run`, `today`, `yesterday`
+
+**Output by Mode**
+
+**Default output** (paths) with `--frontmatter` or `--frontmatter=extra`:
 ```
 /path/to/note.md
-  extra: author=kevin, status=draft
+  author=kevin, status=draft
 ```
 
-**JSON output**:
+**Default output** with `--frontmatter=full`:
+```
+/path/to/note.md
+  uuid: abc-123
+  created: 2025-01-28T10:00:00-08:00
+  tags: [#daily, #work]
+  author: kevin
+```
+
+**JSON output** with `--frontmatter`:
 ```json
 {
   "path": "/path/to/note.md",
@@ -832,42 +844,7 @@ Users may have custom frontmatter fields (e.g., `author`, `status`, `project`, `
 }
 ```
 
-**Implementation Notes**
-
-- The `Note.Extra` map already preserves these fields
-- Add `Extra map[string]interface{}` to `SearchResult` JSON output
-- Consider filtering: `--extra-fields author,status` to show only specific fields
-- Useful for workflows like: `ruin search "status:draft"` (future filter)
-
-#### 12.2 Frontmatter in Bulk Edit
-
-Allow viewing and editing frontmatter in bulk export format.
-
-**New Flag**
-
-```
---with-frontmatter    Include frontmatter in bulk output
-```
-
-Applies to:
-- `ruin search --bulk --with-frontmatter`
-- `ruin query run <name> --bulk --with-frontmatter`
-- `ruin today --bulk --with-frontmatter`
-
-**Output Format**
-
-**Current bulk format** (content only):
-```
-%%%% uuid-1 %%%%
-# Note Title
-
-Content here...
-
-%%%% uuid-2 %%%%
-...
-```
-
-**With `--with-frontmatter`**:
+**Bulk output** with `--frontmatter=full`:
 ```
 %%%% uuid-1 %%%%
 ---
@@ -881,12 +858,23 @@ author: kevin
 # Note Title
 
 Content here...
-
-%%%% uuid-2 %%%%
-...
 ```
 
-#### 12.3 Update Command Frontmatter Handling
+**Examples**
+```bash
+ruin search "#daily" --frontmatter           # Show extra fields
+ruin search "#daily" --frontmatter=full      # Show all frontmatter
+ruin search "#daily" --bulk --frontmatter=full  # Bulk with frontmatter
+ruin search "#daily" --json --frontmatter    # JSON with extra fields
+```
+
+**Implementation Notes**
+
+- The `Note.Extra` map already preserves user fields
+- Add `Extra map[string]interface{}` to `SearchResult` JSON output
+- Modify `note.FormatBulk()` to accept frontmatter mode parameter
+
+#### 12.2 Update Command Frontmatter Handling
 
 When `update` receives bulk content with frontmatter:
 - Parse frontmatter from each section
