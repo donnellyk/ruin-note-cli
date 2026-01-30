@@ -6,7 +6,7 @@ import (
 	"os"
 	"reflect"
 
-	"github.com/kevin/ruin-note-cli/internal/config"
+	"kvnd/ruin-note-cli/internal/config"
 	"github.com/spf13/cobra"
 )
 

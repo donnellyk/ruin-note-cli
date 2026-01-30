@@ -13,7 +13,7 @@ This is a CLI with downstream dependencies. Avoid breaking changes unless necess
 
 ### Initialize Project
 ```bash
-go mod init github.com/kevin/ruin-note-cli
+go mod init kvnd/ruin-note-cli
 ```
 
 ### Build & Run

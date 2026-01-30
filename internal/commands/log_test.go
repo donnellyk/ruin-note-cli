@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/kevin/ruin-note-cli/internal/note"
-	"github.com/kevin/ruin-note-cli/internal/vault"
+	"kvnd/ruin-note-cli/internal/note"
+	"kvnd/ruin-note-cli/internal/vault"
 )
 
 func TestLogCmd_BasicContent(t *testing.T) {

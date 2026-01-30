@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/kevin/ruin-note-cli/internal/vault"
+	"kvnd/ruin-note-cli/internal/vault"
 )
 
 // setupBenchmarkVault creates a vault with N notes for benchmarking.

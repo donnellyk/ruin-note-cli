@@ -1,6 +1,6 @@
 goos: darwin
 goarch: arm64
-pkg: github.com/kevin/ruin-note-cli/internal/commands
+pkg: kvnd/ruin-note-cli/internal/commands
 cpu: Apple M3 Pro
 BenchmarkSearch_TagOnly_100-12                   	    4435	    831380 ns/op	 1121186 B/op	   11442 allocs/op
 BenchmarkSearch_TagOnly_500-12                   	     867	   4140119 ns/op	 5578461 B/op	   57048 allocs/op
@@ -17,4 +17,4 @@ BenchmarkSearch_TextSearch_1000_Realistic-12     	     307	  11809059 ns/op	1861
 BenchmarkSearch_TagOnly_5000_Realistic-12        	      69	  49851992 ns/op	56382505 B/op	  562572 allocs/op
 BenchmarkSearch_TextSearch_5000_Realistic-12     	      74	  45784463 ns/op	87842490 B/op	  665912 allocs/op
 PASS
-ok  	github.com/kevin/ruin-note-cli/internal/commands	74.682s
+ok  	kvnd/ruin-note-cli/internal/commands	74.682s

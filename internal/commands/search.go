@@ -10,9 +10,9 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/kevin/ruin-note-cli/internal/dateparse"
-	"github.com/kevin/ruin-note-cli/internal/note"
-	"github.com/kevin/ruin-note-cli/internal/vault"
+	"kvnd/ruin-note-cli/internal/dateparse"
+	"kvnd/ruin-note-cli/internal/note"
+	"kvnd/ruin-note-cli/internal/vault"
 	"github.com/spf13/cobra"
 )
 

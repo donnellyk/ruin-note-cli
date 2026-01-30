@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/kevin/ruin-note-cli/internal/commands"
-	"github.com/kevin/ruin-note-cli/internal/config"
-	"github.com/kevin/ruin-note-cli/internal/vault"
+	"kvnd/ruin-note-cli/internal/commands"
+	"kvnd/ruin-note-cli/internal/config"
+	"kvnd/ruin-note-cli/internal/vault"
 	"github.com/spf13/cobra"
 )
 
