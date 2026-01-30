@@ -40,7 +40,6 @@
   - [ ] 14.3 Enhanced `--help` with examples
 - [ ] **Phase 15**: Developer Experience
   - [ ] 15.1 Shell completions (`completion` command)
-  - [ ] 15.2 Note templates (`--template` flag)
 
 ### Milestone 3: Advanced Features (Future)
 
@@ -234,16 +233,6 @@ ruin completion <shell>
 
 Generate completion scripts for bash, zsh, fish, powershell using Cobra's built-in generation.
 
-#### 15.2 Note Templates
-
-```
-ruin log --template <name> [content]
-```
-
-**Template Location**: `.ruin/templates/<name>.md`
-
-**Variables**: `{{.Date}}`, `{{.DateTime}}`, `{{.Content}}`, `{{.Title}}`
-
 ---
 
 ## Milestone 3 Specifications
@@ -328,6 +317,16 @@ Extract `confirmAction(prompt string) (bool, error)` helper.
 
 ## Future Ideas
 
+### Note Templates
+
+```
+ruin log --template <name> [content]
+```
+
+**Template Location**: `.ruin/templates/<name>.md`
+
+**Variables**: `{{.Date}}`, `{{.DateTime}}`, `{{.Content}}`, `{{.Title}}`
+
 ### Version Control Integration
 
 Git integration for vault history:
@@ -339,15 +338,6 @@ ruin sync
 ```
 
 Consider Jujutsu as alternative for automatic snapshotting.
-
-### Performance Benchmarking Infrastructure
-
-Already implemented:
-- `scripts/create-benchmark-vault.sh` - Create test vaults
-- `PERFORMANCE.md` - Track results over time
-- `make bench`, `make bench-baseline`, `make bench-compare`
-
-Future: CI integration, regression tests.
 
 ---
 
