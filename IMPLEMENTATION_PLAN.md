@@ -34,10 +34,9 @@
   - [x] 13.1 `tags list` subcommand
   - [x] 13.2 `tags rename` subcommand
   - [x] 13.3 `tags delete` subcommand
-- [ ] **Phase 14**: Documentation
-  - [ ] 14.1 Man page generation (`cobra-doc`)
-  - [ ] 14.2 Markdown documentation (`docs/`)
-  - [ ] 14.3 Enhanced `--help` with examples
+- [x] **Phase 14**: Documentation
+  - [x] 14.1 CLI reference (`docs/cli-reference.md`)
+  - [x] 14.3 Enhanced `--help` with examples (already in command definitions)
 - [ ] **Phase 15**: Developer Experience
   - [ ] 15.1 Shell completions (`completion` command)
 
@@ -189,38 +188,6 @@ Same flags as `rename`. Removes tag from all notes.
 
 ---
 
-### Phase 14: Documentation
-
-#### 14.1 Man Pages
-
-Generate using `cobra/doc` package. Target structure:
-```
-ruin(1)       - Main command overview
-ruin-log(1)   - Creating notes
-ruin-search(1) - Searching notes
-...
-```
-
-#### 14.2 Markdown Documentation
-
-```
-docs/
-├── getting-started.md
-├── commands/
-│   ├── log.md, search.md, query.md, ...
-├── concepts/
-│   ├── vault.md, frontmatter.md, tags.md, bulk-format.md
-└── guides/
-    ├── daily-notes.md, scripting.md, editor-integration.md
-```
-
-#### 14.3 Enhanced `--help`
-
-Every command should have:
-- Clear one-line description
-- Multiple examples showing common patterns
-- Flag descriptions that explain *why*, not just *what*
-
 ---
 
 ### Phase 15: Developer Experience
@@ -316,6 +283,20 @@ Extract `confirmAction(prompt string) (bool, error)` helper.
 ---
 
 ## Future Ideas
+
+### Extended Markdown Documentation
+
+Full documentation site with guides and concepts:
+```
+docs/
+├── getting-started.md
+├── commands/
+│   ├── log.md, search.md, query.md, ...
+├── concepts/
+│   ├── vault.md, frontmatter.md, tags.md, bulk-format.md
+└── guides/
+    ├── daily-notes.md, scripting.md, editor-integration.md
+```
 
 ### Note Templates
 
