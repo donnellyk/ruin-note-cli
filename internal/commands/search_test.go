@@ -391,8 +391,8 @@ func TestSearchCmd_EditJsonIncompatible(t *testing.T) {
 		t.Error("expected error for --edit with --json")
 	}
 
-	if !strings.Contains(err.Error(), "incompatible") {
-		t.Errorf("error = %q, want to mention 'incompatible'", err.Error())
+	if !strings.Contains(err.Error(), "mutually exclusive") {
+		t.Errorf("error = %q, want to mention 'mutually exclusive'", err.Error())
 	}
 }
 

@@ -28,9 +28,6 @@ func main() {
 	if err := rootCmd.Execute(); err != nil {
 		// Determine appropriate exit code based on error type
 		switch {
-		case err == commands.ErrNoMatches:
-			// No matches is exit code 1 but not a "real" error
-			os.Exit(exitError)
 		case err == commands.ErrUserAborted:
 			os.Exit(exitUserAborted)
 		default:

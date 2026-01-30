@@ -37,7 +37,12 @@ func newTagsListCmd(getVault func() *vault.Vault, jsonOutput *bool) *cobra.Comma
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List all tags in the vault",
-		Long:  `List all tags with their usage counts.`,
+		Long: `List all tags with their usage counts.
+
+See also:
+  ruin search "#tag"    Search for notes with a specific tag
+  ruin tags rename      Rename a tag across all notes
+  ruin tags delete      Remove a tag from all notes`,
 		Example: `  # List all tags sorted by count (most used first)
   ruin tags list
 
@@ -124,15 +129,22 @@ func newTagsRenameCmd(getVault func() *vault.Vault, jsonOutput *bool) *cobra.Com
 		Long: `Rename a tag in all notes that contain it.
 
 The old tag will be replaced with the new tag in all matching notes.
-Tags should include the # prefix (e.g., #old-tag #new-tag).`,
-		Example: `  # Rename a tag
+The # prefix is optional and will be added automatically if missing.
+
+Note: When searching for tags with "ruin search", the # prefix is required.
+
+See also:
+  ruin tags list      List all tags in the vault
+  ruin tags delete    Remove a tag from all notes`,
+		Example: `  # Rename a tag (with or without # prefix)
   ruin tags rename "#wip" "#in-progress"
+  ruin tags rename wip in-progress
 
   # Preview changes without applying
-  ruin tags rename "#old" "#new" --dry-run
+  ruin tags rename old new --dry-run
 
   # Skip confirmation
-  ruin tags rename "#old" "#new" --force`,
+  ruin tags rename old new --force`,
 		Args: cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			vlt := getVault()
@@ -264,15 +276,22 @@ func newTagsDeleteCmd(getVault func() *vault.Vault, jsonOutput *bool) *cobra.Com
 		Long: `Remove a tag from all notes that contain it.
 
 The tag will be removed from the content of all matching notes.
-Tags should include the # prefix (e.g., #tag-to-delete).`,
-		Example: `  # Delete a tag
+The # prefix is optional and will be added automatically if missing.
+
+Note: When searching for tags with "ruin search", the # prefix is required.
+
+See also:
+  ruin tags list      List all tags in the vault
+  ruin tags rename    Rename a tag across all notes`,
+		Example: `  # Delete a tag (with or without # prefix)
   ruin tags delete "#deprecated"
+  ruin tags delete deprecated
 
   # Preview changes without applying
-  ruin tags delete "#old" --dry-run
+  ruin tags delete old --dry-run
 
   # Skip confirmation
-  ruin tags delete "#old" --force`,
+  ruin tags delete old --force`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			vlt := getVault()

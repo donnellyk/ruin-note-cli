@@ -46,15 +46,7 @@ type SortField struct {
 
 // NewSearchCmd creates the search command.
 func NewSearchCmd(getVault func() *vault.Vault, jsonOutput *bool) *cobra.Command {
-	var (
-		bulk        bool
-		first       bool
-		edit        bool
-		force       bool
-		frontmatter string
-		sortBy      string
-		limit       int
-	)
+	var flags SearchFlags
 
 	cmd := &cobra.Command{
 		Use:   "search <query>",
@@ -62,7 +54,7 @@ func NewSearchCmd(getVault func() *vault.Vault, jsonOutput *bool) *cobra.Command
 		Long: `Search for notes matching the given query.
 
 Query syntax:
-  - Tag search: #tagname
+  - Tag search: #tagname (requires # prefix)
   - Text search: word (case-insensitive)
   - AND (explicit): term1 && term2
   - AND (implicit): term1 term2 (space-separated)
@@ -83,7 +75,12 @@ Date formats:
 
 Other filters:
   - title:TEXT       Notes with title containing text
-  - path:TEXT        Notes with path containing text`,
+  - path:TEXT        Notes with path containing text
+
+See also:
+  ruin query save    Save a search as a named query
+  ruin today         Shortcut for notes created today
+  ruin yesterday     Shortcut for notes created yesterday`,
 		Example: `  # Tag search
   ruin search "#daily"
 
@@ -122,21 +119,9 @@ Other filters:
 				return fmt.Errorf("vault not configured")
 			}
 
-			// Check mutual exclusivity of output formats
-			modeCount := 0
-			if bulk {
-				modeCount++
-			}
-			if first {
-				modeCount++
-			}
-			if modeCount > 1 {
-				return fmt.Errorf("--bulk and --first are mutually exclusive")
-			}
-
-			// --edit is orthogonal to format, but incompatible with --json
-			if edit && *jsonOutput {
-				return fmt.Errorf("--json and --edit are incompatible")
+			// Validate flags
+			if err := ValidateSearchFlags(&flags, *jsonOutput); err != nil {
+				return err
 			}
 
 			// Parse query
@@ -148,8 +133,8 @@ Other filters:
 
 			// Parse sort fields
 			var sortFields []SortField
-			if sortBy != "" {
-				sortFields, err = parseSort(sortBy)
+			if flags.Sort != "" {
+				sortFields, err = parseSort(flags.Sort)
 				if err != nil {
 					return fmt.Errorf("invalid sort: %w", err)
 				}
@@ -158,8 +143,8 @@ Other filters:
 			// Determine search options for optimization
 			// Only enable early termination if limit is set and no sorting requested
 			var opts SearchOptions
-			if limit > 0 && len(sortFields) == 0 {
-				opts.Limit = limit
+			if flags.Limit > 0 && len(sortFields) == 0 {
+				opts.Limit = flags.Limit
 			}
 
 			// Find matching notes
@@ -173,8 +158,8 @@ Other filters:
 				sortResults(results, sortFields)
 
 				// Apply limit after sorting (early termination wasn't possible)
-				if limit > 0 && len(results) > limit {
-					results = results[:limit]
+				if flags.Limit > 0 && len(results) > flags.Limit {
+					results = results[:flags.Limit]
 				}
 			}
 
@@ -183,30 +168,29 @@ Other filters:
 				if *jsonOutput {
 					fmt.Println("[]")
 				}
-				// Return special error for no matches (caller can check and set exit code)
-				return ErrNoMatches
+				return nil
 			}
 
 			// Parse frontmatter mode
-			fmMode := FrontmatterMode(frontmatter)
-			if frontmatter != "" && frontmatter != "none" && frontmatter != "extra" && frontmatter != "full" {
-				return fmt.Errorf("invalid frontmatter mode: %s (use: none, extra, full)", frontmatter)
+			fmMode := FrontmatterMode(flags.Frontmatter)
+			if flags.Frontmatter != "" && flags.Frontmatter != "none" && flags.Frontmatter != "extra" && flags.Frontmatter != "full" {
+				return fmt.Errorf("invalid frontmatter mode: %s (use: none, extra, full)", flags.Frontmatter)
 			}
 
 			// Output based on mode
-			if edit {
+			if flags.Edit {
 				// --first limits edit to first match only
-				if first && len(results) > 1 {
+				if flags.First && len(results) > 1 {
 					results = results[:1]
 				}
-				return handleEdit(vlt, results, force, fmMode)
+				return handleEdit(vlt, results, flags.Force, fmMode)
 			}
 
-			if bulk {
+			if flags.Bulk {
 				return outputBulk(results, fmMode)
 			}
 
-			if first {
+			if flags.First {
 				return outputFirst(results, fmMode)
 			}
 
@@ -219,14 +203,7 @@ Other filters:
 		},
 	}
 
-	cmd.Flags().BoolVarP(&bulk, "bulk", "b", false, "output content with %%%% <uuid> %%%% separators")
-	cmd.Flags().BoolVarP(&first, "first", "f", false, "output first match content only")
-	cmd.Flags().BoolVarP(&edit, "edit", "e", false, "open matches in $EDITOR")
-	cmd.Flags().BoolVar(&force, "force", false, "skip confirmation for deletions in edit mode")
-	cmd.Flags().StringVar(&frontmatter, "frontmatter", "", "include frontmatter in output (modes: extra, full, none)")
-	cmd.Flag("frontmatter").NoOptDefVal = "extra" // --frontmatter without value defaults to "extra"
-	cmd.Flags().StringVarP(&sortBy, "sort", "s", "", "sort order: field:dir (e.g., created:desc)")
-	cmd.Flags().IntVarP(&limit, "limit", "l", 0, "max results (0 = unlimited)")
+	AddSearchFlags(cmd, &flags, "created:desc")
 
 	return cmd
 }
@@ -883,7 +860,9 @@ func handleEditSingle(vlt *vault.Vault, result SearchResult, force bool, fmMode 
 				return fmt.Errorf("deletion requires --force in non-interactive mode")
 			}
 
-			fmt.Fprintf(os.Stderr, "Delete note %s? [y/N]: ", result.Path)
+			fmt.Fprintf(os.Stderr, "The following 1 note(s) will be deleted:\n")
+			fmt.Fprintf(os.Stderr, "  - %s\n", result.Path)
+			fmt.Fprint(os.Stderr, "Continue? [y/N]: ")
 			var response string
 			fmt.Scanln(&response)
 			response = strings.ToLower(strings.TrimSpace(response))

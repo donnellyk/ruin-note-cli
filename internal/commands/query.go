@@ -47,7 +47,12 @@ func newQuerySaveCmd(getVault func() *vault.Vault, jsonOutput *bool) *cobra.Comm
 		Long: `Save a search query with a name for later use.
 
 Before saving, the query is tested and the number of matching notes is displayed.
-You will be prompted to confirm unless --force is used.`,
+You will be prompted to confirm unless --force is used.
+
+See also:
+  ruin query list    List all saved queries
+  ruin query run     Run a saved query
+  ruin search        Search directly without saving`,
 		Example: `  # Save a query (interactive)
   ruin query save daily-work "#daily && #work"
 
@@ -159,7 +164,12 @@ func newQueryListCmd(getVault func() *vault.Vault, jsonOutput *bool) *cobra.Comm
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List all saved queries",
-		Long:  `List all saved queries from .ruin/queries.yml.`,
+		Long: `List all saved queries from .ruin/queries.yml.
+
+See also:
+  ruin query save    Save a new query
+  ruin query run     Run a saved query
+  ruin query delete  Delete a saved query`,
 		Example: `  # List queries
   ruin query list
 
@@ -205,7 +215,11 @@ func newQueryDeleteCmd(getVault func() *vault.Vault, jsonOutput *bool) *cobra.Co
 	cmd := &cobra.Command{
 		Use:   "delete <name>",
 		Short: "Delete a saved query",
-		Long:  `Delete a saved query by name.`,
+		Long: `Delete a saved query by name.
+
+See also:
+  ruin query list    List all saved queries
+  ruin query save    Save a new query`,
 		Example: `  # Delete a query (interactive)
   ruin query delete daily-work
 
@@ -287,22 +301,18 @@ func newQueryDeleteCmd(getVault func() *vault.Vault, jsonOutput *bool) *cobra.Co
 
 // newQueryRunCmd creates the "query run" subcommand.
 func newQueryRunCmd(getVault func() *vault.Vault, jsonOutput *bool) *cobra.Command {
-	var (
-		bulk        bool
-		first       bool
-		edit        bool
-		force       bool
-		frontmatter string
-		sortBy      string
-		limit       int
-	)
+	var flags SearchFlags
 
 	cmd := &cobra.Command{
 		Use:   "run <name>",
 		Short: "Run a saved query",
 		Long: `Run a saved query by name.
 
-This is equivalent to running "ruin search <query>" with the saved query string.`,
+This is equivalent to running "ruin search <query>" with the saved query string.
+
+See also:
+  ruin search        Search for notes directly
+  ruin query list    List all saved queries`,
 		Example: `  # Run a saved query
   ruin query run daily-work
 
@@ -337,27 +347,15 @@ This is equivalent to running "ruin search <query>" with the saved query string.
 				return fmt.Errorf("query not found: %s", name)
 			}
 
-			// Check mutual exclusivity of output formats
-			modeCount := 0
-			if bulk {
-				modeCount++
-			}
-			if first {
-				modeCount++
-			}
-			if modeCount > 1 {
-				return fmt.Errorf("--bulk and --first are mutually exclusive")
-			}
-
-			// --edit is orthogonal to format, but incompatible with --json
-			if edit && *jsonOutput {
-				return fmt.Errorf("--json and --edit are incompatible")
+			// Validate flags
+			if err := ValidateSearchFlags(&flags, *jsonOutput); err != nil {
+				return err
 			}
 
 			// Parse frontmatter mode
-			fmMode := FrontmatterMode(frontmatter)
-			if frontmatter != "" && frontmatter != "none" && frontmatter != "extra" && frontmatter != "full" {
-				return fmt.Errorf("invalid frontmatter mode: %s (use: none, extra, full)", frontmatter)
+			fmMode := FrontmatterMode(flags.Frontmatter)
+			if flags.Frontmatter != "" && flags.Frontmatter != "none" && flags.Frontmatter != "extra" && flags.Frontmatter != "full" {
+				return fmt.Errorf("invalid frontmatter mode: %s (use: none, extra, full)", flags.Frontmatter)
 			}
 
 			// Parse query
@@ -368,8 +366,8 @@ This is equivalent to running "ruin search <query>" with the saved query string.
 
 			// Parse sort fields
 			var sortFields []SortField
-			if sortBy != "" {
-				sortFields, err = parseSort(sortBy)
+			if flags.Sort != "" {
+				sortFields, err = parseSort(flags.Sort)
 				if err != nil {
 					return fmt.Errorf("invalid sort: %w", err)
 				}
@@ -387,8 +385,8 @@ This is equivalent to running "ruin search <query>" with the saved query string.
 			}
 
 			// Apply limit
-			if limit > 0 && len(results) > limit {
-				results = results[:limit]
+			if flags.Limit > 0 && len(results) > flags.Limit {
+				results = results[:flags.Limit]
 			}
 
 			// No results
@@ -396,23 +394,23 @@ This is equivalent to running "ruin search <query>" with the saved query string.
 				if *jsonOutput {
 					fmt.Println("[]")
 				}
-				return ErrNoMatches
+				return nil
 			}
 
 			// Output based on mode
-			if edit {
+			if flags.Edit {
 				// --first limits edit to first match only
-				if first && len(results) > 1 {
+				if flags.First && len(results) > 1 {
 					results = results[:1]
 				}
-				return handleEdit(vlt, results, force, fmMode)
+				return handleEdit(vlt, results, flags.Force, fmMode)
 			}
 
-			if bulk {
+			if flags.Bulk {
 				return outputBulk(results, fmMode)
 			}
 
-			if first {
+			if flags.First {
 				return outputFirst(results, fmMode)
 			}
 
@@ -425,14 +423,7 @@ This is equivalent to running "ruin search <query>" with the saved query string.
 		},
 	}
 
-	cmd.Flags().BoolVarP(&bulk, "bulk", "b", false, "output content with %%%% <uuid> %%%% separators")
-	cmd.Flags().BoolVarP(&first, "first", "f", false, "output first match content only")
-	cmd.Flags().BoolVarP(&edit, "edit", "e", false, "open matches in $EDITOR")
-	cmd.Flags().BoolVar(&force, "force", false, "skip confirmation for deletions in edit mode")
-	cmd.Flags().StringVar(&frontmatter, "frontmatter", "", "include frontmatter in output (modes: extra, full, none)")
-	cmd.Flag("frontmatter").NoOptDefVal = "extra"
-	cmd.Flags().StringVarP(&sortBy, "sort", "s", "", "sort order: field:dir (e.g., created:desc)")
-	cmd.Flags().IntVarP(&limit, "limit", "l", 0, "max results (0 = unlimited)")
+	AddSearchFlags(cmd, &flags, "created:desc")
 
 	return cmd
 }

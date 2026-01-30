@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"reflect"
-	"strings"
 
 	"github.com/kevin/ruin-note-cli/internal/config"
 	"github.com/spf13/cobra"
@@ -109,21 +108,21 @@ func setConfigKey(cfg *config.Config, key, value string, jsonOut bool) error {
 }
 
 func getConfigValue(cfg *config.Config, key string) (string, error) {
-	switch strings.ToLower(key) {
-	case "vault_path", "vault-path", "vaultpath":
+	switch key {
+	case "vault_path":
 		return cfg.VaultPath, nil
 	default:
-		return "", fmt.Errorf("unknown config key: %s", key)
+		return "", fmt.Errorf("unknown config key: %s (available: vault_path)", key)
 	}
 }
 
 func setConfigValue(cfg *config.Config, key, value string) error {
-	switch strings.ToLower(key) {
-	case "vault_path", "vault-path", "vaultpath":
+	switch key {
+	case "vault_path":
 		cfg.VaultPath = value
 		return nil
 	default:
-		return fmt.Errorf("unknown config key: %s", key)
+		return fmt.Errorf("unknown config key: %s (available: vault_path)", key)
 	}
 }
 

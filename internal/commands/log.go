@@ -40,7 +40,11 @@ Content can be provided as:
   - Via stdin (use --stdin or pipe content)
   - Via stdin when no argument is provided and stdin is not a TTY
 
-The note will be saved with frontmatter containing UUID, timestamps, and tags.`,
+The note will be saved with frontmatter containing UUID, timestamps, and tags.
+
+See also:
+  ruin search      Search for notes
+  ruin today       Show notes created today`,
 		Example: `  # From argument
   ruin log "Quick thought #idea"
 
