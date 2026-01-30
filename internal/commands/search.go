@@ -122,7 +122,7 @@ Other filters:
 				return fmt.Errorf("vault not configured")
 			}
 
-			// Check mutual exclusivity
+			// Check mutual exclusivity of output formats
 			modeCount := 0
 			if bulk {
 				modeCount++
@@ -130,11 +130,13 @@ Other filters:
 			if first {
 				modeCount++
 			}
-			if edit {
-				modeCount++
-			}
 			if modeCount > 1 {
-				return fmt.Errorf("--bulk, --first, and --edit are mutually exclusive")
+				return fmt.Errorf("--bulk and --first are mutually exclusive")
+			}
+
+			// --edit is orthogonal to format, but incompatible with --json
+			if edit && *jsonOutput {
+				return fmt.Errorf("--json and --edit are incompatible")
 			}
 
 			// Parse query
@@ -193,6 +195,10 @@ Other filters:
 
 			// Output based on mode
 			if edit {
+				// --first limits edit to first match only
+				if first && len(results) > 1 {
+					results = results[:1]
+				}
 				return handleEdit(vlt, results, force, fmMode)
 			}
 
@@ -811,6 +817,133 @@ func handleEdit(vlt *vault.Vault, results []SearchResult, force bool, fmMode Fro
 		editor = "vi"
 	}
 
+	// Single note: use simple format without bulk separators
+	if len(results) == 1 {
+		return handleEditSingle(vlt, results[0], force, fmMode, editor)
+	}
+
+	// Multiple notes: use bulk format
+	return handleEditBulk(vlt, results, force, fmMode, editor)
+}
+
+// handleEditSingle handles editing a single note without bulk separators.
+func handleEditSingle(vlt *vault.Vault, result SearchResult, force bool, fmMode FrontmatterMode, editor string) error {
+	// Create temp file
+	tmpFile, err := os.CreateTemp("", "ruin-edit-*.md")
+	if err != nil {
+		return fmt.Errorf("failed to create temp file: %w", err)
+	}
+	tmpPath := tmpFile.Name()
+	defer os.Remove(tmpPath)
+
+	// Prepare content
+	content := result.note.Content
+	if fmMode == FrontmatterFull {
+		serialized, err := result.note.Serialize()
+		if err == nil {
+			content = serialized
+		}
+	}
+
+	if _, err := tmpFile.WriteString(content); err != nil {
+		tmpFile.Close()
+		return fmt.Errorf("failed to write temp file: %w", err)
+	}
+	tmpFile.Close()
+
+	originalContent := content
+
+	// Open editor
+	cmd := exec.Command("sh", "-c", editor+" \"$1\"", "sh", tmpPath)
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("editor failed: %w", err)
+	}
+
+	// Read modified content
+	modifiedBytes, err := os.ReadFile(tmpPath)
+	if err != nil {
+		return fmt.Errorf("failed to read modified file: %w", err)
+	}
+	modifiedContent := string(modifiedBytes)
+
+	// If no changes, nothing to do
+	if modifiedContent == originalContent {
+		fmt.Fprintln(os.Stderr, "No changes made")
+		return nil
+	}
+
+	// Check for deletion (empty content)
+	if strings.TrimSpace(modifiedContent) == "" {
+		if !force {
+			if !isTerminal(os.Stderr) {
+				return fmt.Errorf("deletion requires --force in non-interactive mode")
+			}
+
+			fmt.Fprintf(os.Stderr, "Delete note %s? [y/N]: ", result.Path)
+			var response string
+			fmt.Scanln(&response)
+			response = strings.ToLower(strings.TrimSpace(response))
+			if response != "y" && response != "yes" {
+				fmt.Fprintln(os.Stderr, "Aborted.")
+				return nil
+			}
+		}
+
+		if err := os.Remove(result.Path); err != nil {
+			return fmt.Errorf("failed to delete %s: %w", result.Path, err)
+		}
+		vlt.DecrementTagsIndex(result.note.Tags)
+		fmt.Fprintf(os.Stderr, "Modified: 0, Deleted: 1\n")
+		return nil
+	}
+
+	// Apply changes
+	if strings.HasPrefix(strings.TrimLeft(modifiedContent, "\n\r"), "---") {
+		fm, body, err := note.ParseFrontmatter(modifiedContent)
+		if err != nil {
+			return fmt.Errorf("failed to parse frontmatter: %w", err)
+		}
+
+		if fm.UUID != "" && fm.UUID != result.note.UUID {
+			return fmt.Errorf("cannot change UUID")
+		}
+
+		if len(fm.Extra) > 0 {
+			if result.note.Extra == nil {
+				result.note.Extra = make(map[string]interface{})
+			}
+			for k, v := range fm.Extra {
+				result.note.Extra[k] = v
+			}
+		}
+
+		if len(fm.Tags) > 0 {
+			result.note.Tags = fm.Tags
+		}
+
+		result.note.Content = body
+	} else {
+		result.note.Content = modifiedContent
+		result.note.RefreshTags()
+	}
+
+	result.note.SetTimestamps()
+
+	if err := result.note.Save(); err != nil {
+		return fmt.Errorf("failed to save: %w", err)
+	}
+
+	vlt.UpdateTagsIndex(result.note.Tags)
+	fmt.Fprintf(os.Stderr, "Modified: 1, Deleted: 0\n")
+	return nil
+}
+
+// handleEditBulk handles editing multiple notes with bulk format.
+func handleEditBulk(vlt *vault.Vault, results []SearchResult, force bool, fmMode FrontmatterMode, editor string) error {
 	// Create temp file with bulk format
 	tmpFile, err := os.CreateTemp("", "ruin-edit-*.md")
 	if err != nil {

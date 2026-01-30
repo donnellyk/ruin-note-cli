@@ -145,7 +145,7 @@ func runDateCommand(
 		return fmt.Errorf("vault not configured")
 	}
 
-	// Check mutual exclusivity
+	// Check mutual exclusivity of output formats
 	modeCount := 0
 	if bulk {
 		modeCount++
@@ -153,11 +153,13 @@ func runDateCommand(
 	if first {
 		modeCount++
 	}
-	if edit {
-		modeCount++
-	}
 	if modeCount > 1 {
-		return fmt.Errorf("--bulk, --first, and --edit are mutually exclusive")
+		return fmt.Errorf("--bulk and --first are mutually exclusive")
+	}
+
+	// --edit is orthogonal to format, but incompatible with --json
+	if edit && *jsonOutput {
+		return fmt.Errorf("--json and --edit are incompatible")
 	}
 
 	// Parse frontmatter mode
@@ -214,6 +216,10 @@ func runDateCommand(
 
 	// Output based on mode
 	if edit {
+		// --first limits edit to first match only
+		if first && len(results) > 1 {
+			results = results[:1]
+		}
 		return handleEdit(vlt, results, force, fmMode)
 	}
 

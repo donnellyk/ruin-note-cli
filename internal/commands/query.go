@@ -337,7 +337,7 @@ This is equivalent to running "ruin search <query>" with the saved query string.
 				return fmt.Errorf("query not found: %s", name)
 			}
 
-			// Check mutual exclusivity
+			// Check mutual exclusivity of output formats
 			modeCount := 0
 			if bulk {
 				modeCount++
@@ -345,11 +345,13 @@ This is equivalent to running "ruin search <query>" with the saved query string.
 			if first {
 				modeCount++
 			}
-			if edit {
-				modeCount++
-			}
 			if modeCount > 1 {
-				return fmt.Errorf("--bulk, --first, and --edit are mutually exclusive")
+				return fmt.Errorf("--bulk and --first are mutually exclusive")
+			}
+
+			// --edit is orthogonal to format, but incompatible with --json
+			if edit && *jsonOutput {
+				return fmt.Errorf("--json and --edit are incompatible")
 			}
 
 			// Parse frontmatter mode
@@ -399,6 +401,10 @@ This is equivalent to running "ruin search <query>" with the saved query string.
 
 			// Output based on mode
 			if edit {
+				// --first limits edit to first match only
+				if first && len(results) > 1 {
+					results = results[:1]
+				}
 				return handleEdit(vlt, results, force, fmMode)
 			}
 

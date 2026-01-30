@@ -378,6 +378,49 @@ func TestSearchCmd_MutualExclusivity(t *testing.T) {
 	}
 }
 
+func TestSearchCmd_EditJsonIncompatible(t *testing.T) {
+	vlt := setupTestVault(t)
+
+	jsonOut := true
+	cmd := NewSearchCmd(func() *vault.Vault { return vlt }, &jsonOut)
+
+	cmd.SetArgs([]string{"--edit", "#daily"})
+	err := cmd.Execute()
+
+	if err == nil {
+		t.Error("expected error for --edit with --json")
+	}
+
+	if !strings.Contains(err.Error(), "incompatible") {
+		t.Errorf("error = %q, want to mention 'incompatible'", err.Error())
+	}
+}
+
+func TestSearchCmd_EditFirstAllowed(t *testing.T) {
+	vlt := setupTestVault(t)
+
+	// --edit --first should be allowed (not mutually exclusive)
+	// This test verifies the flags are accepted; actual editing requires EDITOR
+	jsonOut := false
+	cmd := NewSearchCmd(func() *vault.Vault { return vlt }, &jsonOut)
+
+	// Capture stderr to suppress "No changes made" message
+	oldStderr := os.Stderr
+	_, w, _ := os.Pipe()
+	os.Stderr = w
+
+	cmd.SetArgs([]string{"--edit", "--first", "#daily"})
+	err := cmd.Execute()
+
+	w.Close()
+	os.Stderr = oldStderr
+
+	// Should not error on flag combination (EDITOR=true makes it a no-op)
+	if err != nil {
+		t.Errorf("--edit --first should be allowed, got error: %v", err)
+	}
+}
+
 func TestParseQuery(t *testing.T) {
 	tests := []struct {
 		name    string
