@@ -42,8 +42,6 @@
 - [x] **Phase 14**: Documentation
   - [x] 14.1 CLI reference (`docs/cli-reference.md`)
   - [x] 14.3 Enhanced `--help` with examples (already in command definitions)
-- [ ] **Phase 15**: Developer Experience
-  - [ ] 15.1 Shell completions (`completion` command)
 
 ### Milestone 3: Advanced Features (Future)
 
@@ -91,20 +89,6 @@
 | stderr | Errors, confirmations |
 
 **TTY behavior**: Prompts only when stderr is a TTY. Non-interactive mode requires `--force` for destructive operations.
-
----
-
-## Upcoming Phase Specifications
-
-### Phase 15: Developer Experience
-
-#### 15.1 Shell Completions
-
-```
-ruin completion <shell>
-```
-
-Generate completion scripts for bash, zsh, fish, powershell using Cobra's built-in generation.
 
 ---
 
@@ -189,6 +173,14 @@ Extract `confirmAction(prompt string) (bool, error)` helper.
 ---
 
 ## Future Ideas
+
+### Shell Completions
+
+```
+ruin completion <shell>
+```
+
+Generate completion scripts for bash, zsh, fish, powershell using Cobra's built-in generation.
 
 ### Extended Markdown Documentation
 
