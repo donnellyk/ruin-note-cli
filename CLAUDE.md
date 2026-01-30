@@ -2,6 +2,9 @@
 
 A Zettelkasten-inspired note-taking CLI written in Go.
 
+## Important
+This is a CLI with downstream dependencies. Avoid breaking changes unless necessary. If you need to make a breaking change, tell me.
+
 ## Project Setup
 
 ### Prerequisites
