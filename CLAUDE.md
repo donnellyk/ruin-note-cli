@@ -11,11 +11,6 @@ This is a CLI with downstream dependencies. Avoid breaking changes unless necess
 - Go 1.21+ (install via `brew install go` on macOS or from https://go.dev/dl/)
 - Set up Go environment: ensure `$GOPATH/bin` is in your `$PATH`
 
-### Initialize Project
-```bash
-go mod init kvnd/ruin-note-cli
-```
-
 ### Build & Run
 ```bash
 make build    # or: go build -o ruin ./cmd/ruin

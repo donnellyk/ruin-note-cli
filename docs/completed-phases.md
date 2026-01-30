@@ -467,6 +467,91 @@ The concurrent I/O (worker pool) provides the majority of the speedup (~2x).
 
 ---
 
+### Phase 12: Frontmatter Enhancements
+
+#### 12.1 `--frontmatter` Flag
+
+Unified flag for controlling frontmatter visibility in output.
+
+```
+--frontmatter[=MODE]   Include frontmatter in output
+                       Modes: extra (default), full, none
+```
+
+| Mode | Description |
+|------|-------------|
+| `extra` | Show only user-defined fields (default when flag present) |
+| `full` | Show complete frontmatter block |
+| `none` | Hide frontmatter (default when flag absent) |
+
+**Applies to**: `search`, `query run`, `today`, `yesterday`
+
+#### 12.2 Update Command Frontmatter Handling
+
+When `update` receives bulk content with frontmatter:
+- Parse frontmatter from each section
+- Apply frontmatter changes (merge with existing)
+- Protect managed fields: `uuid` changes are errors, `created` is immutable
+- Allow changes to: `tags` (overrides extraction), user fields
+
+---
+
+### Phase 13: Tag Management
+
+#### 13.1 `tags list` Subcommand
+
+```
+ruin tags list [flags]
+```
+
+| Flag | Short | Type | Default | Description |
+|------|-------|------|---------|-------------|
+| `--sort` | `-s` | string | `count:desc` | Sort by `name` or `count` |
+| `--min` | | int | 0 | Only show tags with at least N uses |
+
+**Output**: `#daily (15)` per line, or JSON array.
+
+#### 13.2 `tags rename` Subcommand
+
+```
+ruin tags rename <old> <new> [flags]
+```
+
+| Flag | Short | Type | Default | Description |
+|------|-------|------|---------|-------------|
+| `--force` | `-f` | bool | false | Skip confirmation |
+| `--dry-run` | `-n` | bool | false | Show changes without applying |
+
+#### 13.3 `tags delete` Subcommand
+
+```
+ruin tags delete <tag> [flags]
+```
+
+Same flags as `rename`. Removes tag from all notes.
+
+---
+
+### Phase 14: Documentation
+
+#### 14.1 Man Pages - Skipped
+
+Man page generation via `cobra-doc` was skipped in favor of markdown documentation.
+
+#### 14.2 Markdown Documentation - Moved to Future Ideas
+
+Full documentation site with guides and concepts moved to Future Ideas section.
+
+#### 14.3 Enhanced `--help`
+
+All commands include detailed help text with examples in their Cobra command definitions.
+
+#### Actual Implementation
+
+Created `docs/cli-reference.md` with minimal command documentation covering all commands, flags, and formats.
+
+---
+
 ## Reference
 
 ### Spaced Tag Rules
