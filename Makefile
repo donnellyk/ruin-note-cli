@@ -35,26 +35,27 @@ install:
 	$(GOINSTALL) $(LDFLAGS) $(CMD_PATH)
 
 # Run all tests
+# EDITOR=true prevents tests from opening the user's editor
 .PHONY: test
 test:
-	$(GOTEST) ./...
+	EDITOR=true $(GOTEST) ./...
 
 # Run tests with verbose output
 .PHONY: test-v
 test-v:
-	$(GOTEST) -v ./...
+	EDITOR=true $(GOTEST) -v ./...
 
 # Run tests with coverage
 .PHONY: test-coverage
 test-coverage:
-	$(GOTEST) -coverprofile=coverage.out ./...
+	EDITOR=true $(GOTEST) -coverprofile=coverage.out ./...
 	$(GO) tool cover -html=coverage.out -o coverage.html
 	@echo "Coverage report: coverage.html"
 
 # Run tests with race detector
 .PHONY: test-race
 test-race:
-	$(GOTEST) -race ./...
+	EDITOR=true $(GOTEST) -race ./...
 
 # Format code
 .PHONY: fmt

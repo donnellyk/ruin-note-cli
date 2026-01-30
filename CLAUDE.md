@@ -21,7 +21,8 @@ make build    # or: go build -o ruin ./cmd/ruin
 
 ### Run Tests
 ```bash
-make test     # or: go test ./...
+make test                    # Preferred: sets EDITOR=true to prevent editor popups
+EDITOR=true go test ./...    # If running go test directly
 ```
 
 ### Install Locally
@@ -126,6 +127,9 @@ Then test commands against it:
 ```bash
 ./ruin --vault /tmp/ruin-test-vault log
 ./ruin --vault /tmp/ruin-test-vault search "#daily"
+
+# When testing --edit flag, use EDITOR=cat to see output without opening an editor
+EDITOR=cat ./ruin --vault /tmp/ruin-test-vault search "#daily" --edit
 ```
 
 ## Implementation Status
