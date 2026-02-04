@@ -117,6 +117,7 @@ func init() {
 	rootCmd.AddCommand(commands.NewTodayCmd(getVault, &jsonOut))
 	rootCmd.AddCommand(commands.NewYesterdayCmd(getVault, &jsonOut))
 	rootCmd.AddCommand(commands.NewTagsCmd(getVault, &jsonOut))
+	rootCmd.AddCommand(commands.NewGetCmd(getVault, &jsonOut))
 }
 
 // getVault returns the current vault instance.

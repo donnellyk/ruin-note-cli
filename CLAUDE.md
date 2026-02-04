@@ -3,7 +3,8 @@
 A Zettelkasten-inspired note-taking CLI written in Go.
 
 ## Important
-This is a CLI with downstream dependencies. Avoid breaking changes unless necessary. If you need to make a breaking change, tell me.
+- This is a CLI with downstream dependencies. Avoid breaking changes unless necessary. Highlight breaking changes.
+- Do not edit `Todos` section in "IMPLEMENTATION_PLAN.md`
 
 ## Project Setup
 

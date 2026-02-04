@@ -415,7 +415,7 @@ See also:
 			}
 
 			if *jsonOutput {
-				return outputJSON(results, fmMode)
+				return outputJSON(results, fmMode, flags.Content, flags.StripGlobalTags, flags.StripTitle)
 			}
 
 			// Default: list of paths (with optional frontmatter)
