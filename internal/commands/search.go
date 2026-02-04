@@ -195,7 +195,7 @@ See also:
 			}
 
 			if *jsonOutput {
-				return outputJSON(results, fmMode)
+				return outputJSON(results, fmMode, flags.Content, flags.StripGlobalTags, flags.StripTitle)
 			}
 
 			// Default: list of paths (with optional frontmatter)
@@ -703,7 +703,7 @@ func formatExtraFields(extra map[string]interface{}) string {
 }
 
 // outputJSON outputs results as JSON.
-func outputJSON(results []SearchResult, fmMode FrontmatterMode) error {
+func outputJSON(results []SearchResult, fmMode FrontmatterMode, includeContent, stripGlobalTags, stripTitle bool) error {
 	// Create output with optional frontmatter fields
 	type jsonResult struct {
 		Path    string                 `json:"path"`
@@ -713,6 +713,7 @@ func outputJSON(results []SearchResult, fmMode FrontmatterMode) error {
 		Created string                 `json:"created,omitempty"`
 		Updated string                 `json:"updated,omitempty"`
 		Extra   map[string]interface{} `json:"extra,omitempty"`
+		Content string                 `json:"content,omitempty"`
 	}
 
 	output := make([]jsonResult, len(results))
@@ -732,6 +733,28 @@ func outputJSON(results []SearchResult, fmMode FrontmatterMode) error {
 			if len(r.note.Extra) > 0 {
 				jr.Extra = r.note.Extra
 			}
+		}
+
+		// Include content if requested
+		if includeContent {
+			content := r.note.Content
+
+			// Include frontmatter in content if extra or full mode
+			if fmMode == FrontmatterExtra || fmMode == FrontmatterFull {
+				if serialized, err := r.note.Serialize(); err == nil {
+					content = serialized
+				}
+			}
+
+			// Apply stripping options
+			if stripTitle {
+				content = note.StripTitle(content)
+			}
+			if stripGlobalTags {
+				content = note.StripGlobalTags(content, r.note.InlineTags)
+			}
+
+			jr.Content = content
 		}
 
 		output[i] = jr
