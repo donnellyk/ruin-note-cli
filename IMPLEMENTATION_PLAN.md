@@ -10,6 +10,9 @@
 - [ ] Wiki link parsing and indexing in YML (and how titles will work for wikilinks)
 - [ ] Parents links to compose full documents
 - [ ] Inline search w/ basic editing and todo support (might be more of a TUI feature)
+- [ ] Ability, from bulk edit, to make a new file - inserting `%%% %%%` moves it to a new file or something like that.
+- [ ] Option to filter 'global' tags out of the note and return seperately 
+  - So the UI can display them consistently, when viewing...
 
 ## Progress Checklist
 
