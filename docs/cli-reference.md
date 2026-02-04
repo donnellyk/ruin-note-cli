@@ -88,6 +88,31 @@ ruin search <query>
 | `--frontmatter` | | Include frontmatter (modes: `extra`, `full`, `none`) |
 | `--sort` | `-s` | Sort order (e.g., `created:desc`) |
 | `--limit` | `-l` | Max results |
+| `--content` | | Include note content in JSON output (requires `--json`) |
+| `--strip-global-tags` | | Remove global tags from content (requires `--content`) |
+| `--strip-title` | | Remove H1 title from content (requires `--content`) |
+
+### get
+
+Get a single note by path or title.
+
+```
+ruin get --path <path-substring>
+ruin get --title <title-substring>
+```
+
+Requires one of `--path` or `--title` (mutually exclusive).
+
+| Flag | Short | Description |
+|------|-------|-------------|
+| `--path` | | Match by file path (substring) |
+| `--title` | | Match by title (case-insensitive substring) |
+| `--frontmatter` | | Include frontmatter (modes: `extra`, `full`, `none`) |
+| `--content` | | Include note content in JSON output (requires `--json`) |
+| `--strip-global-tags` | | Remove global tags from content (requires `--content`) |
+| `--strip-title` | | Remove H1 title from content (requires `--content`) |
+
+Returns the first match if multiple notes match. Returns an error if no match found.
 
 ### update
 
