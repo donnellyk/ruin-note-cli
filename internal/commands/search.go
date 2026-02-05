@@ -719,20 +719,18 @@ func outputJSON(results []SearchResult, fmMode FrontmatterMode, includeContent, 
 	output := make([]jsonResult, len(results))
 	for i, r := range results {
 		jr := jsonResult{
-			Path:  r.Path,
-			UUID:  r.UUID,
-			Title: r.Title,
-			Tags:  r.Tags,
+			Path:    r.Path,
+			UUID:    r.UUID,
+			Title:   r.Title,
+			Tags:    r.Tags,
+			Created: r.note.Created.Format(note.TimeFormat),
+			Updated: r.note.Updated.Format(note.TimeFormat),
 		}
 
 		if fmMode == FrontmatterExtra && len(r.note.Extra) > 0 {
 			jr.Extra = r.note.Extra
-		} else if fmMode == FrontmatterFull {
-			jr.Created = r.note.Created.Format(note.TimeFormat)
-			jr.Updated = r.note.Updated.Format(note.TimeFormat)
-			if len(r.note.Extra) > 0 {
-				jr.Extra = r.note.Extra
-			}
+		} else if fmMode == FrontmatterFull && len(r.note.Extra) > 0 {
+			jr.Extra = r.note.Extra
 		}
 
 		// Include content if requested

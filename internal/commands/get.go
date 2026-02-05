@@ -16,6 +16,8 @@ func NewGetCmd(getVault func() *vault.Vault, jsonOutput *bool) *cobra.Command {
 	var flags SearchFlags
 	var pathFilter string
 	var titleFilter string
+	var edit bool
+	var force bool
 
 	cmd := &cobra.Command{
 		Use:   "get",
@@ -35,7 +37,10 @@ Returns an error if no match is found.`,
   ruin get --title "Daily" --json --content
 
   # Get with content stripping
-  ruin get --path "notes/idea.md" --json --content --strip-global-tags --strip-title`,
+  ruin get --path "notes/idea.md" --json --content --strip-global-tags --strip-title
+
+  # Edit a note
+  ruin get --title "Meeting Notes" --edit`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			vlt := getVault()
 			if vlt == nil {
@@ -50,7 +55,10 @@ Returns an error if no match is found.`,
 				return errMutuallyExclusive("--path", "--title")
 			}
 
-			// Validate other flags
+			// Validate flags
+			if edit && *jsonOutput {
+				return errMutuallyExclusive("--json", "--edit")
+			}
 			if err := ValidateSearchFlags(&flags, *jsonOutput); err != nil {
 				return err
 			}
@@ -86,6 +94,11 @@ Returns an error if no match is found.`,
 				return fmt.Errorf("invalid frontmatter mode: %s (use: none, extra, full)", flags.Frontmatter)
 			}
 
+			// Edit mode
+			if edit {
+				return handleEdit(vlt, []SearchResult{result}, force, fmMode)
+			}
+
 			// Output based on mode
 			if *jsonOutput {
 				return outputSingleJSON(result, fmMode, flags.Content, flags.StripGlobalTags, flags.StripTitle)
@@ -106,6 +119,8 @@ Returns an error if no match is found.`,
 	cmd.Flags().BoolVar(&flags.Content, "content", false, "include note content in JSON output")
 	cmd.Flags().BoolVar(&flags.StripGlobalTags, "strip-global-tags", false, "remove global tags from content (requires --content)")
 	cmd.Flags().BoolVar(&flags.StripTitle, "strip-title", false, "remove H1 title from content (requires --content)")
+	cmd.Flags().BoolVarP(&edit, "edit", "e", false, "open note in $EDITOR")
+	cmd.Flags().BoolVarP(&force, "force", "f", false, "skip confirmation for deletions in edit mode")
 
 	return cmd
 }
@@ -124,20 +139,18 @@ func outputSingleJSON(r SearchResult, fmMode FrontmatterMode, includeContent, st
 	}
 
 	jr := jsonResult{
-		Path:  r.Path,
-		UUID:  r.UUID,
-		Title: r.Title,
-		Tags:  r.Tags,
+		Path:    r.Path,
+		UUID:    r.UUID,
+		Title:   r.Title,
+		Tags:    r.Tags,
+		Created: r.note.Created.Format(note.TimeFormat),
+		Updated: r.note.Updated.Format(note.TimeFormat),
 	}
 
 	if fmMode == FrontmatterExtra && len(r.note.Extra) > 0 {
 		jr.Extra = r.note.Extra
-	} else if fmMode == FrontmatterFull {
-		jr.Created = r.note.Created.Format(note.TimeFormat)
-		jr.Updated = r.note.Updated.Format(note.TimeFormat)
-		if len(r.note.Extra) > 0 {
-			jr.Extra = r.note.Extra
-		}
+	} else if fmMode == FrontmatterFull && len(r.note.Extra) > 0 {
+		jr.Extra = r.note.Extra
 	}
 
 	// Include content if requested

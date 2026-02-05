@@ -111,6 +111,8 @@ Requires one of `--path` or `--title` (mutually exclusive).
 | `--content` | | Include note content in JSON output (requires `--json`) |
 | `--strip-global-tags` | | Remove global tags from content (requires `--content`) |
 | `--strip-title` | | Remove H1 title from content (requires `--content`) |
+| `--edit` | `-e` | Open note in `$EDITOR` for editing |
+| `--force` | `-f` | Skip confirmation for deletions in edit mode |
 
 Returns the first match if multiple notes match. Returns an error if no match found.
 
