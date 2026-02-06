@@ -5,6 +5,9 @@ A Zettelkasten-inspired note-taking CLI written in Go.
 ## Important
 - This is a CLI with downstream dependencies. Avoid breaking changes unless necessary. Highlight breaking changes.
 - Do not edit `Todos` section in "IMPLEMENTATION_PLAN.md`
+- When running `go test` directly, always set `EDITOR=true` to prevent editor popups (or use `make test` which does this automatically).
+- When running the `ruin` binary for manual testing, always use `--vault /tmp/ruin-test-vault` (create it first with `./scripts/test-vault.sh create` if needed). Never run against the user's real vault.
+- Never modify `~/.config/ruin` when testing. Use `--vault` to point at a test vault instead of running `ruin config` or `ruin init` without an explicit path.
 
 ## Project Setup
 
