@@ -49,6 +49,7 @@ ruin log [content]
 | `--title` | `-t` | Set filename explicitly |
 | `--h1` | | Extract filename from first H1 |
 | `--stdin` | | Read content from stdin |
+| `--parent` | | Set parent note (UUID, title, or path substring) |
 
 Content can be provided as argument, via stdin, or piped.
 
@@ -78,6 +79,8 @@ ruin search <query>
 
 **Other filters:**
 - `title:TEXT`, `path:TEXT`
+- `parent:UUID` — notes with specific parent
+- `parent:none` — notes with no parent
 
 | Flag | Short | Description |
 |------|-------|-------------|
@@ -99,14 +102,16 @@ Get a single note by path or title.
 ```
 ruin get --path <path-substring>
 ruin get --title <title-substring>
+ruin get --uuid <uuid-or-identifier>
 ```
 
-Requires one of `--path` or `--title` (mutually exclusive).
+Requires one of `--path`, `--title`, or `--uuid` (mutually exclusive).
 
 | Flag | Short | Description |
 |------|-------|-------------|
 | `--path` | | Match by file path (substring) |
 | `--title` | | Match by title (case-insensitive substring) |
+| `--uuid` | | Match by UUID (exact or via resolve) |
 | `--frontmatter` | | Include frontmatter (modes: `extra`, `full`, `none`) |
 | `--content` | | Include note content in JSON output (requires `--json`) |
 | `--strip-global-tags` | | Remove global tags from content (requires `--content`) |
@@ -263,6 +268,93 @@ Operations:
 - Generate UUIDs for notes missing one
 - Reindex tags from document content
 - Rebuild `.ruin/tags.yml`
+- Rebuild `.ruin/titles.json`
+- Detect orphaned parent references
+
+### parent
+
+Manage parent-child note relationships.
+
+#### parent set
+
+```
+ruin parent set <child> <parent>
+```
+
+| Flag | Short | Description |
+|------|-------|-------------|
+| `--force` | `-f` | Skip confirmation when overwriting existing parent |
+
+Both `<child>` and `<parent>` are resolved via UUID, title substring, or path substring. Validates no self-reference or cycle.
+
+#### parent get
+
+```
+ruin parent get <note>
+```
+
+Shows the parent of a note. Returns the parent's path (default) or JSON `{uuid, title, path}`.
+
+#### parent remove
+
+```
+ruin parent remove <note>
+```
+
+Removes the parent relationship from a note.
+
+#### parent children
+
+```
+ruin parent children <note>
+```
+
+| Flag | Short | Description |
+|------|-------|-------------|
+| `--recursive` | `-r` | Include all descendants |
+
+Lists direct children of a note. With `--recursive`, shows the full subtree.
+
+#### parent tree
+
+```
+ruin parent tree [note]
+```
+
+| Flag | Short | Description |
+|------|-------|-------------|
+| `--depth` | | Max tree depth (0 = unlimited) |
+
+Without arguments, shows the full forest. With a note, shows the subtree rooted at that note.
+
+### suggest
+
+```
+ruin suggest <prefix>
+```
+
+| Flag | Short | Description |
+|------|-------|-------------|
+| `--limit` | `-l` | Max results (default 10) |
+
+Case-insensitive prefix match on note titles. Default output: `<uuid>\t<title>` per line.
+
+### compose
+
+```
+ruin compose <note>
+```
+
+| Flag | Short | Description |
+|------|-------|-------------|
+| `--depth` | | Max recursion depth (0 = unlimited) |
+| `--strip-title` | | Remove H1 from children |
+| `--strip-global-tags` | | Remove global tag lines |
+| `--sort` | | Child ordering: `title` (default) or `created` |
+| `--edit` | `-e` | Open tree notes in `$EDITOR` |
+| `--force` | `-f` | Skip confirmation for deletions in edit mode |
+
+Recursively assembles a document from a note and its children. Headings in children are adjusted by depth level (capped at H6).
 
 ## Note Format
 
@@ -283,7 +375,7 @@ tags:
 Content with #tags inline.
 ```
 
-**Managed fields** (set by CLI): `uuid`, `created`, `updated`, `tags`, `inline-tags`
+**Managed fields** (set by CLI): `uuid`, `created`, `updated`, `tags`, `inline-tags`, `parent`
 
 **User fields**: Any other YAML keys are preserved.
 
@@ -310,7 +402,8 @@ Content of second note...
 <vault>/
 ├── .ruin/
 │   ├── tags.yml      # Tag index
-│   └── queries.yml   # Saved queries
+│   ├── queries.yml   # Saved queries
+│   └── titles.json   # Titles index (UUID to title/path/parent)
 ├── Note Title.md
 └── 2025-01-28T10-30-00.md
 ```

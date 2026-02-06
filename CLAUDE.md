@@ -44,7 +44,8 @@ ruin-note-cli/
 │   ├── config/
 │   │   └── config.go         # Config file handling (~/.config/ruin)
 │   ├── vault/
-│   │   └── vault.go          # Vault operations + tags/queries index
+│   │   ├── vault.go          # Vault operations + tags/queries index
+│   │   └── titles.go         # Titles index (JSON, UUID->title/path/parent)
 │   ├── note/
 │   │   ├── note.go           # Note struct and operations
 │   │   ├── frontmatter.go    # YAML frontmatter parsing/writing
@@ -57,7 +58,11 @@ ruin-note-cli/
 │       ├── query.go          # query command (save, list, delete, run)
 │       ├── init.go           # init command implementation
 │       ├── config.go         # config command implementation
-│       └── doctor.go         # doctor command implementation
+│       ├── doctor.go         # doctor command implementation
+│       ├── parent.go         # parent command (set, get, remove, children, tree)
+│       ├── suggest.go        # suggest command (title prefix matching)
+│       ├── compose.go        # compose command (recursive document assembly)
+│       └── resolve.go        # Note resolution (UUID, title, path lookup)
 ├── scripts/
 │   └── test-vault.sh         # Test vault helper script
 ├── go.mod
@@ -84,7 +89,8 @@ ruin-note-cli/
 <vault_path>/
 ├── .ruin/
 │   ├── tags.yml      # All tags index
-│   └── queries.yml   # Saved search queries
+│   ├── queries.yml   # Saved search queries
+│   └── titles.json   # Titles index (UUID to title/path/parent)
 ├── Note Title 1.md
 ├── Note Title 2.md
 └── 2025-01-28T10-30-00.md  # Timestamp-named note
@@ -100,6 +106,7 @@ ruin-note-cli/
 - `updated`: last modified timestamp
 - `tags`: all tags found in document
 - `inline-tags`: tags found within content body (not at top/end)
+- `parent`: UUID of parent note (optional, omitted if empty)
 
 ## Common Commands
 

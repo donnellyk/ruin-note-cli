@@ -51,6 +51,13 @@
 - [x] **Phase 14**: Documentation
   - [x] 14.1 CLI reference (`docs/cli-reference.md`)
   - [x] 14.3 Enhanced `--help` with examples (already in command definitions)
+- [x] **Phase 15**: Parent Links & Document Composition
+  - [x] 15.1 Data model: `parent` field in frontmatter + `titles.json` index
+  - [x] 15.2 `parent` command group (set, get, remove, children, tree)
+  - [x] 15.3 `suggest` command (title prefix matching via titles index)
+  - [x] 15.4 `compose` command (recursive document assembly)
+  - [x] 15.5 Existing command integration (log --parent, search parent:, get --uuid, doctor titles.json)
+  - [x] 15.6 Note resolution (UUID, title substring, path substring)
 
 ### Milestone 3: Advanced Features (Future)
 
