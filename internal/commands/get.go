@@ -16,6 +16,7 @@ func NewGetCmd(getVault func() *vault.Vault, jsonOutput *bool) *cobra.Command {
 	var flags SearchFlags
 	var pathFilter string
 	var titleFilter string
+	var uuidFilter string
 	var edit bool
 	var force bool
 
@@ -47,12 +48,22 @@ Returns an error if no match is found.`,
 				return fmt.Errorf("vault not configured")
 			}
 
-			// Validate that exactly one of --path or --title is provided
-			if pathFilter == "" && titleFilter == "" {
-				return fmt.Errorf("one of --path or --title is required")
+			// Validate that exactly one of --path, --title, or --uuid is provided
+			filterCount := 0
+			if pathFilter != "" {
+				filterCount++
 			}
-			if pathFilter != "" && titleFilter != "" {
-				return errMutuallyExclusive("--path", "--title")
+			if titleFilter != "" {
+				filterCount++
+			}
+			if uuidFilter != "" {
+				filterCount++
+			}
+			if filterCount == 0 {
+				return fmt.Errorf("one of --path, --title, or --uuid is required")
+			}
+			if filterCount > 1 {
+				return fmt.Errorf("--path, --title, and --uuid are mutually exclusive")
 			}
 
 			// Validate flags
@@ -63,30 +74,50 @@ Returns an error if no match is found.`,
 				return err
 			}
 
-			// Build matcher based on filter type
-			var matcher QueryMatcher
-			if pathFilter != "" {
-				matcher = pathMatcher(pathFilter)
-			} else {
-				matcher = titleMatcher(titleFilter)
-			}
+			var result SearchResult
 
-			// Find matching notes
-			results, err := searchNotes(vlt, matcher)
-			if err != nil {
-				return fmt.Errorf("search failed: %w", err)
-			}
-
-			// Handle no results
-			if len(results) == 0 {
-				if *jsonOutput {
-					fmt.Println("null")
+			if uuidFilter != "" {
+				// UUID resolution via titles index
+				n, err := ResolveNote(vlt, uuidFilter)
+				if err != nil {
+					if *jsonOutput {
+						fmt.Println("null")
+					}
+					return fmt.Errorf("no matching note found: %w", err)
 				}
-				return fmt.Errorf("no matching note found")
-			}
+				result = SearchResult{
+					Path:   n.FilePath,
+					UUID:   n.UUID,
+					Title:  n.Title,
+					Tags:   n.Tags,
+					Parent: n.Parent,
+					note:   n,
+				}
+			} else {
+				// Build matcher based on filter type
+				var matcher QueryMatcher
+				if pathFilter != "" {
+					matcher = pathMatcher(pathFilter)
+				} else {
+					matcher = titleMatcher(titleFilter)
+				}
 
-			// Take first result
-			result := results[0]
+				// Find matching notes
+				results, err := searchNotes(vlt, matcher)
+				if err != nil {
+					return fmt.Errorf("search failed: %w", err)
+				}
+
+				// Handle no results
+				if len(results) == 0 {
+					if *jsonOutput {
+						fmt.Println("null")
+					}
+					return fmt.Errorf("no matching note found")
+				}
+
+				result = results[0]
+			}
 
 			// Parse frontmatter mode
 			fmMode := FrontmatterMode(flags.Frontmatter)
@@ -112,6 +143,7 @@ Returns an error if no match is found.`,
 	// Add get-specific flags
 	cmd.Flags().StringVar(&pathFilter, "path", "", "match by file path (substring)")
 	cmd.Flags().StringVar(&titleFilter, "title", "", "match by title (case-insensitive substring)")
+	cmd.Flags().StringVar(&uuidFilter, "uuid", "", "match by UUID (exact or via resolve)")
 
 	// Add common search flags (but only certain ones are relevant)
 	cmd.Flags().StringVar(&flags.Frontmatter, "frontmatter", "", "include frontmatter in output (modes: extra, full, none)")
@@ -132,6 +164,7 @@ func outputSingleJSON(r SearchResult, fmMode FrontmatterMode, includeContent, st
 		UUID    string                 `json:"uuid"`
 		Title   string                 `json:"title,omitempty"`
 		Tags    []string               `json:"tags,omitempty"`
+		Parent  string                 `json:"parent,omitempty"`
 		Created string                 `json:"created,omitempty"`
 		Updated string                 `json:"updated,omitempty"`
 		Extra   map[string]interface{} `json:"extra,omitempty"`
@@ -143,6 +176,7 @@ func outputSingleJSON(r SearchResult, fmMode FrontmatterMode, includeContent, st
 		UUID:    r.UUID,
 		Title:   r.Title,
 		Tags:    r.Tags,
+		Parent:  r.note.Parent,
 		Created: r.note.Created.Format(note.TimeFormat),
 		Updated: r.note.Updated.Format(note.TimeFormat),
 	}

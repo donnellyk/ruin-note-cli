@@ -1,6 +1,7 @@
 package vault
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -79,7 +80,35 @@ func (v *Vault) Initialize(force bool) (*InitResult, error) {
 		return nil, err
 	}
 
+	// Initialize titles.json
+	titlesPath := v.TitlesFile()
+	if err := v.initJSONFile(titlesPath, &TitlesIndex{Titles: make(map[string]TitleEntry)}, force, result); err != nil {
+		return nil, err
+	}
+
 	return result, nil
+}
+
+func (v *Vault) initJSONFile(path string, data interface{}, force bool, result *InitResult) error {
+	_, err := os.Stat(path)
+	exists := err == nil
+
+	if exists && !force {
+		result.Existed = append(result.Existed, filepath.Base(path))
+		return nil
+	}
+
+	content, err := json.MarshalIndent(data, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal %s: %w", filepath.Base(path), err)
+	}
+
+	if err := os.WriteFile(path, content, 0644); err != nil {
+		return fmt.Errorf("failed to write %s: %w", filepath.Base(path), err)
+	}
+
+	result.Created = append(result.Created, filepath.Base(path))
+	return nil
 }
 
 func (v *Vault) initMetadataFile(path string, data interface{}, force bool, result *InitResult) error {

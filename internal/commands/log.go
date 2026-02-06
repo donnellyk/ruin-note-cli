@@ -17,17 +17,19 @@ import (
 
 // LogOutput represents the JSON output for the log command.
 type LogOutput struct {
-	Path  string `json:"path"`
-	UUID  string `json:"uuid"`
-	Title string `json:"title,omitempty"`
+	Path   string `json:"path"`
+	UUID   string `json:"uuid"`
+	Title  string `json:"title,omitempty"`
+	Parent string `json:"parent,omitempty"`
 }
 
 // NewLogCmd creates the log command.
 func NewLogCmd(getVault func() *vault.Vault, jsonOutput *bool) *cobra.Command {
 	var (
-		title    string
-		useH1    bool
-		useStdin bool
+		title     string
+		useH1     bool
+		useStdin  bool
+		parentRef string
 	)
 
 	cmd := &cobra.Command{
@@ -90,6 +92,15 @@ Details here..."
 			// Refresh tags from content
 			n.RefreshTags()
 
+			// Resolve parent if specified
+			if parentRef != "" {
+				parent, err := ResolveNote(vlt, parentRef)
+				if err != nil {
+					return fmt.Errorf("parent: %w", err)
+				}
+				n.Parent = parent.UUID
+			}
+
 			// Determine filename
 			filename := determineFilename(n, title, useH1)
 
@@ -112,12 +123,18 @@ Details here..."
 				fmt.Fprintf(os.Stderr, "warning: failed to update tags index: %v\n", err)
 			}
 
+			// Update titles index
+			if err := vlt.UpdateTitleEntry(n.UUID, n.Title, n.FilePath, n.Parent); err != nil {
+				fmt.Fprintf(os.Stderr, "warning: failed to update titles index: %v\n", err)
+			}
+
 			// Output result
 			if *jsonOutput {
 				output := LogOutput{
-					Path:  n.FilePath,
-					UUID:  n.UUID,
-					Title: n.Title,
+					Path:   n.FilePath,
+					UUID:   n.UUID,
+					Title:  n.Title,
+					Parent: n.Parent,
 				}
 				enc := json.NewEncoder(os.Stdout)
 				enc.SetIndent("", "  ")
@@ -132,6 +149,7 @@ Details here..."
 	cmd.Flags().StringVarP(&title, "title", "t", "", "set filename explicitly")
 	cmd.Flags().BoolVar(&useH1, "h1", false, "extract filename from first H1 in content")
 	cmd.Flags().BoolVar(&useStdin, "stdin", false, "read content from stdin")
+	cmd.Flags().StringVar(&parentRef, "parent", "", "set parent note (UUID, title, or path substring)")
 
 	return cmd
 }

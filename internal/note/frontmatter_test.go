@@ -193,6 +193,67 @@ func TestFrontmatter_IsEmpty(t *testing.T) {
 	}
 }
 
+func TestParseFrontmatter_WithParent(t *testing.T) {
+	content := `---
+uuid: child-1
+parent: parent-uuid-123
+tags:
+  - "#work"
+---
+# Child Note
+
+Content here.`
+
+	fm, body, err := ParseFrontmatter(content)
+	if err != nil {
+		t.Fatalf("ParseFrontmatter() error = %v", err)
+	}
+
+	if fm.Parent != "parent-uuid-123" {
+		t.Errorf("Parent = %q, want %q", fm.Parent, "parent-uuid-123")
+	}
+
+	if fm.UUID != "child-1" {
+		t.Errorf("UUID = %q, want %q", fm.UUID, "child-1")
+	}
+
+	// Parent should NOT leak into Extra
+	if _, ok := fm.Extra["parent"]; ok {
+		t.Error("parent should not appear in Extra")
+	}
+
+	if !strings.Contains(body, "Child Note") {
+		t.Errorf("body = %q, should contain 'Child Note'", body)
+	}
+}
+
+func TestFrontmatter_SerializeParent(t *testing.T) {
+	fm := &Frontmatter{
+		UUID:   "child-1",
+		Parent: "parent-uuid-123",
+	}
+
+	result, err := fm.Serialize()
+	if err != nil {
+		t.Fatalf("Serialize() error = %v", err)
+	}
+
+	if !strings.Contains(result, "parent: parent-uuid-123") {
+		t.Errorf("Serialize() = %q, should contain parent field", result)
+	}
+
+	if !strings.Contains(result, "uuid: child-1") {
+		t.Errorf("Serialize() = %q, should contain uuid field", result)
+	}
+}
+
+func TestFrontmatter_IsEmpty_WithParent(t *testing.T) {
+	fm := &Frontmatter{Parent: "some-uuid"}
+	if fm.IsEmpty() {
+		t.Error("IsEmpty() should return false when Parent is set")
+	}
+}
+
 func TestFrontmatter_Merge(t *testing.T) {
 	fm1 := &Frontmatter{
 		UUID:    "original",
@@ -226,5 +287,62 @@ func TestFrontmatter_Merge(t *testing.T) {
 
 	if fm1.Extra["key2"] != "val2" {
 		t.Error("Extra[key2] should be merged")
+	}
+}
+
+func TestFrontmatter_MergeParent(t *testing.T) {
+	fm1 := &Frontmatter{
+		UUID:   "child",
+		Extra:  map[string]interface{}{},
+	}
+
+	fm2 := &Frontmatter{
+		Parent: "parent-uuid",
+	}
+
+	fm1.Merge(fm2)
+
+	if fm1.Parent != "parent-uuid" {
+		t.Errorf("Parent = %q, want %q", fm1.Parent, "parent-uuid")
+	}
+
+	// Empty parent should NOT overwrite
+	fm3 := &Frontmatter{}
+	fm1.Merge(fm3)
+
+	if fm1.Parent != "parent-uuid" {
+		t.Errorf("Parent = %q, want %q (should be preserved when merging empty)", fm1.Parent, "parent-uuid")
+	}
+}
+
+func TestParseFrontmatter_ParentRoundTrip(t *testing.T) {
+	fm := &Frontmatter{
+		UUID:    "note-1",
+		Created: "2025-01-28T10:00:00-05:00",
+		Parent:  "parent-uuid",
+		Tags:    []string{"#test"},
+	}
+
+	serialized, err := fm.Serialize()
+	if err != nil {
+		t.Fatalf("Serialize() error = %v", err)
+	}
+
+	content := serialized + "# Test Note\n\nContent."
+	parsed, body, err := ParseFrontmatter(content)
+	if err != nil {
+		t.Fatalf("ParseFrontmatter() error = %v", err)
+	}
+
+	if parsed.Parent != "parent-uuid" {
+		t.Errorf("round-trip Parent = %q, want %q", parsed.Parent, "parent-uuid")
+	}
+
+	if parsed.UUID != "note-1" {
+		t.Errorf("round-trip UUID = %q, want %q", parsed.UUID, "note-1")
+	}
+
+	if !strings.Contains(body, "Test Note") {
+		t.Errorf("body = %q, should contain 'Test Note'", body)
 	}
 }

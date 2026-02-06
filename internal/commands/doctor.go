@@ -12,10 +12,12 @@ import (
 
 // DoctorOutput represents the JSON output for the doctor command.
 type DoctorOutput struct {
-	Scanned        int      `json:"scanned"`
-	UUIDGenerated  []string `json:"uuid_generated,omitempty"`
-	TagsReindexed  []string `json:"tags_reindexed,omitempty"`
-	TagsYMLUpdated bool     `json:"tags_yml_updated"`
+	Scanned         int      `json:"scanned"`
+	UUIDGenerated   []string `json:"uuid_generated,omitempty"`
+	TagsReindexed   []string `json:"tags_reindexed,omitempty"`
+	TagsYMLUpdated  bool     `json:"tags_yml_updated"`
+	TitlesUpdated   bool     `json:"titles_updated"`
+	OrphanedParents []string `json:"orphaned_parents,omitempty"`
 }
 
 // NewDoctorCmd creates the doctor command.
@@ -31,6 +33,8 @@ Operations performed:
   - Generate UUID for notes missing one
   - Reindex tags and inline-tags from document content
   - Rebuild .ruin/tags.yml from all notes
+  - Rebuild .ruin/titles.json from all notes
+  - Detect orphaned parent references
 
 Does NOT update created or updated timestamps.`,
 		Example: `  # Run doctor
@@ -65,6 +69,9 @@ Does NOT update created or updated timestamps.`,
 
 			// Track all tags across the vault for rebuilding tags.yml
 			tagCounts := make(map[string]int)
+
+			// Track all titles for rebuilding titles.json
+			titleEntries := make(map[string]vault.TitleEntry)
 
 			prefix := ""
 			if dryRun {
@@ -121,6 +128,13 @@ Does NOT update created or updated timestamps.`,
 					tagCounts[t]++
 				}
 
+				// Collect title entry
+				titleEntries[n.UUID] = vault.TitleEntry{
+					Title:  n.Title,
+					Path:   path,
+					Parent: n.Parent,
+				}
+
 				// Save if needed
 				if needsSave && !dryRun {
 					if err := n.Save(); err != nil {
@@ -140,6 +154,27 @@ Does NOT update created or updated timestamps.`,
 				output.TagsYMLUpdated = true // Would update
 			}
 
+			// Rebuild titles.json
+			if !dryRun {
+				if err := vlt.RebuildTitlesIndex(titleEntries); err != nil {
+					fmt.Fprintf(os.Stderr, "%swarning: failed to rebuild titles.json: %v\n", prefix, err)
+				} else {
+					output.TitlesUpdated = true
+				}
+			} else {
+				output.TitlesUpdated = true // Would update
+			}
+
+			// Detect orphaned parent references
+			for uuid, entry := range titleEntries {
+				if entry.Parent != "" {
+					if _, ok := titleEntries[entry.Parent]; !ok {
+						output.OrphanedParents = append(output.OrphanedParents,
+							fmt.Sprintf("%s (parent %s not found)", uuid, entry.Parent))
+					}
+				}
+			}
+
 			// Output results
 			if *jsonOutput {
 				enc := json.NewEncoder(os.Stdout)
@@ -157,6 +192,15 @@ Does NOT update created or updated timestamps.`,
 			}
 			if output.TagsYMLUpdated {
 				fmt.Fprintf(os.Stderr, "%sUpdated .ruin/tags.yml\n", prefix)
+			}
+			if output.TitlesUpdated {
+				fmt.Fprintf(os.Stderr, "%sUpdated .ruin/titles.json\n", prefix)
+			}
+			if len(output.OrphanedParents) > 0 {
+				fmt.Fprintf(os.Stderr, "  %d orphaned parent reference(s):\n", len(output.OrphanedParents))
+				for _, op := range output.OrphanedParents {
+					fmt.Fprintf(os.Stderr, "    - %s\n", op)
+				}
 			}
 
 			return nil

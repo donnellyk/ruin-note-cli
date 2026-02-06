@@ -66,11 +66,42 @@ updated: "2025-01-03T10:00:00-05:00"
 tags:
   - "#project"
   - "#work"
+parent: uuid-1
 ---
 # Project Alpha
 #project #work
 
 Working on project alpha with the team.`,
+		},
+		{
+			filename: "note4.md",
+			content: `---
+uuid: uuid-4
+created: "2025-01-04T10:00:00-05:00"
+updated: "2025-01-04T10:00:00-05:00"
+tags:
+  - "#project"
+parent: uuid-3
+---
+# Alpha Sub-task
+#project
+
+A sub-task of project alpha.`,
+		},
+		{
+			filename: "note5.md",
+			content: `---
+uuid: uuid-5
+created: "2025-01-05T10:00:00-05:00"
+updated: "2025-01-05T10:00:00-05:00"
+tags:
+  - "#idea"
+parent: uuid-nonexistent
+---
+# Orphan Idea
+#idea
+
+This note references a non-existent parent.`,
 		},
 	}
 
@@ -140,10 +171,10 @@ func TestSearchCmd_TextSearch(t *testing.T) {
 	buf.ReadFrom(r)
 	output := buf.String()
 
-	// Should find 1 note with "alpha"
+	// Should find 2 notes with "alpha" (note3 "Project Alpha" + note4 "Alpha Sub-task")
 	lines := strings.Split(strings.TrimSpace(output), "\n")
-	if len(lines) != 1 {
-		t.Errorf("found %d notes, want 1", len(lines))
+	if len(lines) != 2 {
+		t.Errorf("found %d notes, want 2", len(lines))
 	}
 }
 
@@ -212,12 +243,18 @@ func TestSearchCmd_JSONOutput(t *testing.T) {
 		t.Fatalf("failed to parse JSON: %v", err)
 	}
 
-	if len(results) != 1 {
-		t.Errorf("found %d results, want 1", len(results))
+	// Should find 2 notes with #project (uuid-3 and uuid-4)
+	if len(results) != 2 {
+		t.Errorf("found %d results, want 2", len(results))
 	}
 
-	if results[0].UUID != "uuid-3" {
-		t.Errorf("UUID = %q, want %q", results[0].UUID, "uuid-3")
+	// Verify both project notes are present
+	uuids := make(map[string]bool)
+	for _, r := range results {
+		uuids[r.UUID] = true
+	}
+	if !uuids["uuid-3"] || !uuids["uuid-4"] {
+		t.Errorf("expected uuid-3 and uuid-4, got %v", uuids)
 	}
 }
 
@@ -283,8 +320,9 @@ func TestSearchCmd_FirstOutput(t *testing.T) {
 	buf.ReadFrom(r)
 	output := buf.String()
 
-	if !strings.Contains(output, "Project Alpha") {
-		t.Error("first output should contain note content")
+	// Default sort is created:desc, so first result is note4 (newest with #project)
+	if !strings.Contains(output, "#project") {
+		t.Error("first output should contain note content with #project tag")
 	}
 
 	// Should NOT contain uuid separator
@@ -357,6 +395,86 @@ func TestSearchCmd_Limit(t *testing.T) {
 	lines := strings.Split(strings.TrimSpace(output), "\n")
 	if len(lines) != 1 {
 		t.Errorf("found %d results, want 1 (limited)", len(lines))
+	}
+}
+
+func TestSearchCmd_ParentFilter(t *testing.T) {
+	vlt := setupTestVault(t)
+
+	jsonOut := true
+	cmd := NewSearchCmd(func() *vault.Vault { return vlt }, &jsonOut)
+
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	cmd.SetArgs([]string{"parent:uuid-1"})
+	err := cmd.Execute()
+
+	w.Close()
+	os.Stdout = oldStdout
+
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+
+	var buf bytes.Buffer
+	buf.ReadFrom(r)
+
+	var results []struct {
+		UUID   string `json:"uuid"`
+		Parent string `json:"parent"`
+	}
+
+	if err := json.Unmarshal(buf.Bytes(), &results); err != nil {
+		t.Fatalf("failed to parse JSON: %v", err)
+	}
+
+	// uuid-3 has parent uuid-1
+	if len(results) != 1 {
+		t.Errorf("found %d results, want 1", len(results))
+	}
+
+	if len(results) > 0 && results[0].UUID != "uuid-3" {
+		t.Errorf("UUID = %q, want uuid-3", results[0].UUID)
+	}
+}
+
+func TestSearchCmd_ParentNone(t *testing.T) {
+	vlt := setupTestVault(t)
+
+	jsonOut := true
+	cmd := NewSearchCmd(func() *vault.Vault { return vlt }, &jsonOut)
+
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	cmd.SetArgs([]string{"parent:none"})
+	err := cmd.Execute()
+
+	w.Close()
+	os.Stdout = oldStdout
+
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+
+	var buf bytes.Buffer
+	buf.ReadFrom(r)
+
+	var results []struct {
+		UUID   string `json:"uuid"`
+		Parent string `json:"parent"`
+	}
+
+	if err := json.Unmarshal(buf.Bytes(), &results); err != nil {
+		t.Fatalf("failed to parse JSON: %v", err)
+	}
+
+	// uuid-1 and uuid-2 have no parent
+	if len(results) != 2 {
+		t.Errorf("found %d results, want 2 (notes without parent)", len(results))
 	}
 }
 

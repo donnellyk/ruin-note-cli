@@ -31,11 +31,12 @@ const (
 
 // SearchResult represents a single search result.
 type SearchResult struct {
-	Path  string   `json:"path"`
-	UUID  string   `json:"uuid"`
-	Title string   `json:"title,omitempty"`
-	Tags  []string `json:"tags,omitempty"`
-	note  *note.Note
+	Path   string   `json:"path"`
+	UUID   string   `json:"uuid"`
+	Title  string   `json:"title,omitempty"`
+	Tags   []string `json:"tags,omitempty"`
+	Parent string   `json:"parent,omitempty"`
+	note   *note.Note
 }
 
 // SortField represents a field and direction for sorting.
@@ -362,6 +363,8 @@ func parseTermMatcher(term string) (QueryMatcher, error) {
 			return titleMatcher(value), nil
 		case "path":
 			return pathMatcher(value), nil
+		case "parent":
+			return parentMatcher(value), nil
 		}
 		// If not a recognized filter, fall through to text search
 	}
@@ -404,6 +407,19 @@ func titleMatcher(text string) QueryMatcher {
 	textLower := strings.ToLower(text)
 	return func(n *note.Note) bool {
 		return strings.Contains(strings.ToLower(n.Title), textLower)
+	}
+}
+
+// parentMatcher returns a matcher for parent filter.
+// "none" matches notes with no parent. Any other value matches by parent UUID.
+func parentMatcher(value string) QueryMatcher {
+	if strings.ToLower(value) == "none" {
+		return func(n *note.Note) bool {
+			return n.Parent == ""
+		}
+	}
+	return func(n *note.Note) bool {
+		return n.Parent == value
 	}
 }
 
@@ -582,11 +598,12 @@ func searchNotesWithOptions(vlt *vault.Vault, matcher QueryMatcher, opts SearchO
 
 			if matcher(n) {
 				resultsChan <- SearchResult{
-					Path:  path,
-					UUID:  n.UUID,
-					Title: n.Title,
-					Tags:  n.Tags,
-					note:  n,
+					Path:   path,
+					UUID:   n.UUID,
+					Title:  n.Title,
+					Tags:   n.Tags,
+					Parent: n.Parent,
+					note:   n,
 				}
 			}
 		}
@@ -710,6 +727,7 @@ func outputJSON(results []SearchResult, fmMode FrontmatterMode, includeContent, 
 		UUID    string                 `json:"uuid"`
 		Title   string                 `json:"title,omitempty"`
 		Tags    []string               `json:"tags,omitempty"`
+		Parent  string                 `json:"parent,omitempty"`
 		Created string                 `json:"created,omitempty"`
 		Updated string                 `json:"updated,omitempty"`
 		Extra   map[string]interface{} `json:"extra,omitempty"`
@@ -723,6 +741,7 @@ func outputJSON(results []SearchResult, fmMode FrontmatterMode, includeContent, 
 			UUID:    r.UUID,
 			Title:   r.Title,
 			Tags:    r.Tags,
+			Parent:  r.note.Parent,
 			Created: r.note.Created.Format(note.TimeFormat),
 			Updated: r.note.Updated.Format(note.TimeFormat),
 		}
@@ -897,6 +916,7 @@ func handleEditSingle(vlt *vault.Vault, result SearchResult, force bool, fmMode 
 			return fmt.Errorf("failed to delete %s: %w", result.Path, err)
 		}
 		vlt.DecrementTagsIndex(result.note.Tags)
+		vlt.RemoveTitleEntry(result.note.UUID)
 		fmt.Fprintf(os.Stderr, "Modified: 0, Deleted: 1\n")
 		return nil
 	}
@@ -938,6 +958,7 @@ func handleEditSingle(vlt *vault.Vault, result SearchResult, force bool, fmMode 
 	}
 
 	vlt.UpdateTagsIndex(result.note.Tags)
+	vlt.UpdateTitleEntry(result.note.UUID, result.note.Title, result.note.FilePath, result.note.Parent)
 	fmt.Fprintf(os.Stderr, "Modified: 1, Deleted: 0\n")
 	return nil
 }
@@ -1134,6 +1155,8 @@ func applyBulkChanges(vlt *vault.Vault, original, modified string, results []Sea
 
 		// Update tags index
 		vlt.UpdateTagsIndex(result.note.Tags)
+		// Update titles index
+		vlt.UpdateTitleEntry(result.note.UUID, result.note.Title, result.note.FilePath, result.note.Parent)
 		modifiedCount++
 	}
 
@@ -1153,6 +1176,7 @@ func applyBulkChanges(vlt *vault.Vault, original, modified string, results []Sea
 
 		// Decrement tags for deleted note
 		vlt.DecrementTagsIndex(result.note.Tags)
+		vlt.RemoveTitleEntry(result.note.UUID)
 		deletedCount++
 	}
 

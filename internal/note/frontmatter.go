@@ -19,6 +19,7 @@ type Frontmatter struct {
 	Updated    string   `yaml:"updated,omitempty"`
 	Tags       []string `yaml:"tags,omitempty"`
 	InlineTags []string `yaml:"inline-tags,omitempty"`
+	Parent     string   `yaml:"parent,omitempty"`
 
 	// Extra holds any additional frontmatter fields not explicitly defined.
 	// This preserves user-added fields.
@@ -95,6 +96,10 @@ func parseFrontmatterYAML(yamlContent string) (*Frontmatter, error) {
 		fm.InlineTags = toStringSlice(v)
 		delete(raw, "inline-tags")
 	}
+	if v, ok := raw["parent"].(string); ok {
+		fm.Parent = v
+		delete(raw, "parent")
+	}
 
 	// Store remaining fields as extra
 	fm.Extra = raw
@@ -161,6 +166,9 @@ func (fm *Frontmatter) Serialize() (string, error) {
 	if len(fm.InlineTags) > 0 {
 		data["inline-tags"] = fm.InlineTags
 	}
+	if fm.Parent != "" {
+		data["parent"] = fm.Parent
+	}
 
 	// Add extra fields
 	for k, v := range fm.Extra {
@@ -187,6 +195,7 @@ func (fm *Frontmatter) IsEmpty() bool {
 		fm.Updated == "" &&
 		len(fm.Tags) == 0 &&
 		len(fm.InlineTags) == 0 &&
+		fm.Parent == "" &&
 		len(fm.Extra) == 0
 }
 
@@ -211,6 +220,9 @@ func (fm *Frontmatter) Merge(other *Frontmatter) {
 	}
 	if len(other.InlineTags) > 0 {
 		fm.InlineTags = other.InlineTags
+	}
+	if other.Parent != "" {
+		fm.Parent = other.Parent
 	}
 
 	// Merge extra fields

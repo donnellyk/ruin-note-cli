@@ -20,6 +20,10 @@ func TestVault_Paths(t *testing.T) {
 	if got := v.QueriesFile(); got != "/my/vault/.ruin/queries.yml" {
 		t.Errorf("QueriesFile() = %q, want %q", got, "/my/vault/.ruin/queries.yml")
 	}
+
+	if got := v.TitlesFile(); got != "/my/vault/.ruin/titles.json" {
+		t.Errorf("TitlesFile() = %q, want %q", got, "/my/vault/.ruin/titles.json")
+	}
 }
 
 func TestVault_IsInitialized(t *testing.T) {
@@ -52,8 +56,8 @@ func TestVault_Initialize(t *testing.T) {
 	}
 
 	// Check created files
-	if len(result.Created) != 2 {
-		t.Errorf("Created = %v, want 2 files", result.Created)
+	if len(result.Created) != 3 {
+		t.Errorf("Created = %v, want 3 files", result.Created)
 	}
 
 	// Check .ruin directory exists
@@ -70,6 +74,11 @@ func TestVault_Initialize(t *testing.T) {
 	if _, err := os.Stat(v.QueriesFile()); err != nil {
 		t.Errorf("queries.yml not created: %v", err)
 	}
+
+	// Check titles.json exists
+	if _, err := os.Stat(v.TitlesFile()); err != nil {
+		t.Errorf("titles.json not created: %v", err)
+	}
 }
 
 func TestVault_Initialize_Idempotent(t *testing.T) {
@@ -81,8 +90,8 @@ func TestVault_Initialize_Idempotent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Initialize() error = %v", err)
 	}
-	if len(result1.Created) != 2 {
-		t.Errorf("First init: Created = %d, want 2", len(result1.Created))
+	if len(result1.Created) != 3 {
+		t.Errorf("First init: Created = %d, want 3", len(result1.Created))
 	}
 
 	// Second init (without force)
@@ -93,8 +102,8 @@ func TestVault_Initialize_Idempotent(t *testing.T) {
 	if len(result2.Created) != 0 {
 		t.Errorf("Second init: Created = %d, want 0", len(result2.Created))
 	}
-	if len(result2.Existed) != 2 {
-		t.Errorf("Second init: Existed = %d, want 2", len(result2.Existed))
+	if len(result2.Existed) != 3 {
+		t.Errorf("Second init: Existed = %d, want 3", len(result2.Existed))
 	}
 }
 
@@ -112,8 +121,8 @@ func TestVault_Initialize_Force(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Initialize(force=true) error = %v", err)
 	}
-	if len(result.Created) != 2 {
-		t.Errorf("Force init: Created = %d, want 2", len(result.Created))
+	if len(result.Created) != 3 {
+		t.Errorf("Force init: Created = %d, want 3", len(result.Created))
 	}
 }
 

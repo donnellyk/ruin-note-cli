@@ -183,6 +183,9 @@ New UUIDs in the updated content are an error (use 'log' to create new notes).`,
 					// Update tags index: decrement old, increment new
 					vlt.DecrementTagsIndex(oldTags)
 					vlt.UpdateTagsIndex(n.Tags)
+
+					// Update titles index
+					vlt.UpdateTitleEntry(n.UUID, n.Title, n.FilePath, n.Parent)
 				}
 
 				output.Modified = append(output.Modified, path)
@@ -207,6 +210,7 @@ New UUIDs in the updated content are an error (use 'log' to create new notes).`,
 					// Decrement tags for deleted note
 					if n != nil {
 						vlt.DecrementTagsIndex(n.Tags)
+						vlt.RemoveTitleEntry(n.UUID)
 					}
 				}
 

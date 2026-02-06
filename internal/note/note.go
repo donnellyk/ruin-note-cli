@@ -21,6 +21,7 @@ type Note struct {
 	Updated    time.Time
 	Tags       []string // All tags (global + inline)
 	InlineTags []string // Tags within content body only
+	Parent     string   // UUID of parent note
 	Title      string   // H1 header text (without #)
 	Content    string   // Full markdown content (without frontmatter)
 	FilePath   string   // Path to the file on disk
@@ -42,6 +43,7 @@ func Parse(content string) (*Note, error) {
 
 	note := &Note{
 		UUID:    fm.UUID,
+		Parent:  fm.Parent,
 		Content: body,
 		Extra:   fm.Extra,
 	}
@@ -100,6 +102,7 @@ func (n *Note) Serialize() (string, error) {
 		UUID:       n.UUID,
 		Tags:       n.Tags,
 		InlineTags: n.InlineTags,
+		Parent:     n.Parent,
 		Extra:      n.Extra,
 	}
 
