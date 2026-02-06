@@ -36,6 +36,10 @@ cat > "$OUTPUT_DIR/.ruin/queries.yml" << 'EOF'
 queries: []
 EOF
 
+# Hub (parent) notes - created first, used as parents
+NUM_HUBS=10
+HUB_NAMES=("Project Alpha" "Project Beta" "Infrastructure" "Documentation" "Platform" "Backend" "Frontend" "DevOps" "Research" "Design")
+
 # Tag pools
 TAGS_COMMON=("#daily" "#work" "#personal" "#todo" "#idea")
 TAGS_CONTEXT=("#meeting" "#project" "#reference" "#draft" "#blog" "#notes")
@@ -43,6 +47,35 @@ TAGS_SPACED=("#meeting notes#" "#action items#" "#follow up#")
 
 # Content blocks
 PARAGRAPH="Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris. "
+
+# Create hub notes as parent targets
+echo "Creating $NUM_HUBS hub notes..."
+for h in $(seq 0 $((NUM_HUBS - 1))); do
+    HUB_UUID=$(uuidgen 2>/dev/null || cat /proc/sys/kernel/random/uuid 2>/dev/null || echo "hub-$h")
+    HUB_UUID=$(echo "$HUB_UUID" | tr '[:upper:]' '[:lower:]')
+    eval "HUB_UUID_$h=\"$HUB_UUID\""
+    HUB_NAME="${HUB_NAMES[$h]}"
+
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        HUB_CREATED=$(date -v-180d "+%Y-%m-%dT09:00:00-05:00")
+    else
+        HUB_CREATED=$(date -d "-180 days" "+%Y-%m-%dT09:00:00-05:00")
+    fi
+
+    cat > "$OUTPUT_DIR/hub-$(printf '%02d' $h).md" << EOF
+---
+uuid: $HUB_UUID
+created: $HUB_CREATED
+updated: $HUB_CREATED
+tags:
+  - "#project"
+  - "#hub"
+---
+# $HUB_NAME
+
+Hub note for $HUB_NAME project.
+EOF
+done
 
 # Generate notes
 for i in $(seq 0 $((NUM_NOTES - 1))); do
@@ -93,6 +126,14 @@ for i in $(seq 0 $((NUM_NOTES - 1))); do
     # Generate UUID
     UUID=$(uuidgen 2>/dev/null || cat /proc/sys/kernel/random/uuid 2>/dev/null || echo "uuid-$i")
     UUID=$(echo "$UUID" | tr '[:upper:]' '[:lower:]')
+
+    # ~30% of notes get a parent (hub note)
+    PARENT_LINE=""
+    if [ $((RANDOM % 100)) -lt 30 ]; then
+        PARENT_HUB=$((RANDOM % NUM_HUBS))
+        eval "PARENT_UUID=\"\$HUB_UUID_$PARENT_HUB\""
+        PARENT_LINE="parent: $PARENT_UUID"
+    fi
 
     # Create note content based on type
     if [ $TYPE_ROLL -lt 40 ]; then
@@ -210,7 +251,20 @@ $PARAGRAPH
     fi
 
     # Write note file
-    cat > "$OUTPUT_DIR/$FILENAME" << EOF
+    if [ -n "$PARENT_LINE" ]; then
+        cat > "$OUTPUT_DIR/$FILENAME" << EOF
+---
+uuid: $UUID
+created: $CREATED
+updated: $CREATED
+tags:$TAGS_YAML
+$PARENT_LINE
+---
+# $TITLE
+$CONTENT
+EOF
+    else
+        cat > "$OUTPUT_DIR/$FILENAME" << EOF
 ---
 uuid: $UUID
 created: $CREATED
@@ -220,6 +274,7 @@ tags:$TAGS_YAML
 # $TITLE
 $CONTENT
 EOF
+    fi
 
     # Progress indicator
     if [ $((i % 500)) -eq 0 ] && [ $i -gt 0 ]; then
@@ -227,14 +282,16 @@ EOF
     fi
 done
 
-echo "Created $NUM_NOTES notes in $OUTPUT_DIR"
+echo "Created $NUM_NOTES notes + $NUM_HUBS hubs in $OUTPUT_DIR"
 
 # Show stats
 echo ""
 echo "Vault statistics:"
 echo "  Total notes: $(ls -1 "$OUTPUT_DIR"/*.md 2>/dev/null | wc -l | tr -d ' ')"
 echo "  Total size: $(du -sh "$OUTPUT_DIR" | cut -f1)"
+echo "  Hub notes: $(ls -1 "$OUTPUT_DIR"/hub-*.md 2>/dev/null | wc -l | tr -d ' ')"
 echo "  Tiny notes: $(ls -1 "$OUTPUT_DIR"/thought-*.md 2>/dev/null | wc -l | tr -d ' ')"
 echo "  Small notes: $(ls -1 "$OUTPUT_DIR"/daily-*.md 2>/dev/null | wc -l | tr -d ' ')"
 echo "  Medium notes: $(ls -1 "$OUTPUT_DIR"/meeting-*.md 2>/dev/null | wc -l | tr -d ' ')"
 echo "  Large notes: $(ls -1 "$OUTPUT_DIR"/document-*.md 2>/dev/null | wc -l | tr -d ' ')"
+echo "  Notes with parent: $(grep -rl '^parent:' "$OUTPUT_DIR"/*.md 2>/dev/null | wc -l | tr -d ' ')"
