@@ -461,6 +461,22 @@ queries:
     query: "#meeting"
 EOF
 
+    # --- Write parents.yml (saved parent bookmarks) ---
+    echo "  Writing saved parent bookmarks..."
+    cat > "$vault_path/.ruin/parents.yml" <<'EOF'
+parents:
+  - name: alpha
+    uuid: test-uuid-hub-alpha
+  - name: beta
+    uuid: test-uuid-hub-beta
+  - name: infra
+    uuid: test-uuid-hub-infra
+  - name: docs
+    uuid: test-uuid-hub-docs
+  - name: platform
+    uuid: test-uuid-hub-platform
+EOF
+
     # --- Run ruin doctor to build tags.yml and titles.json ---
     echo "  Running 'ruin doctor' to build indexes..."
     local ruin_bin=""
@@ -498,11 +514,14 @@ EOF
     echo "  - 5 hub (project) notes"
     echo "  - 3 notes with orphaned parent references"
     echo "  - 5 saved queries in queries.yml"
+    echo "  - 5 saved parent bookmarks (alpha, beta, infra, docs, platform)"
     echo ""
     echo "Test with:"
     echo "  ./ruin --vault $vault_path log"
     echo "  ./ruin --vault $vault_path search \"#daily\""
     echo "  ./ruin --vault $vault_path query list"
+    echo "  ./ruin --vault $vault_path parent list"
+    echo "  ./ruin --vault $vault_path compose alpha"
     echo "  ./ruin --vault $vault_path doctor --json"
 }
 
