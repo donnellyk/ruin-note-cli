@@ -12,12 +12,13 @@ import (
 
 // DoctorOutput represents the JSON output for the doctor command.
 type DoctorOutput struct {
-	Scanned         int      `json:"scanned"`
-	UUIDGenerated   []string `json:"uuid_generated,omitempty"`
-	TagsReindexed   []string `json:"tags_reindexed,omitempty"`
-	TagsYMLUpdated  bool     `json:"tags_yml_updated"`
-	TitlesUpdated   bool     `json:"titles_updated"`
-	OrphanedParents []string `json:"orphaned_parents,omitempty"`
+	Scanned            int      `json:"scanned"`
+	UUIDGenerated      []string `json:"uuid_generated,omitempty"`
+	TagsReindexed      []string `json:"tags_reindexed,omitempty"`
+	TagsYMLUpdated     bool     `json:"tags_yml_updated"`
+	TitlesUpdated      bool     `json:"titles_updated"`
+	OrphanedParents    []string `json:"orphaned_parents,omitempty"`
+	OrphanedBookmarks  []string `json:"orphaned_bookmarks,omitempty"`
 }
 
 // NewDoctorCmd creates the doctor command.
@@ -175,6 +176,17 @@ Does NOT update created or updated timestamps.`,
 				}
 			}
 
+			// Detect orphaned bookmarks
+			parentBookmarks, err := vlt.LoadParents()
+			if err == nil {
+				for _, p := range parentBookmarks.Parents {
+					if _, ok := titleEntries[p.UUID]; !ok {
+						output.OrphanedBookmarks = append(output.OrphanedBookmarks,
+							fmt.Sprintf("%s (uuid %s not found)", p.Name, p.UUID))
+					}
+				}
+			}
+
 			// Output results
 			if *jsonOutput {
 				enc := json.NewEncoder(os.Stdout)
@@ -200,6 +212,12 @@ Does NOT update created or updated timestamps.`,
 				fmt.Fprintf(os.Stderr, "  %d orphaned parent reference(s):\n", len(output.OrphanedParents))
 				for _, op := range output.OrphanedParents {
 					fmt.Fprintf(os.Stderr, "    - %s\n", op)
+				}
+			}
+			if len(output.OrphanedBookmarks) > 0 {
+				fmt.Fprintf(os.Stderr, "  %d orphaned bookmark(s):\n", len(output.OrphanedBookmarks))
+				for _, ob := range output.OrphanedBookmarks {
+					fmt.Fprintf(os.Stderr, "    - %s\n", ob)
 				}
 			}
 

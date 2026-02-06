@@ -24,6 +24,10 @@ func TestVault_Paths(t *testing.T) {
 	if got := v.TitlesFile(); got != "/my/vault/.ruin/titles.json" {
 		t.Errorf("TitlesFile() = %q, want %q", got, "/my/vault/.ruin/titles.json")
 	}
+
+	if got := v.ParentsFile(); got != "/my/vault/.ruin/parents.yml" {
+		t.Errorf("ParentsFile() = %q, want %q", got, "/my/vault/.ruin/parents.yml")
+	}
 }
 
 func TestVault_IsInitialized(t *testing.T) {
@@ -56,8 +60,8 @@ func TestVault_Initialize(t *testing.T) {
 	}
 
 	// Check created files
-	if len(result.Created) != 3 {
-		t.Errorf("Created = %v, want 3 files", result.Created)
+	if len(result.Created) != 4 {
+		t.Errorf("Created = %v, want 4 files", result.Created)
 	}
 
 	// Check .ruin directory exists
@@ -75,6 +79,11 @@ func TestVault_Initialize(t *testing.T) {
 		t.Errorf("queries.yml not created: %v", err)
 	}
 
+	// Check parents.yml exists
+	if _, err := os.Stat(v.ParentsFile()); err != nil {
+		t.Errorf("parents.yml not created: %v", err)
+	}
+
 	// Check titles.json exists
 	if _, err := os.Stat(v.TitlesFile()); err != nil {
 		t.Errorf("titles.json not created: %v", err)
@@ -90,8 +99,8 @@ func TestVault_Initialize_Idempotent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Initialize() error = %v", err)
 	}
-	if len(result1.Created) != 3 {
-		t.Errorf("First init: Created = %d, want 3", len(result1.Created))
+	if len(result1.Created) != 4 {
+		t.Errorf("First init: Created = %d, want 4", len(result1.Created))
 	}
 
 	// Second init (without force)
@@ -102,8 +111,8 @@ func TestVault_Initialize_Idempotent(t *testing.T) {
 	if len(result2.Created) != 0 {
 		t.Errorf("Second init: Created = %d, want 0", len(result2.Created))
 	}
-	if len(result2.Existed) != 3 {
-		t.Errorf("Second init: Existed = %d, want 3", len(result2.Existed))
+	if len(result2.Existed) != 4 {
+		t.Errorf("Second init: Existed = %d, want 4", len(result2.Existed))
 	}
 }
 
@@ -121,8 +130,8 @@ func TestVault_Initialize_Force(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Initialize(force=true) error = %v", err)
 	}
-	if len(result.Created) != 3 {
-		t.Errorf("Force init: Created = %d, want 3", len(result.Created))
+	if len(result.Created) != 4 {
+		t.Errorf("Force init: Created = %d, want 4", len(result.Created))
 	}
 }
 
@@ -238,5 +247,66 @@ func TestVault_QueriesRoundTrip(t *testing.T) {
 
 	if loaded.Queries[0].Name != "daily" {
 		t.Errorf("Queries[0].Name = %q, want %q", loaded.Queries[0].Name, "daily")
+	}
+}
+
+func TestVault_ParentsRoundTrip(t *testing.T) {
+	tmpDir := t.TempDir()
+	v := New(tmpDir)
+
+	if _, err := v.Initialize(false); err != nil {
+		t.Fatalf("Initialize() error = %v", err)
+	}
+
+	parents := &ParentsIndex{
+		Parents: []ParentEntry{
+			{Name: "alpha", UUID: "uuid-alpha"},
+			{Name: "docs", UUID: "uuid-docs"},
+		},
+	}
+
+	if err := v.SaveParents(parents); err != nil {
+		t.Fatalf("SaveParents() error = %v", err)
+	}
+
+	loaded, err := v.LoadParents()
+	if err != nil {
+		t.Fatalf("LoadParents() error = %v", err)
+	}
+
+	if len(loaded.Parents) != 2 {
+		t.Errorf("LoadParents() returned %d parents, want 2", len(loaded.Parents))
+	}
+
+	if loaded.Parents[0].Name != "alpha" || loaded.Parents[0].UUID != "uuid-alpha" {
+		t.Errorf("Parents[0] = %+v, want {Name:alpha, UUID:uuid-alpha}", loaded.Parents[0])
+	}
+}
+
+func TestVault_LookupParent(t *testing.T) {
+	tmpDir := t.TempDir()
+	v := New(tmpDir)
+
+	if _, err := v.Initialize(false); err != nil {
+		t.Fatalf("Initialize() error = %v", err)
+	}
+
+	parents := &ParentsIndex{
+		Parents: []ParentEntry{
+			{Name: "alpha", UUID: "uuid-alpha"},
+		},
+	}
+	v.SaveParents(parents)
+
+	// Found
+	uuid, ok := v.LookupParent("alpha")
+	if !ok || uuid != "uuid-alpha" {
+		t.Errorf("LookupParent(alpha) = %q, %v; want uuid-alpha, true", uuid, ok)
+	}
+
+	// Not found
+	_, ok = v.LookupParent("nonexistent")
+	if ok {
+		t.Error("LookupParent(nonexistent) = true, want false")
 	}
 }

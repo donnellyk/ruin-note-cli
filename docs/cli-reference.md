@@ -315,6 +315,38 @@ ruin parent children <note>
 
 Lists direct children of a note. With `--recursive`, shows the full subtree.
 
+#### parent save
+
+```
+ruin parent save <name> <note>
+```
+
+| Flag | Short | Description |
+|------|-------|-------------|
+| `--force` | `-f` | Skip confirmation when overwriting |
+
+Save a named bookmark mapping `<name>` to a note's UUID. The bookmark can be used anywhere a note reference is accepted (e.g., `--parent`, `compose`, other `parent` subcommands).
+
+#### parent list
+
+```
+ruin parent list
+```
+
+List all saved parent bookmarks. Shows `name: title (uuid)` per line, or JSON array with `--json`.
+
+#### parent delete
+
+```
+ruin parent delete <name>
+```
+
+| Flag | Short | Description |
+|------|-------|-------------|
+| `--force` | `-f` | Skip confirmation |
+
+Delete a saved parent bookmark by name.
+
 #### parent tree
 
 ```
@@ -403,6 +435,7 @@ Content of second note...
 ├── .ruin/
 │   ├── tags.yml      # Tag index
 │   ├── queries.yml   # Saved queries
+│   ├── parents.yml   # Saved parent bookmarks
 │   └── titles.json   # Titles index (UUID to title/path/parent)
 ├── Note Title.md
 └── 2025-01-28T10-30-00.md

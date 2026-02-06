@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -24,6 +25,9 @@ func NewParentCmd(getVault func() *vault.Vault, jsonOutput *bool) *cobra.Command
 	cmd.AddCommand(newParentRemoveCmd(getVault, jsonOutput))
 	cmd.AddCommand(newParentChildrenCmd(getVault, jsonOutput))
 	cmd.AddCommand(newParentTreeCmd(getVault, jsonOutput))
+	cmd.AddCommand(newParentSaveCmd(getVault, jsonOutput))
+	cmd.AddCommand(newParentListCmd(getVault, jsonOutput))
+	cmd.AddCommand(newParentDeleteCmd(getVault, jsonOutput))
 
 	return cmd
 }
@@ -507,6 +511,242 @@ func printTreeNodes(index *vault.TitlesIndex, childrenMap map[string][]string, u
 		fmt.Printf("%s%s\n", strings.Repeat("  ", depth), entry.Path)
 		printTreeNodes(index, childrenMap, childUUID, visited, maxDepth, depth+1)
 	}
+}
+
+func newParentSaveCmd(getVault func() *vault.Vault, jsonOutput *bool) *cobra.Command {
+	var force bool
+
+	cmd := &cobra.Command{
+		Use:   "save <name> <note>",
+		Short: "Save a named parent bookmark",
+		Long: `Save a named bookmark that maps a short name to a note UUID.
+
+The bookmark can then be used anywhere a note reference is accepted
+(e.g., --parent, compose, parent set/get/remove/children/tree).`,
+		Example: `  ruin parent save alpha "Project Alpha Hub"
+  ruin parent save docs "Documentation Root" --force`,
+		Args: cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			vlt := getVault()
+			if vlt == nil {
+				return fmt.Errorf("vault not configured")
+			}
+
+			name := args[0]
+
+			n, err := ResolveNote(vlt, args[1])
+			if err != nil {
+				return fmt.Errorf("note: %w", err)
+			}
+
+			index, err := vlt.LoadParents()
+			if err != nil {
+				return fmt.Errorf("failed to load parents: %w", err)
+			}
+
+			// Check for existing entry
+			existingIdx := -1
+			for i, p := range index.Parents {
+				if p.Name == name {
+					existingIdx = i
+					break
+				}
+			}
+
+			if existingIdx >= 0 && !force {
+				if !isTerminal(os.Stderr) {
+					return fmt.Errorf("non-interactive mode requires --force")
+				}
+
+				fmt.Fprintf(os.Stderr, "Bookmark %q already exists (UUID: %s). Overwrite? [y/N] ", name, index.Parents[existingIdx].UUID)
+				reader := bufio.NewReader(os.Stdin)
+				response, err := reader.ReadString('\n')
+				if err != nil {
+					return fmt.Errorf("failed to read response: %w", err)
+				}
+				response = strings.TrimSpace(strings.ToLower(response))
+				if response != "y" && response != "yes" {
+					return ErrUserAborted
+				}
+			}
+
+			// Upsert
+			if existingIdx >= 0 {
+				index.Parents[existingIdx].UUID = n.UUID
+			} else {
+				index.Parents = append(index.Parents, vault.ParentEntry{
+					Name: name,
+					UUID: n.UUID,
+				})
+			}
+
+			if err := vlt.SaveParents(index); err != nil {
+				return fmt.Errorf("failed to save parents: %w", err)
+			}
+
+			if *jsonOutput {
+				output := struct {
+					Name  string `json:"name"`
+					UUID  string `json:"uuid"`
+					Title string `json:"title"`
+				}{
+					Name:  name,
+					UUID:  n.UUID,
+					Title: n.Title,
+				}
+				enc := json.NewEncoder(os.Stdout)
+				enc.SetIndent("", "  ")
+				return enc.Encode(output)
+			}
+
+			fmt.Fprintf(os.Stderr, "Saved parent %q -> %s (%s)\n", name, n.Title, n.UUID)
+			return nil
+		},
+	}
+
+	cmd.Flags().BoolVarP(&force, "force", "f", false, "skip confirmation when overwriting")
+	return cmd
+}
+
+func newParentListCmd(getVault func() *vault.Vault, jsonOutput *bool) *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "list",
+		Short: "List saved parent bookmarks",
+		Example: `  ruin parent list
+  ruin parent list --json`,
+		Args: cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			vlt := getVault()
+			if vlt == nil {
+				return fmt.Errorf("vault not configured")
+			}
+
+			index, err := vlt.LoadParents()
+			if err != nil {
+				return fmt.Errorf("failed to load parents: %w", err)
+			}
+
+			titles, _ := vlt.LoadTitles()
+
+			if *jsonOutput {
+				type listEntry struct {
+					Name  string `json:"name"`
+					UUID  string `json:"uuid"`
+					Title string `json:"title"`
+				}
+				var entries []listEntry
+				for _, p := range index.Parents {
+					title := ""
+					if titles != nil {
+						if te, ok := titles.Titles[p.UUID]; ok {
+							title = te.Title
+						}
+					}
+					entries = append(entries, listEntry{
+						Name:  p.Name,
+						UUID:  p.UUID,
+						Title: title,
+					})
+				}
+				enc := json.NewEncoder(os.Stdout)
+				enc.SetIndent("", "  ")
+				return enc.Encode(entries)
+			}
+
+			if len(index.Parents) == 0 {
+				fmt.Println("No saved parent bookmarks")
+				return nil
+			}
+
+			for _, p := range index.Parents {
+				title := p.UUID
+				if titles != nil {
+					if te, ok := titles.Titles[p.UUID]; ok {
+						title = te.Title
+					}
+				}
+				fmt.Printf("%s: %s (%s)\n", p.Name, title, p.UUID)
+			}
+			return nil
+		},
+	}
+
+	return cmd
+}
+
+func newParentDeleteCmd(getVault func() *vault.Vault, jsonOutput *bool) *cobra.Command {
+	var force bool
+
+	cmd := &cobra.Command{
+		Use:   "delete <name>",
+		Short: "Delete a saved parent bookmark",
+		Example: `  ruin parent delete alpha
+  ruin parent delete alpha --force`,
+		Args: cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			vlt := getVault()
+			if vlt == nil {
+				return fmt.Errorf("vault not configured")
+			}
+
+			name := args[0]
+
+			index, err := vlt.LoadParents()
+			if err != nil {
+				return fmt.Errorf("failed to load parents: %w", err)
+			}
+
+			found := -1
+			for i, p := range index.Parents {
+				if p.Name == name {
+					found = i
+					break
+				}
+			}
+
+			if found == -1 {
+				return fmt.Errorf("parent bookmark not found: %s", name)
+			}
+
+			if !force {
+				if !isTerminal(os.Stderr) {
+					return fmt.Errorf("non-interactive mode requires --force")
+				}
+
+				fmt.Fprintf(os.Stderr, "Delete bookmark %q? [y/N] ", name)
+				reader := bufio.NewReader(os.Stdin)
+				response, err := reader.ReadString('\n')
+				if err != nil {
+					return fmt.Errorf("failed to read response: %w", err)
+				}
+				response = strings.TrimSpace(strings.ToLower(response))
+				if response != "y" && response != "yes" {
+					return ErrUserAborted
+				}
+			}
+
+			index.Parents = append(index.Parents[:found], index.Parents[found+1:]...)
+
+			if err := vlt.SaveParents(index); err != nil {
+				return fmt.Errorf("failed to save parents: %w", err)
+			}
+
+			if *jsonOutput {
+				output := struct {
+					Deleted string `json:"deleted"`
+				}{Deleted: name}
+				enc := json.NewEncoder(os.Stdout)
+				enc.SetIndent("", "  ")
+				return enc.Encode(output)
+			}
+
+			fmt.Fprintf(os.Stderr, "Deleted parent bookmark %q\n", name)
+			return nil
+		},
+	}
+
+	cmd.Flags().BoolVarP(&force, "force", "f", false, "skip confirmation prompt")
+	return cmd
 }
 
 // detectCycle checks if setting proposedParentUUID as the parent of childUUID

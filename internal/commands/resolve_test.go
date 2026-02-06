@@ -125,6 +125,50 @@ func TestResolveNote_Ambiguous(t *testing.T) {
 	}
 }
 
+func TestResolveNote_SavedParentBookmark(t *testing.T) {
+	vlt := setupResolveTestVault(t)
+
+	// Save a bookmark
+	parents := &vault.ParentsIndex{
+		Parents: []vault.ParentEntry{
+			{Name: "alpha", UUID: "uuid-alpha"},
+		},
+	}
+	if err := vlt.SaveParents(parents); err != nil {
+		t.Fatalf("SaveParents() error = %v", err)
+	}
+
+	// Resolve by bookmark name
+	n, err := ResolveNote(vlt, "alpha")
+	if err != nil {
+		t.Fatalf("ResolveNote() error = %v", err)
+	}
+	if n.UUID != "uuid-alpha" {
+		t.Errorf("UUID = %q, want %q", n.UUID, "uuid-alpha")
+	}
+}
+
+func TestResolveNote_BookmarkTakesPrecedence(t *testing.T) {
+	vlt := setupResolveTestVault(t)
+
+	// Save a bookmark named "Meeting" that points to alpha
+	parents := &vault.ParentsIndex{
+		Parents: []vault.ParentEntry{
+			{Name: "Meeting", UUID: "uuid-alpha"},
+		},
+	}
+	vlt.SaveParents(parents)
+
+	// "Meeting" would match "Meeting Notes" by title, but bookmark should win
+	n, err := ResolveNote(vlt, "Meeting")
+	if err != nil {
+		t.Fatalf("ResolveNote() error = %v", err)
+	}
+	if n.UUID != "uuid-alpha" {
+		t.Errorf("UUID = %q, want %q (bookmark should take precedence)", n.UUID, "uuid-alpha")
+	}
+}
+
 func TestResolveNote_NotFound(t *testing.T) {
 	vlt := setupResolveTestVault(t)
 

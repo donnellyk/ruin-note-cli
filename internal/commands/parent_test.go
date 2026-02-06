@@ -397,6 +397,174 @@ func TestParentTree(t *testing.T) {
 	}
 }
 
+func TestParentSave_Basic(t *testing.T) {
+	vlt := setupParentTestVault(t)
+	jsonOut := false
+	cmd := NewParentCmd(func() *vault.Vault { return vlt }, &jsonOut)
+
+	cmd.SetArgs([]string{"save", "myroot", "uuid-root", "--force"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("parent save error = %v", err)
+	}
+
+	// Verify saved
+	index, err := vlt.LoadParents()
+	if err != nil {
+		t.Fatalf("LoadParents() error = %v", err)
+	}
+	if len(index.Parents) != 1 {
+		t.Fatalf("got %d parents, want 1", len(index.Parents))
+	}
+	if index.Parents[0].Name != "myroot" || index.Parents[0].UUID != "uuid-root" {
+		t.Errorf("parent = %+v, want {myroot, uuid-root}", index.Parents[0])
+	}
+}
+
+func TestParentSave_Upsert(t *testing.T) {
+	vlt := setupParentTestVault(t)
+	jsonOut := false
+
+	// Save first
+	cmd := NewParentCmd(func() *vault.Vault { return vlt }, &jsonOut)
+	cmd.SetArgs([]string{"save", "myroot", "uuid-root", "--force"})
+	cmd.Execute()
+
+	// Upsert (change target)
+	cmd2 := NewParentCmd(func() *vault.Vault { return vlt }, &jsonOut)
+	cmd2.SetArgs([]string{"save", "myroot", "uuid-child", "--force"})
+	if err := cmd2.Execute(); err != nil {
+		t.Fatalf("parent save upsert error = %v", err)
+	}
+
+	index, _ := vlt.LoadParents()
+	if len(index.Parents) != 1 {
+		t.Fatalf("got %d parents, want 1 (upsert, not append)", len(index.Parents))
+	}
+	if index.Parents[0].UUID != "uuid-child" {
+		t.Errorf("UUID = %q, want uuid-child", index.Parents[0].UUID)
+	}
+}
+
+func TestParentSave_JSON(t *testing.T) {
+	vlt := setupParentTestVault(t)
+	jsonOut := true
+	cmd := NewParentCmd(func() *vault.Vault { return vlt }, &jsonOut)
+
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	cmd.SetArgs([]string{"save", "myroot", "uuid-root", "--force"})
+	err := cmd.Execute()
+
+	w.Close()
+	os.Stdout = oldStdout
+
+	if err != nil {
+		t.Fatalf("parent save --json error = %v", err)
+	}
+
+	var buf bytes.Buffer
+	buf.ReadFrom(r)
+
+	var result struct {
+		Name  string `json:"name"`
+		UUID  string `json:"uuid"`
+		Title string `json:"title"`
+	}
+	if err := json.Unmarshal(buf.Bytes(), &result); err != nil {
+		t.Fatalf("failed to parse JSON: %v", err)
+	}
+	if result.Name != "myroot" {
+		t.Errorf("name = %q, want myroot", result.Name)
+	}
+	if result.UUID != "uuid-root" {
+		t.Errorf("uuid = %q, want uuid-root", result.UUID)
+	}
+}
+
+func TestParentList(t *testing.T) {
+	vlt := setupParentTestVault(t)
+	jsonOut := true
+
+	// Save a couple
+	cmd := NewParentCmd(func() *vault.Vault { return vlt }, &jsonOut)
+	cmd.SetArgs([]string{"save", "alpha", "uuid-root", "--force"})
+	cmd.Execute()
+
+	cmd2 := NewParentCmd(func() *vault.Vault { return vlt }, &jsonOut)
+	cmd2.SetArgs([]string{"save", "beta", "uuid-child", "--force"})
+	cmd2.Execute()
+
+	// List
+	cmd3 := NewParentCmd(func() *vault.Vault { return vlt }, &jsonOut)
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	cmd3.SetArgs([]string{"list"})
+	err := cmd3.Execute()
+
+	w.Close()
+	os.Stdout = oldStdout
+
+	if err != nil {
+		t.Fatalf("parent list error = %v", err)
+	}
+
+	var buf bytes.Buffer
+	buf.ReadFrom(r)
+
+	var entries []struct {
+		Name  string `json:"name"`
+		UUID  string `json:"uuid"`
+		Title string `json:"title"`
+	}
+	if err := json.Unmarshal(buf.Bytes(), &entries); err != nil {
+		t.Fatalf("failed to parse JSON: %v", err)
+	}
+	if len(entries) != 2 {
+		t.Errorf("got %d entries, want 2", len(entries))
+	}
+}
+
+func TestParentDelete(t *testing.T) {
+	vlt := setupParentTestVault(t)
+	jsonOut := false
+
+	// Save
+	cmd := NewParentCmd(func() *vault.Vault { return vlt }, &jsonOut)
+	cmd.SetArgs([]string{"save", "alpha", "uuid-root", "--force"})
+	cmd.Execute()
+
+	// Delete
+	cmd2 := NewParentCmd(func() *vault.Vault { return vlt }, &jsonOut)
+	cmd2.SetArgs([]string{"delete", "alpha", "--force"})
+	if err := cmd2.Execute(); err != nil {
+		t.Fatalf("parent delete error = %v", err)
+	}
+
+	index, _ := vlt.LoadParents()
+	if len(index.Parents) != 0 {
+		t.Errorf("got %d parents after delete, want 0", len(index.Parents))
+	}
+}
+
+func TestParentDelete_NotFound(t *testing.T) {
+	vlt := setupParentTestVault(t)
+	jsonOut := false
+	cmd := NewParentCmd(func() *vault.Vault { return vlt }, &jsonOut)
+
+	cmd.SetArgs([]string{"delete", "nonexistent", "--force"})
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatal("expected not-found error")
+	}
+	if !containsSubstr(err.Error(), "not found") {
+		t.Errorf("error = %q, want not-found error", err.Error())
+	}
+}
+
 func TestDetectCycle(t *testing.T) {
 	index := &vault.TitlesIndex{
 		Titles: map[string]vault.TitleEntry{

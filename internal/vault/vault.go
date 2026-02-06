@@ -15,6 +15,7 @@ const (
 	ruinDir     = ".ruin"
 	tagsFile    = "tags.yml"
 	queriesFile = "queries.yml"
+	parentsFile = "parents.yml"
 )
 
 // Vault represents a notes vault directory.
@@ -40,6 +41,11 @@ func (v *Vault) TagsFile() string {
 // QueriesFile returns the path to the queries.yml file.
 func (v *Vault) QueriesFile() string {
 	return filepath.Join(v.RuinDir(), queriesFile)
+}
+
+// ParentsFile returns the path to the parents.yml file.
+func (v *Vault) ParentsFile() string {
+	return filepath.Join(v.RuinDir(), parentsFile)
 }
 
 // IsInitialized checks if the vault has been initialized (has .ruin directory).
@@ -77,6 +83,12 @@ func (v *Vault) Initialize(force bool) (*InitResult, error) {
 	// Initialize queries.yml
 	queriesPath := v.QueriesFile()
 	if err := v.initMetadataFile(queriesPath, &QueriesIndex{Queries: []QueryEntry{}}, force, result); err != nil {
+		return nil, err
+	}
+
+	// Initialize parents.yml
+	parentsPath := v.ParentsFile()
+	if err := v.initMetadataFile(parentsPath, &ParentsIndex{Parents: []ParentEntry{}}, force, result); err != nil {
 		return nil, err
 	}
 
@@ -356,4 +368,62 @@ func (v *Vault) SaveQueries(index *QueriesIndex) error {
 	}
 
 	return nil
+}
+
+// ParentEntry represents a saved parent bookmark (name -> UUID).
+type ParentEntry struct {
+	Name string `yaml:"name" json:"name"`
+	UUID string `yaml:"uuid" json:"uuid"`
+}
+
+// ParentsIndex represents the contents of parents.yml.
+type ParentsIndex struct {
+	Parents []ParentEntry `yaml:"parents"`
+}
+
+// LoadParents reads the parents index from .ruin/parents.yml.
+func (v *Vault) LoadParents() (*ParentsIndex, error) {
+	data, err := os.ReadFile(v.ParentsFile())
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return &ParentsIndex{Parents: []ParentEntry{}}, nil
+		}
+		return nil, fmt.Errorf("failed to read parents file: %w", err)
+	}
+
+	var index ParentsIndex
+	if err := yaml.Unmarshal(data, &index); err != nil {
+		return nil, fmt.Errorf("failed to parse parents file: %w", err)
+	}
+
+	return &index, nil
+}
+
+// SaveParents writes the parents index to .ruin/parents.yml.
+func (v *Vault) SaveParents(index *ParentsIndex) error {
+	data, err := yaml.Marshal(index)
+	if err != nil {
+		return fmt.Errorf("failed to marshal parents: %w", err)
+	}
+
+	if err := os.WriteFile(v.ParentsFile(), data, 0644); err != nil {
+		return fmt.Errorf("failed to write parents file: %w", err)
+	}
+
+	return nil
+}
+
+// LookupParent finds a saved parent by name and returns its UUID.
+func (v *Vault) LookupParent(name string) (string, bool) {
+	index, err := v.LoadParents()
+	if err != nil {
+		return "", false
+	}
+
+	for _, p := range index.Parents {
+		if p.Name == name {
+			return p.UUID, true
+		}
+	}
+	return "", false
 }
