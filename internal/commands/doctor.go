@@ -12,13 +12,14 @@ import (
 
 // DoctorOutput represents the JSON output for the doctor command.
 type DoctorOutput struct {
-	Scanned            int      `json:"scanned"`
-	UUIDGenerated      []string `json:"uuid_generated,omitempty"`
-	TagsReindexed      []string `json:"tags_reindexed,omitempty"`
-	TagsYMLUpdated     bool     `json:"tags_yml_updated"`
-	TitlesUpdated      bool     `json:"titles_updated"`
-	OrphanedParents    []string `json:"orphaned_parents,omitempty"`
-	OrphanedBookmarks  []string `json:"orphaned_bookmarks,omitempty"`
+	Scanned              int      `json:"scanned"`
+	UUIDGenerated        []string `json:"uuid_generated,omitempty"`
+	TagsReindexed        []string `json:"tags_reindexed,omitempty"`
+	LinkedCardsReindexed []string `json:"linked_cards_reindexed,omitempty"`
+	TagsYMLUpdated       bool     `json:"tags_yml_updated"`
+	TitlesUpdated        bool     `json:"titles_updated"`
+	OrphanedParents      []string `json:"orphaned_parents,omitempty"`
+	OrphanedBookmarks    []string `json:"orphaned_bookmarks,omitempty"`
 }
 
 // NewDoctorCmd creates the doctor command.
@@ -33,6 +34,7 @@ func NewDoctorCmd(getVault func() *vault.Vault, jsonOutput *bool) *cobra.Command
 Operations performed:
   - Generate UUID for notes missing one
   - Reindex tags and inline-tags from document content
+  - Resolve [[wiki links]] and rebuild linked-cards
   - Rebuild .ruin/tags.yml from all notes
   - Rebuild .ruin/titles.json from all notes
   - Detect orphaned parent references
@@ -73,6 +75,9 @@ Does NOT update created or updated timestamps.`,
 
 			// Track all titles for rebuilding titles.json
 			titleEntries := make(map[string]vault.TitleEntry)
+
+			// Store loaded notes for linked-cards pass
+			var loadedNotes []*note.Note
 
 			prefix := ""
 			if dryRun {
@@ -142,6 +147,43 @@ Does NOT update created or updated timestamps.`,
 						fmt.Fprintf(os.Stderr, "%swarning: failed to save %s: %v\n", prefix, path, err)
 					}
 				}
+
+				loadedNotes = append(loadedNotes, n)
+			}
+
+			// Post-loop: rebuild linked-cards using collected title entries
+			tempIndex := &vault.TitlesIndex{Titles: titleEntries}
+			for _, n := range loadedNotes {
+				oldLinkedCards := make(map[string]bool)
+				for _, lc := range n.LinkedCards {
+					oldLinkedCards[lc] = true
+				}
+
+				RefreshLinkedCards(n, tempIndex)
+
+				newLinkedCards := make(map[string]bool)
+				for _, lc := range n.LinkedCards {
+					newLinkedCards[lc] = true
+				}
+
+				changed := len(oldLinkedCards) != len(newLinkedCards)
+				if !changed {
+					for lc := range oldLinkedCards {
+						if !newLinkedCards[lc] {
+							changed = true
+							break
+						}
+					}
+				}
+
+				if changed {
+					output.LinkedCardsReindexed = append(output.LinkedCardsReindexed, n.FilePath)
+					if !dryRun {
+						if err := n.Save(); err != nil {
+							fmt.Fprintf(os.Stderr, "%swarning: failed to save linked-cards for %s: %v\n", prefix, n.FilePath, err)
+						}
+					}
+				}
 			}
 
 			// Rebuild tags.yml
@@ -201,6 +243,9 @@ Does NOT update created or updated timestamps.`,
 			}
 			if len(output.TagsReindexed) > 0 {
 				fmt.Fprintf(os.Stderr, "  %d notes: %sreindexed tags\n", len(output.TagsReindexed), prefix)
+			}
+			if len(output.LinkedCardsReindexed) > 0 {
+				fmt.Fprintf(os.Stderr, "  %d notes: %sreindexed linked-cards\n", len(output.LinkedCardsReindexed), prefix)
 			}
 			if output.TagsYMLUpdated {
 				fmt.Fprintf(os.Stderr, "%sUpdated .ruin/tags.yml\n", prefix)

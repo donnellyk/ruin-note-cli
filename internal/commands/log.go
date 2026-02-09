@@ -93,6 +93,13 @@ Details here..."
 			// Refresh tags from content
 			n.RefreshTags()
 
+			// Refresh linked-cards from wiki links
+			if titlesIndex, err := vlt.LoadTitles(); err == nil {
+				RefreshLinkedCards(n, titlesIndex)
+			} else {
+				fmt.Fprintf(os.Stderr, "warning: failed to load titles index for linked-cards: %v\n", err)
+			}
+
 			// Set order if specified
 			if cmd.Flags().Changed("order") {
 				n.Order = &orderVal

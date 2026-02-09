@@ -53,7 +53,8 @@ ruin-note-cli/
 │   │   ├── note.go           # Note struct and operations
 │   │   ├── frontmatter.go    # YAML frontmatter parsing/writing
 │   │   ├── bulk.go           # Bulk export/import format
-│   │   └── tags.go           # Tag extraction logic
+│   │   ├── tags.go           # Tag extraction logic
+│   │   └── links.go          # Wiki link extraction ([[title]])
 │   └── commands/
 │       ├── log.go            # log command implementation
 │       ├── search.go         # search command implementation
@@ -65,7 +66,8 @@ ruin-note-cli/
 │       ├── parent.go         # parent command (set, get, remove, children, tree)
 │       ├── suggest.go        # suggest command (title prefix matching)
 │       ├── compose.go        # compose command (recursive document assembly)
-│       └── resolve.go        # Note resolution (UUID, title, path lookup)
+│       ├── resolve.go        # Note resolution (UUID, title, path lookup)
+│       └── links.go          # Wiki link resolution (RefreshLinkedCards)
 ├── scripts/
 │   └── test-vault.sh         # Test vault helper script
 ├── go.mod
@@ -110,6 +112,7 @@ ruin-note-cli/
 - `tags`: all tags found in document
 - `inline-tags`: tags found within content body (not at top/end)
 - `parent`: UUID of parent note (optional, omitted if empty)
+- `linked-cards`: resolved UUIDs from `[[wiki links]]` (optional, omitted if empty)
 
 ## Common Commands
 

@@ -152,6 +152,9 @@ New UUIDs in the updated content are an error (use 'log' to create new notes).`,
 				prefix = "[dry-run] "
 			}
 
+			// Load titles index for linked-cards resolution
+			titlesIndex, titlesErr := vlt.LoadTitles()
+
 			// Process modifications
 			for _, uuid := range toModify {
 				path := uuidToPath[uuid]
@@ -172,6 +175,12 @@ New UUIDs in the updated content are an error (use 'log' to create new notes).`,
 				// Update content
 				n.Content = updatedMap[uuid]
 				n.RefreshTags()
+
+				// Refresh linked-cards from wiki links
+				if titlesErr == nil {
+					RefreshLinkedCards(n, titlesIndex)
+				}
+
 				n.SetTimestamps()
 
 				if !dryRun {

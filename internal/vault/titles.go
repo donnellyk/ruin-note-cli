@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 const titlesFile = "titles.json"
@@ -95,4 +96,15 @@ func (v *Vault) RemoveTitleEntry(uuid string) error {
 func (v *Vault) RebuildTitlesIndex(entries map[string]TitleEntry) error {
 	index := &TitlesIndex{Titles: entries}
 	return v.SaveTitles(index)
+}
+
+// FindByTitle returns the UUID for a note with an exact case-insensitive title match.
+func (idx *TitlesIndex) FindByTitle(title string) (string, bool) {
+	titleLower := strings.ToLower(strings.TrimSpace(title))
+	for uuid, entry := range idx.Titles {
+		if strings.ToLower(entry.Title) == titleLower {
+			return uuid, true
+		}
+	}
+	return "", false
 }

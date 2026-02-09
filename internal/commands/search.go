@@ -976,6 +976,11 @@ func handleEditSingle(vlt *vault.Vault, result SearchResult, force bool, fmMode 
 
 	result.note.SetTimestamps()
 
+	// Refresh linked-cards from wiki links
+	if titlesIndex, err := vlt.LoadTitles(); err == nil {
+		RefreshLinkedCards(result.note, titlesIndex)
+	}
+
 	if err := result.note.Save(); err != nil {
 		return fmt.Errorf("failed to save: %w", err)
 	}
@@ -1116,6 +1121,9 @@ func applyBulkChanges(vlt *vault.Vault, original, modified string, results []Sea
 		}
 	}
 
+	// Load titles index for linked-cards resolution
+	titlesIndex, titlesErr := vlt.LoadTitles()
+
 	// Apply modifications
 	var modifiedCount int
 	for _, uuid := range toModify {
@@ -1169,6 +1177,12 @@ func applyBulkChanges(vlt *vault.Vault, original, modified string, results []Sea
 		if !strings.HasPrefix(strings.TrimLeft(modContent, "\n\r"), "---") {
 			result.note.RefreshTags()
 		}
+
+		// Refresh linked-cards from wiki links
+		if titlesErr == nil {
+			RefreshLinkedCards(result.note, titlesIndex)
+		}
+
 		result.note.SetTimestamps()
 
 		if err := result.note.Save(); err != nil {

@@ -20,7 +20,8 @@ type Frontmatter struct {
 	Tags       []string `yaml:"tags,omitempty"`
 	InlineTags []string `yaml:"inline-tags,omitempty"`
 	Parent     string   `yaml:"parent,omitempty"`
-	Order      *int     `yaml:"order,omitempty"`
+	Order       *int     `yaml:"order,omitempty"`
+	LinkedCards []string `yaml:"linked-cards,omitempty"`
 
 	// Extra holds any additional frontmatter fields not explicitly defined.
 	// This preserves user-added fields.
@@ -111,6 +112,10 @@ func parseFrontmatterYAML(yamlContent string) (*Frontmatter, error) {
 		}
 		delete(raw, "order")
 	}
+	if v, ok := raw["linked-cards"]; ok {
+		fm.LinkedCards = toStringSlice(v)
+		delete(raw, "linked-cards")
+	}
 
 	// Store remaining fields as extra
 	fm.Extra = raw
@@ -183,6 +188,9 @@ func (fm *Frontmatter) Serialize() (string, error) {
 	if fm.Order != nil {
 		data["order"] = *fm.Order
 	}
+	if len(fm.LinkedCards) > 0 {
+		data["linked-cards"] = fm.LinkedCards
+	}
 
 	// Add extra fields
 	for k, v := range fm.Extra {
@@ -211,6 +219,7 @@ func (fm *Frontmatter) IsEmpty() bool {
 		len(fm.InlineTags) == 0 &&
 		fm.Parent == "" &&
 		fm.Order == nil &&
+		len(fm.LinkedCards) == 0 &&
 		len(fm.Extra) == 0
 }
 
@@ -241,6 +250,9 @@ func (fm *Frontmatter) Merge(other *Frontmatter) {
 	}
 	if other.Order != nil {
 		fm.Order = other.Order
+	}
+	if len(other.LinkedCards) > 0 {
+		fm.LinkedCards = other.LinkedCards
 	}
 
 	// Merge extra fields

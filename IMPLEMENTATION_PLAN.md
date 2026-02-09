@@ -62,8 +62,11 @@
 ### Milestone 3: Advanced Features (Future)
 
 - [ ] **Phase 16**: Graph & Links
+  - [x] 16.0 Wiki link parsing (`[[title]]`, `[[title|display]]`) and `linked-cards` frontmatter
   - [ ] 16.1 Backlinks command
   - [ ] 16.2 Graph export (DOT format)
+  - [ ] 16.3 `links-to:` search filter
+  - [ ] 16.4 Links index (`.ruin/links.yml` or similar)
 - [ ] **Phase 17**: Extended Functionality
   - [x] 17.1 Custom sort order (`order` field)
   - [ ] 17.2 Note archiving

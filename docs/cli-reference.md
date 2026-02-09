@@ -268,6 +268,7 @@ ruin doctor
 Operations:
 - Generate UUIDs for notes missing one
 - Reindex tags from document content
+- Resolve [[wiki links]] and rebuild linked-cards
 - Rebuild `.ruin/tags.yml`
 - Rebuild `.ruin/titles.json`
 - Detect orphaned parent references
@@ -409,7 +410,7 @@ tags:
 Content with #tags inline.
 ```
 
-**Managed fields** (set by CLI): `uuid`, `created`, `updated`, `tags`, `inline-tags`, `parent`, `order`
+**Managed fields** (set by CLI): `uuid`, `created`, `updated`, `tags`, `inline-tags`, `parent`, `order`, `linked-cards`
 
 **User fields**: Any other YAML keys are preserved.
 
@@ -417,6 +418,17 @@ Content with #tags inline.
 
 - Simple: `#foo`, `#bar`, `#2025/may`
 - Spaced: `#daily note#`
+
+## Wiki Links
+
+Reference other notes using wiki-style links:
+
+- Basic: `[[Note Title]]`
+- With display text: `[[Note Title|display text]]`
+
+Wiki links are resolved to UUIDs via exact case-insensitive title matching against the titles index. Resolved UUIDs are stored in the `linked-cards` frontmatter field. Unresolvable links produce a stderr warning and are omitted.
+
+Wiki links are resolved during `log`, `search --edit`, `update`, and `doctor`.
 
 ## Bulk Format
 

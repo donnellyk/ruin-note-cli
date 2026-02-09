@@ -316,11 +316,23 @@ $closing"
                     parent="test-uuid-hub-$proj"
                 fi
 
+                # Build hub title for wiki link
+                local hub_title_ref=""
+                case "$proj" in
+                    alpha) hub_title_ref="Project Alpha Hub" ;;
+                    beta)  hub_title_ref="Project Beta Hub" ;;
+                    infra) hub_title_ref="Infrastructure Hub" ;;
+                    docs)  hub_title_ref="Documentation Hub" ;;
+                    platform) hub_title_ref="Platform Hub" ;;
+                esac
+
                 content="# $title
 
 #code #$proj
 
 $desc
+
+See [[$hub_title_ref]] for project context.
 
 ## Details
 
@@ -385,6 +397,14 @@ Discussed timelines and priorities. #work
                     parent="test-uuid-074"
                 fi
 
+                # Add cross-reference wiki link for some idea notes
+                local idea_link=""
+                if [ $(( RANDOM % 3 )) -eq 0 ]; then
+                    idea_link="
+
+Related to [[Project Alpha Hub]]."
+                fi
+
                 content="# $title
 
 #idea #$cat1
@@ -393,7 +413,7 @@ $spark
 
 ## Thinking
 
-$detail
+$detail$idea_link
 
 ## Next Steps
 
@@ -522,6 +542,7 @@ EOF
     echo "  - 15 task lists"
     echo "  - 5 hub (project) notes"
     echo "  - 3 notes with orphaned parent references"
+    echo "  - Wiki links ([[Title]]) in code and idea notes"
     echo "  - 5 saved queries in queries.yml"
     echo "  - 5 saved parent bookmarks (alpha, beta, infra, docs, platform)"
     echo ""
