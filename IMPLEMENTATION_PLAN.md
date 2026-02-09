@@ -65,7 +65,7 @@
   - [ ] 16.1 Backlinks command
   - [ ] 16.2 Graph export (DOT format)
 - [ ] **Phase 17**: Extended Functionality
-  - [ ] 17.1 Custom sort order (`order` field)
+  - [x] 17.1 Custom sort order (`order` field)
   - [ ] 17.2 Note archiving
   - [ ] 17.3 Extended search operators (OR, NOT, grouping, phrase)
 

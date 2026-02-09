@@ -30,6 +30,7 @@ func NewLogCmd(getVault func() *vault.Vault, jsonOutput *bool) *cobra.Command {
 		useH1     bool
 		useStdin  bool
 		parentRef string
+		orderVal  int
 	)
 
 	cmd := &cobra.Command{
@@ -92,6 +93,11 @@ Details here..."
 			// Refresh tags from content
 			n.RefreshTags()
 
+			// Set order if specified
+			if cmd.Flags().Changed("order") {
+				n.Order = &orderVal
+			}
+
 			// Resolve parent if specified
 			if parentRef != "" {
 				parent, err := ResolveNote(vlt, parentRef)
@@ -150,6 +156,7 @@ Details here..."
 	cmd.Flags().BoolVar(&useH1, "h1", false, "extract filename from first H1 in content")
 	cmd.Flags().BoolVar(&useStdin, "stdin", false, "read content from stdin")
 	cmd.Flags().StringVar(&parentRef, "parent", "", "set parent note (UUID, title, or path substring)")
+	cmd.Flags().IntVar(&orderVal, "order", 0, "set manual sort order")
 
 	return cmd
 }

@@ -20,6 +20,7 @@ type Frontmatter struct {
 	Tags       []string `yaml:"tags,omitempty"`
 	InlineTags []string `yaml:"inline-tags,omitempty"`
 	Parent     string   `yaml:"parent,omitempty"`
+	Order      *int     `yaml:"order,omitempty"`
 
 	// Extra holds any additional frontmatter fields not explicitly defined.
 	// This preserves user-added fields.
@@ -100,6 +101,16 @@ func parseFrontmatterYAML(yamlContent string) (*Frontmatter, error) {
 		fm.Parent = v
 		delete(raw, "parent")
 	}
+	if v, ok := raw["order"]; ok {
+		switch val := v.(type) {
+		case int:
+			fm.Order = &val
+		case float64:
+			n := int(val)
+			fm.Order = &n
+		}
+		delete(raw, "order")
+	}
 
 	// Store remaining fields as extra
 	fm.Extra = raw
@@ -169,6 +180,9 @@ func (fm *Frontmatter) Serialize() (string, error) {
 	if fm.Parent != "" {
 		data["parent"] = fm.Parent
 	}
+	if fm.Order != nil {
+		data["order"] = *fm.Order
+	}
 
 	// Add extra fields
 	for k, v := range fm.Extra {
@@ -196,6 +210,7 @@ func (fm *Frontmatter) IsEmpty() bool {
 		len(fm.Tags) == 0 &&
 		len(fm.InlineTags) == 0 &&
 		fm.Parent == "" &&
+		fm.Order == nil &&
 		len(fm.Extra) == 0
 }
 
@@ -223,6 +238,9 @@ func (fm *Frontmatter) Merge(other *Frontmatter) {
 	}
 	if other.Parent != "" {
 		fm.Parent = other.Parent
+	}
+	if other.Order != nil {
+		fm.Order = other.Order
 	}
 
 	// Merge extra fields

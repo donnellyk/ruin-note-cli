@@ -533,10 +533,10 @@ func parseSort(s string) ([]SortField, error) {
 
 		// Validate field
 		switch field.Field {
-		case "created", "updated", "title":
+		case "created", "updated", "title", "order":
 			// valid
 		default:
-			return nil, fmt.Errorf("invalid sort field: %s (use created, updated, or title)", field.Field)
+			return nil, fmt.Errorf("invalid sort field: %s (use created, updated, title, or order)", field.Field)
 		}
 
 		fields = append(fields, field)
@@ -651,6 +651,13 @@ func searchNotesWithOptions(vlt *vault.Vault, matcher QueryMatcher, opts SearchO
 func sortResults(results []SearchResult, fields []SortField) {
 	sort.Slice(results, func(i, j int) bool {
 		for _, f := range fields {
+			// For order field, unset (nil) always sorts last regardless of direction
+			if f.Field == "order" {
+				aSet, bSet := results[i].note.Order != nil, results[j].note.Order != nil
+				if aSet != bSet {
+					return aSet // set before unset
+				}
+			}
 			cmp := compareResults(results[i], results[j], f.Field)
 			if cmp != 0 {
 				if f.Ascending {
@@ -684,6 +691,22 @@ func compareResults(a, b SearchResult, field string) int {
 		return 0
 	case "title":
 		return strings.Compare(strings.ToLower(a.Title), strings.ToLower(b.Title))
+	case "order":
+		// nil check is handled in sortResults (unset always sorts last)
+		aOrd, bOrd := 0, 0
+		if a.note.Order != nil {
+			aOrd = *a.note.Order
+		}
+		if b.note.Order != nil {
+			bOrd = *b.note.Order
+		}
+		if aOrd < bOrd {
+			return -1
+		}
+		if aOrd > bOrd {
+			return 1
+		}
+		return 0
 	}
 	return 0
 }

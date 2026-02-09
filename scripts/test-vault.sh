@@ -82,36 +82,39 @@ create_note() {
     local tags="$5"
     local content="$6"
     local parent="${7:-}"
+    local order="${8:-}"
 
     local parent_line=""
     if [ -n "$parent" ]; then
         parent_line="parent: $parent"
     fi
 
-    if [ -n "$parent_line" ]; then
-        cat > "$vault_path/$filename" <<EOF
----
-uuid: $uuid
-created: $created
-updated: $created
-tags: [$tags]
-$parent_line
----
-
-$content
-EOF
-    else
-        cat > "$vault_path/$filename" <<EOF
----
-uuid: $uuid
-created: $created
-updated: $created
-tags: [$tags]
----
-
-$content
-EOF
+    local order_line=""
+    if [ -n "$order" ]; then
+        order_line="order: $order"
     fi
+
+    # Build optional lines
+    local extra_lines=""
+    if [ -n "$parent_line" ]; then
+        extra_lines="$extra_lines
+$parent_line"
+    fi
+    if [ -n "$order_line" ]; then
+        extra_lines="$extra_lines
+$order_line"
+    fi
+
+    cat > "$vault_path/$filename" <<EOF
+---
+uuid: $uuid
+created: $created
+updated: $created
+tags: [$tags]$extra_lines
+---
+
+$content
+EOF
 }
 
 create_vault() {
@@ -197,6 +200,7 @@ create_vault() {
         local hub_fn
         hub_fn=$(echo "$title" | tr ' ' '-')".md"
 
+        local hub_order=$(( hub_idx + 1 ))
         create_note "$vault_path" "$hub_fn" "$hub_uuid" "$hub_created" \
             "\"#project\", \"#$proj\"" \
             "# $title
@@ -211,7 +215,8 @@ Actively maintained.
 
 ## Key Decisions
 
-- Tracked in sub-notes linked via parent."
+- Tracked in sub-notes linked via parent." \
+            "" "$hub_order"
         echo "    $hub_fn ($hub_uuid)"
     done
 
@@ -257,6 +262,7 @@ Actively maintained.
         local content=""
         local filename=""
         local title=""
+        local order=""
 
         case "$note_type" in
             daily)
@@ -411,6 +417,9 @@ Think about this more. Maybe prototype something. #draft"
                     parent="test-uuid-hub-$proj"
                 fi
 
+                # Task notes get sequential order values (1-15)
+                order=$(( note_num - 85 ))
+
                 content="# $title
 
 #work #$proj #$status
@@ -436,7 +445,7 @@ Think about this more. Maybe prototype something. #draft"
             parent="test-uuid-orphan-parent-3"
         fi
 
-        create_note "$vault_path" "$filename" "$uuid" "$created" "$tags_str" "$content" "$parent"
+        create_note "$vault_path" "$filename" "$uuid" "$created" "$tags_str" "$content" "$parent" "$order"
 
         if [ $(( note_num % 25 )) -eq 0 ]; then
             echo "    Created $note_num / 100 notes..."

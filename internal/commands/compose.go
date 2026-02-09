@@ -112,7 +112,7 @@ Children are sorted by title by default.`,
 	cmd.Flags().IntVar(&maxDepth, "depth", 0, "max recursion depth (0 = unlimited)")
 	cmd.Flags().BoolVar(&stripTitle, "strip-title", false, "remove H1 from children")
 	cmd.Flags().BoolVar(&stripGlobalTag, "strip-global-tags", false, "remove global tag lines")
-	cmd.Flags().StringVar(&sortBy, "sort", "title", "child ordering: title or created")
+	cmd.Flags().StringVar(&sortBy, "sort", "title", "child ordering: title, created, or order")
 	cmd.Flags().BoolVarP(&edit, "edit", "e", false, "open tree notes in $EDITOR")
 	cmd.Flags().BoolVarP(&force, "force", "f", false, "skip confirmation for deletions in edit mode")
 	cmd.Flags().BoolVar(&content, "content", false, "include full composed document in JSON content field")
@@ -143,6 +143,24 @@ func sortChildUUIDs(_ *vault.Vault, index *vault.TitlesIndex, uuids []string, so
 		for i, item := range items {
 			uuids[i] = item.uuid
 		}
+	case "order":
+		sort.Slice(uuids, func(i, j int) bool {
+			ei := index.Titles[uuids[i]]
+			ej := index.Titles[uuids[j]]
+			ni, erri := note.Load(ei.Path)
+			nj, errj := note.Load(ej.Path)
+			if erri != nil || errj != nil {
+				return uuids[i] < uuids[j]
+			}
+			iSet, jSet := ni.Order != nil, nj.Order != nil
+			if iSet != jSet {
+				return iSet // set before unset
+			}
+			if iSet && *ni.Order != *nj.Order {
+				return *ni.Order < *nj.Order
+			}
+			return ei.Title < ej.Title
+		})
 	default: // "title"
 		sort.Slice(uuids, func(i, j int) bool {
 			return index.Titles[uuids[i]].Title < index.Titles[uuids[j]].Title

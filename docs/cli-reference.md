@@ -50,6 +50,7 @@ ruin log [content]
 | `--h1` | | Extract filename from first H1 |
 | `--stdin` | | Read content from stdin |
 | `--parent` | | Set parent note (UUID, title, or path substring) |
+| `--order` | | Set manual sort order (integer) |
 
 Content can be provided as argument, via stdin, or piped.
 
@@ -89,7 +90,7 @@ ruin search <query>
 | `--edit` | `-e` | Open matches in `$EDITOR` |
 | `--force` | `-f` | Skip confirmation for deletions in edit mode |
 | `--frontmatter` | | Include frontmatter (modes: `extra`, `full`, `none`) |
-| `--sort` | `-s` | Sort order (e.g., `created:desc`) |
+| `--sort` | `-s` | Sort order (e.g., `created:desc`, `order:asc`) |
 | `--limit` | `-l` | Max results |
 | `--content` | | Include note content in JSON output (requires `--json`) |
 | `--strip-global-tags` | | Remove global tags from content (requires `--content`) |
@@ -382,7 +383,7 @@ ruin compose <note>
 | `--depth` | | Max recursion depth (0 = unlimited) |
 | `--strip-title` | | Remove H1 from children |
 | `--strip-global-tags` | | Remove global tag lines |
-| `--sort` | | Child ordering: `title` (default) or `created` |
+| `--sort` | | Child ordering: `title` (default), `created`, or `order` |
 | `--edit` | `-e` | Open tree notes in `$EDITOR` |
 | `--force` | `-f` | Skip confirmation for deletions in edit mode |
 | `--content` | | Include full composed document in JSON `content` field (requires `--json`) |
@@ -408,7 +409,7 @@ tags:
 Content with #tags inline.
 ```
 
-**Managed fields** (set by CLI): `uuid`, `created`, `updated`, `tags`, `inline-tags`, `parent`
+**Managed fields** (set by CLI): `uuid`, `created`, `updated`, `tags`, `inline-tags`, `parent`, `order`
 
 **User fields**: Any other YAML keys are preserved.
 
