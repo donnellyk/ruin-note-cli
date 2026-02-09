@@ -385,6 +385,7 @@ ruin compose <note>
 | `--sort` | | Child ordering: `title` (default) or `created` |
 | `--edit` | `-e` | Open tree notes in `$EDITOR` |
 | `--force` | `-f` | Skip confirmation for deletions in edit mode |
+| `--content` | | Include full composed document in JSON `content` field (requires `--json`) |
 
 Recursively assembles a document from a note and its children. Headings in children are adjusted by depth level (capped at H6).
 

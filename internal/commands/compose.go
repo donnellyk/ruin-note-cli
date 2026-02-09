@@ -24,6 +24,7 @@ func NewComposeCmd(getVault func() *vault.Vault, jsonOutput *bool) *cobra.Comman
 		sortBy         string
 		edit           bool
 		force          bool
+		content        bool
 	)
 
 	cmd := &cobra.Command{
@@ -50,6 +51,10 @@ Children are sorted by title by default.`,
 
 			if edit && *jsonOutput {
 				return errMutuallyExclusive("--json", "--edit")
+			}
+
+			if content && !*jsonOutput {
+				return fmt.Errorf("--content requires --json")
 			}
 
 			root, err := ResolveNote(vlt, args[0])
@@ -86,6 +91,11 @@ Children are sorted by title by default.`,
 
 			if *jsonOutput {
 				tree := composeJSON(vlt, index, childrenMap, root.UUID, make(map[string]bool), maxDepth, 0, stripTitle, stripGlobalTag)
+				if content {
+					var b strings.Builder
+					composeText(vlt, index, childrenMap, root.UUID, make(map[string]bool), &b, maxDepth, 0, stripTitle, stripGlobalTag)
+					tree.Content = b.String()
+				}
 				enc := json.NewEncoder(os.Stdout)
 				enc.SetIndent("", "  ")
 				return enc.Encode(tree)
@@ -105,6 +115,7 @@ Children are sorted by title by default.`,
 	cmd.Flags().StringVar(&sortBy, "sort", "title", "child ordering: title or created")
 	cmd.Flags().BoolVarP(&edit, "edit", "e", false, "open tree notes in $EDITOR")
 	cmd.Flags().BoolVarP(&force, "force", "f", false, "skip confirmation for deletions in edit mode")
+	cmd.Flags().BoolVar(&content, "content", false, "include full composed document in JSON content field")
 	return cmd
 }
 
