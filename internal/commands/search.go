@@ -77,6 +77,8 @@ Date formats:
 Other filters:
   - title:TEXT       Notes with title containing text
   - path:TEXT        Notes with path containing text
+  - parent:UUID      Notes with specific parent
+  - parent:none      Notes with no parent
 
 See also:
   ruin query save    Save a search as a named query
