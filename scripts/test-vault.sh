@@ -154,6 +154,14 @@ create_vault() {
 
     local task_items="Set up monitoring for the new endpoint|Write migration script for legacy data|Review and merge the pending PRs|Update the deployment checklist|Add rate limiting to the public API|Create load test scenarios|Document the new config options|Fix the flaky test in CI|Audit third-party dependencies|Prepare demo for stakeholder review"
 
+    # --- URL link pools ---
+    local code_urls_plain="https://github.com/acme/api-server/pull/142|https://github.com/acme/api-server/pull/287|https://github.com/acme/platform/issues/53|https://github.com/acme/infra/pull/91|https://pkg.go.dev/net/http"
+    local code_urls_md="[PR #142: Fix retry logic](https://github.com/acme/api-server/pull/142)|[PR #287: Add circuit breaker](https://github.com/acme/api-server/pull/287)|[Issue #53: Streaming support](https://github.com/acme/platform/issues/53)|[Go net/http docs](https://pkg.go.dev/net/http)|[PR #91: Terraform modules](https://github.com/acme/infra/pull/91)"
+    local meeting_urls="[Design Doc: Auth Overhaul](https://docs.google.com/document/d/1abc-fake-id)|[Sprint Board](https://linear.app/acme/project/sprint-q2)|[Incident Timeline](https://status.acme.dev/incidents/20260201)|[Architecture RFC](https://docs.google.com/document/d/2def-fake-id)|[Onboarding Checklist](https://notion.so/acme/onboarding-2026)"
+    local idea_urls="https://martinfowler.com/articles/zettelkasten.html|https://jvns.ca/blog/2024/cli-tools/|https://research.google/pubs/pub43438/|https://arxiv.org/abs/2301.00001|https://simonwillison.net/2025/notes-graph/"
+    local idea_urls_md="[Zettelkasten Method](https://martinfowler.com/articles/zettelkasten.html)|[CLI Tool Design](https://jvns.ca/blog/2024/cli-tools/)|[Knowledge Graphs at Scale](https://research.google/pubs/pub43438/)|[Local-first Software](https://www.inkandswitch.com/local-first/)|[Building a Second Brain](https://fortelabs.com/blog/basb-overview/)"
+    local daily_urls_md="[Yesterday's standup notes](https://docs.google.com/document/d/3ghi-fake-id)|[Sprint retro feedback](https://linear.app/acme/project/retro)|[Team wiki](https://notion.so/acme/engineering-wiki)|[CI Dashboard](https://ci.acme.dev/pipelines)|[Monitoring Grafana](https://grafana.acme.dev/d/overview)"
+
     # --- Hub notes (5 project hubs) ---
     local hub_projects="alpha|beta|infra|docs|platform"
     local hub_titles="Project Alpha Hub|Project Beta Hub|Infrastructure Hub|Documentation Hub|Platform Hub"
@@ -278,6 +286,9 @@ Actively maintained.
                 if [ $(( RANDOM % 3 )) -eq 0 ]; then
                     tags_str="$tags_str, \"#$status\""
                 fi
+                local daily_link
+                daily_link=$(pick "$daily_urls_md")
+
                 content="# $title
 
 #daily #$cat1
@@ -292,6 +303,8 @@ $opening
 ## Notes
 
 Focused on #$cat2 work today. Need to keep momentum.
+
+Reference: $daily_link
 
 $closing"
                 ;;
@@ -326,6 +339,10 @@ $closing"
                     platform) hub_title_ref="Platform Hub" ;;
                 esac
 
+                local code_plain_url code_md_url
+                code_plain_url=$(pick "$code_urls_plain")
+                code_md_url=$(pick "$code_urls_md")
+
                 content="# $title
 
 #code #$proj
@@ -338,9 +355,12 @@ See [[$hub_title_ref]] for project context.
 
 $snippet
 
+Related: $code_md_url
+
 ## TODO
 - $todo1
 - $todo2
+- Review $code_plain_url
 
 #$status"
                 ;;
@@ -358,6 +378,9 @@ $snippet
                     tags_str="$tags_str, \"#meeting notes#\""
                 fi
 
+                local meeting_link
+                meeting_link=$(pick "$meeting_urls")
+
                 content="# $title
 
 #meeting #$cat1
@@ -370,6 +393,8 @@ $attendees
 $topic
 
 Discussed timelines and priorities. #work
+
+Resources: $meeting_link
 
 ## Action Items
 - $action1
@@ -405,15 +430,23 @@ Discussed timelines and priorities. #work
 Related to [[Project Alpha Hub]]."
                 fi
 
+                local idea_plain idea_md
+                idea_plain=$(pick "$idea_urls")
+                idea_md=$(pick "$idea_urls_md")
+
                 content="# $title
 
 #idea #$cat1
 
 $spark
 
+Inspired by $idea_md
+
 ## Thinking
 
 $detail$idea_link
+
+See also: $idea_plain
 
 ## Next Steps
 
