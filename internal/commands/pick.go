@@ -197,6 +197,11 @@ func pickLinesFromNote(n *note.Note, queryTags []string, anyMode bool) []PickMat
 			continue
 		}
 
+		// Skip tag-only lines (these are global-style tags, not inline annotations)
+		if isTagOnlyLine(trimmed) {
+			continue
+		}
+
 		// Extract tags from this line
 		lineTags := note.ExtractTags(line)
 		if len(lineTags) == 0 {

@@ -211,6 +211,37 @@ Content here.
 	}
 }
 
+func TestPickLinesFromNote_TagOnlyLinesInContentExcluded(t *testing.T) {
+	n := &note.Note{
+		Content: `# Note
+#global
+
+Some content here.
+
+#wip #urgent
+
+More content. #followup`,
+		Title: "Note",
+	}
+	n.RefreshTags()
+
+	// #wip appears on a tag-only line in the inline zone -- should be excluded
+	queryTags := []string{"#wip"}
+	matches := pickLinesFromNote(n, queryTags, false)
+
+	if len(matches) != 0 {
+		t.Errorf("got %d matches, want 0 (tag-only lines in content should be excluded)", len(matches))
+	}
+
+	// #followup on a content line should still match
+	queryTags = []string{"#followup"}
+	matches = pickLinesFromNote(n, queryTags, false)
+
+	if len(matches) != 1 {
+		t.Errorf("got %d matches, want 1", len(matches))
+	}
+}
+
 func TestPickLinesFromNote_AllTagsOnLine(t *testing.T) {
 	n := &note.Note{
 		Content: `# Note
