@@ -111,12 +111,16 @@ ruin pick <inline-tags...>
 | Flag | Short | Description |
 |------|-------|-------------|
 | `--any` | | Match lines with any of the given tags (OR mode) |
+| `--all` | | Include lines marked `#done` (default: excluded) |
+| `--done` | | Show only lines marked `#done` |
 
 By default, multiple tags are combined with AND (lines must contain all tags).
 
+Lines containing `#done` are excluded by default, since `#done` marks a line as resolved/completed. Use `--all` to include both open and done lines, or `--done` to show only completed lines.
+
 Lines are extracted from the content body only -- global tag lines at the top or bottom of a note are excluded.
 
-**JSON output** (`--json`): Results grouped by note with matches array containing line number, content, and all tags on each line.
+**JSON output** (`--json`): Results grouped by note with matches array containing line number, content, all tags on each line, and a `done` boolean.
 
 ### get
 

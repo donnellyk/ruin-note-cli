@@ -105,7 +105,7 @@ Review the budget.  #todo
 	n.RefreshTags()
 
 	queryTags := []string{"#followup"}
-	matches := pickLinesFromNote(n, queryTags, false)
+	matches := pickLinesFromNote(n, queryTags, false, doneExclude)
 
 	if len(matches) != 1 {
 		t.Fatalf("got %d matches, want 1", len(matches))
@@ -133,7 +133,7 @@ Added unit tests. #followup`,
 	n.RefreshTags()
 
 	queryTags := []string{"#followup", "#urgent"}
-	matches := pickLinesFromNote(n, queryTags, false)
+	matches := pickLinesFromNote(n, queryTags, false, doneExclude)
 
 	if len(matches) != 1 {
 		t.Fatalf("got %d matches, want 1 (AND mode)", len(matches))
@@ -157,7 +157,7 @@ Added unit tests. #todo`,
 	n.RefreshTags()
 
 	queryTags := []string{"#followup", "#todo"}
-	matches := pickLinesFromNote(n, queryTags, true)
+	matches := pickLinesFromNote(n, queryTags, true, doneExclude)
 
 	if len(matches) != 2 {
 		t.Fatalf("got %d matches, want 2 (OR mode)", len(matches))
@@ -175,7 +175,7 @@ Just a regular day.`,
 	n.RefreshTags()
 
 	queryTags := []string{"#followup"}
-	matches := pickLinesFromNote(n, queryTags, false)
+	matches := pickLinesFromNote(n, queryTags, false, doneExclude)
 
 	if len(matches) != 0 {
 		t.Errorf("got %d matches, want 0", len(matches))
@@ -196,7 +196,7 @@ Content here.
 
 	// #meeting is a global tag (after H1), should not be picked
 	queryTags := []string{"#meeting"}
-	matches := pickLinesFromNote(n, queryTags, false)
+	matches := pickLinesFromNote(n, queryTags, false, doneExclude)
 
 	if len(matches) != 0 {
 		t.Errorf("got %d matches, want 0 (global tags excluded)", len(matches))
@@ -204,7 +204,7 @@ Content here.
 
 	// #done is a trailing global tag, should not be picked
 	queryTags = []string{"#done"}
-	matches = pickLinesFromNote(n, queryTags, false)
+	matches = pickLinesFromNote(n, queryTags, false, doneExclude)
 
 	if len(matches) != 0 {
 		t.Errorf("got %d matches, want 0 (trailing global tags excluded)", len(matches))
@@ -227,7 +227,7 @@ More content. #followup`,
 
 	// #wip appears on a tag-only line in the inline zone -- should be excluded
 	queryTags := []string{"#wip"}
-	matches := pickLinesFromNote(n, queryTags, false)
+	matches := pickLinesFromNote(n, queryTags, false, doneExclude)
 
 	if len(matches) != 0 {
 		t.Errorf("got %d matches, want 0 (tag-only lines in content should be excluded)", len(matches))
@@ -235,7 +235,7 @@ More content. #followup`,
 
 	// #followup on a content line should still match
 	queryTags = []string{"#followup"}
-	matches = pickLinesFromNote(n, queryTags, false)
+	matches = pickLinesFromNote(n, queryTags, false, doneExclude)
 
 	if len(matches) != 1 {
 		t.Errorf("got %d matches, want 1", len(matches))
@@ -253,7 +253,7 @@ Fix bug. #followup #urgent #p1`,
 	n.RefreshTags()
 
 	queryTags := []string{"#followup"}
-	matches := pickLinesFromNote(n, queryTags, false)
+	matches := pickLinesFromNote(n, queryTags, false, doneExclude)
 
 	if len(matches) != 1 {
 		t.Fatalf("got %d matches, want 1", len(matches))
@@ -302,5 +302,129 @@ func TestIsTagOnlyLine(t *testing.T) {
 				t.Errorf("isTagOnlyLine(%q) = %v, want %v", tt.line, got, tt.want)
 			}
 		})
+	}
+}
+
+func TestPickLinesFromNote_DoneExcludedByDefault(t *testing.T) {
+	n := &note.Note{
+		Content: `# Tasks
+#work
+
+Chat with Bob tomorrow. #followup
+
+Review the budget. #followup #done
+
+Fix the bug. #followup`,
+		Title: "Tasks",
+	}
+	n.RefreshTags()
+
+	queryTags := []string{"#followup"}
+	matches := pickLinesFromNote(n, queryTags, false, doneExclude)
+
+	if len(matches) != 2 {
+		t.Fatalf("got %d matches, want 2 (done excluded)", len(matches))
+	}
+
+	// Verify the #done line was skipped
+	for _, m := range matches {
+		if m.Done {
+			t.Errorf("match %q should not be done", m.Content)
+		}
+	}
+}
+
+func TestPickLinesFromNote_DoneIncludedWithAll(t *testing.T) {
+	n := &note.Note{
+		Content: `# Tasks
+#work
+
+Chat with Bob tomorrow. #followup
+
+Review the budget. #followup #done
+
+Fix the bug. #followup`,
+		Title: "Tasks",
+	}
+	n.RefreshTags()
+
+	queryTags := []string{"#followup"}
+	matches := pickLinesFromNote(n, queryTags, false, doneInclude)
+
+	if len(matches) != 3 {
+		t.Fatalf("got %d matches, want 3 (all included)", len(matches))
+	}
+
+	// Verify the done flag is set correctly
+	doneCount := 0
+	for _, m := range matches {
+		if m.Done {
+			doneCount++
+		}
+	}
+	if doneCount != 1 {
+		t.Errorf("got %d done matches, want 1", doneCount)
+	}
+}
+
+func TestPickLinesFromNote_DoneOnly(t *testing.T) {
+	n := &note.Note{
+		Content: `# Tasks
+#work
+
+Chat with Bob tomorrow. #followup
+
+Review the budget. #followup #done
+
+Deploy the fix. #todo #done
+
+Fix the bug. #followup`,
+		Title: "Tasks",
+	}
+	n.RefreshTags()
+
+	queryTags := []string{"#followup"}
+	matches := pickLinesFromNote(n, queryTags, false, doneOnly)
+
+	if len(matches) != 1 {
+		t.Fatalf("got %d matches, want 1 (done only)", len(matches))
+	}
+
+	if !matches[0].Done {
+		t.Error("expected match to be marked done")
+	}
+
+	if matches[0].Content != "Review the budget. #followup #done" {
+		t.Errorf("content = %q", matches[0].Content)
+	}
+}
+
+func TestPickLinesFromNote_DoneFieldInJSON(t *testing.T) {
+	n := &note.Note{
+		Content: `# Tasks
+#work
+
+Open item. #followup
+
+Done item. #followup #done`,
+		Title: "Tasks",
+	}
+	n.RefreshTags()
+
+	queryTags := []string{"#followup"}
+	matches := pickLinesFromNote(n, queryTags, false, doneInclude)
+
+	if len(matches) != 2 {
+		t.Fatalf("got %d matches, want 2", len(matches))
+	}
+
+	// First match should not be done
+	if matches[0].Done {
+		t.Errorf("first match should not be done")
+	}
+
+	// Second match should be done
+	if !matches[1].Done {
+		t.Errorf("second match should be done")
 	}
 }

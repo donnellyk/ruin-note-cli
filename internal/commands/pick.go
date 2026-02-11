@@ -12,11 +12,24 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// doneTag is the special tag that marks a line as resolved/completed.
+const doneTag = "#done"
+
+// doneFilter controls how #done lines are handled.
+type doneFilter int
+
+const (
+	doneExclude doneFilter = iota // default: hide lines with #done
+	doneInclude                   // --all: show everything
+	doneOnly                      // --done: show only completed lines
+)
+
 // PickMatch represents a single matching line from a note.
 type PickMatch struct {
 	Line    int      `json:"line"`
 	Content string   `json:"content"`
 	Tags    []string `json:"tags"`
+	Done    bool     `json:"done"`
 }
 
 // PickResult groups matches by note.
@@ -29,7 +42,11 @@ type PickResult struct {
 
 // NewPickCmd creates the pick command.
 func NewPickCmd(getVault func() *vault.Vault, jsonOutput *bool) *cobra.Command {
-	var anyMode bool
+	var (
+		anyMode  bool
+		allMode  bool
+		doneMode bool
+	)
 
 	cmd := &cobra.Command{
 		Use:   "pick <inline-tags...>",
@@ -43,9 +60,13 @@ follow-ups, and other contextual annotations scattered across notes.
 By default, multiple tags are combined with AND (lines must contain all tags).
 Use --any for OR mode (lines with any of the given tags).
 
+Lines containing #done are excluded by default, since #done marks a line as
+resolved/completed. Use --all to include both open and done lines, or --done
+to show only completed lines.
+
 The command pre-filters notes using the inline-tags frontmatter field for
 fast lookups, then extracts matching lines from the content body.`,
-		Example: `  # Find all followup items
+		Example: `  # Find all open followup items (excludes #done lines)
   ruin pick "#followup"
 
   # Lines with both tags (AND)
@@ -53,6 +74,12 @@ fast lookups, then extracts matching lines from the content body.`,
 
   # Lines with either tag (OR)
   ruin pick "#followup" "#todo" --any
+
+  # Include completed lines
+  ruin pick "#followup" --all
+
+  # Show only completed lines
+  ruin pick "#followup" --done
 
   # JSON output grouped by note
   ruin pick "#followup" --json`,
@@ -63,11 +90,23 @@ fast lookups, then extracts matching lines from the content body.`,
 				return fmt.Errorf("vault not configured")
 			}
 
+			if allMode && doneMode {
+				return fmt.Errorf("--all and --done are mutually exclusive")
+			}
+
 			// Validate all args are tags
 			for _, arg := range args {
 				if !strings.HasPrefix(arg, "#") {
 					return fmt.Errorf("invalid tag %q: must start with #", arg)
 				}
+			}
+
+			// Determine done filter
+			df := doneExclude
+			if allMode {
+				df = doneInclude
+			} else if doneMode {
+				df = doneOnly
 			}
 
 			// Normalize query tags
@@ -96,7 +135,7 @@ fast lookups, then extracts matching lines from the content body.`,
 				}
 
 				// Extract matching lines from inline zone
-				matches := pickLinesFromNote(n, queryTags, anyMode)
+				matches := pickLinesFromNote(n, queryTags, anyMode, df)
 				if len(matches) == 0 {
 					continue
 				}
@@ -125,6 +164,8 @@ fast lookups, then extracts matching lines from the content body.`,
 	}
 
 	cmd.Flags().BoolVar(&anyMode, "any", false, "match lines with any of the given tags (OR mode)")
+	cmd.Flags().BoolVar(&allMode, "all", false, "include lines marked #done (default: exclude)")
+	cmd.Flags().BoolVar(&doneMode, "done", false, "show only lines marked #done")
 
 	return cmd
 }
@@ -145,7 +186,7 @@ func noteHasInlineTag(n *note.Note, queryTags []string) bool {
 
 // pickLinesFromNote extracts content lines that match the queried inline tags.
 // Only lines within the "inline zone" (between global tag regions) are considered.
-func pickLinesFromNote(n *note.Note, queryTags []string, anyMode bool) []PickMatch {
+func pickLinesFromNote(n *note.Note, queryTags []string, anyMode bool, df doneFilter) []PickMatch {
 	lines := strings.Split(n.Content, "\n")
 
 	// Determine inline zone boundaries (same logic as ClassifyTags)
@@ -241,10 +282,26 @@ func pickLinesFromNote(n *note.Note, queryTags []string, anyMode bool) []PickMat
 			}
 		}
 
+		// Check #done status and apply filter
+		doneTagNorm := note.NormalizeTag(doneTag)
+		isDone := lineTagsNorm[doneTagNorm]
+
+		switch df {
+		case doneExclude:
+			if isDone {
+				continue
+			}
+		case doneOnly:
+			if !isDone {
+				continue
+			}
+		}
+
 		matches = append(matches, PickMatch{
 			Line:    i + 1, // 1-indexed
 			Content: trimmed,
 			Tags:    lineTags,
+			Done:    isDone,
 		})
 	}
 
