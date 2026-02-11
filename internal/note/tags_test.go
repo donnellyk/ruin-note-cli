@@ -200,6 +200,31 @@ Some content with #inline here.
 	}
 }
 
+func TestClassifyTags_MidContentTagOnlyLine(t *testing.T) {
+	content := `# Note
+#top
+
+Content paragraph. #inline
+
+#middle
+
+More content.
+
+#bottom`
+
+	globalTags, inlineTags := ClassifyTags(content, "Note")
+
+	expectedGlobal := []string{"#top", "#middle", "#bottom"}
+	if !reflect.DeepEqual(globalTags, expectedGlobal) {
+		t.Errorf("globalTags = %v, want %v", globalTags, expectedGlobal)
+	}
+
+	expectedInline := []string{"#inline"}
+	if !reflect.DeepEqual(inlineTags, expectedInline) {
+		t.Errorf("inlineTags = %v, want %v", inlineTags, expectedInline)
+	}
+}
+
 func TestMergeTags(t *testing.T) {
 	global := []string{"#a", "#b"}
 	inline := []string{"#b", "#c"}

@@ -110,8 +110,8 @@ ruin-note-cli/
 - `uuid`: unique identifier
 - `created`: creation timestamp
 - `updated`: last modified timestamp
-- `tags`: global tags only (categorization, at top/end of note)
-- `inline-tags`: inline tags only (contextual annotations within content body)
+- `tags`: global tags (tags on tag-only lines anywhere in the note)
+- `inline-tags`: inline tags (tags on lines that also contain non-tag content)
 - `parent`: UUID of parent note (optional, omitted if empty)
 - `linked-cards`: resolved UUIDs from `[[wiki links]]` (optional, omitted if empty)
 

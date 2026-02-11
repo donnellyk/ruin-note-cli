@@ -32,8 +32,8 @@ type Note struct {
 	Extra map[string]interface{}
 }
 
-// h1Pattern matches a markdown H1 header.
-var h1Pattern = regexp.MustCompile(`(?m)^#\s+(.+)$`)
+// headerPattern matches any markdown header (H1 through H6).
+var headerPattern = regexp.MustCompile(`(?m)^#{1,6}\s+(.+)$`)
 
 // Parse reads a note from markdown content.
 // It extracts frontmatter, title, and tags.

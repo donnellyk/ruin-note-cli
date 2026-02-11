@@ -118,7 +118,7 @@ By default, multiple tags are combined with AND (lines must contain all tags).
 
 Lines containing `#done` are excluded by default, since `#done` marks a line as resolved/completed. Use `--all` to include both open and done lines, or `--done` to show only completed lines.
 
-Lines are extracted from the content body only -- global tag lines at the top or bottom of a note are excluded.
+Tag-only lines (lines containing only tags and separators like commas) are treated as global tags and excluded from pick results.
 
 **JSON output** (`--json`): Results grouped by note with matches array containing line number, content, all tags on each line, and a `done` boolean.
 

@@ -53,8 +53,8 @@ func NewPickCmd(getVault func() *vault.Vault, jsonOutput *bool) *cobra.Command {
 		Short: "Pick lines annotated with inline tags",
 		Long: `Extract lines annotated with specific inline tags from across the vault.
 
-Inline tags are tags that appear within content paragraphs (not the global
-tag lines at the top or bottom of a note). Use pick to collect action items,
+Inline tags are tags that appear on lines with other content (not tag-only
+lines which are treated as global tags). Use pick to collect action items,
 follow-ups, and other contextual annotations scattered across notes.
 
 By default, multiple tags are combined with AND (lines must contain all tags).
@@ -185,60 +185,24 @@ func noteHasInlineTag(n *note.Note, queryTags []string) bool {
 }
 
 // pickLinesFromNote extracts content lines that match the queried inline tags.
-// Only lines within the "inline zone" (between global tag regions) are considered.
+// Tag-only lines and the title line are skipped (those contain global tags).
 func pickLinesFromNote(n *note.Note, queryTags []string, anyMode bool, df doneFilter) []PickMatch {
 	lines := strings.Split(n.Content, "\n")
 
-	// Determine inline zone boundaries (same logic as ClassifyTags)
-	titleLineIdx := -1
-	for i, line := range lines {
-		if strings.HasPrefix(strings.TrimSpace(line), "# ") {
-			titleLineIdx = i
-			break
-		}
-	}
-
-	firstContentIdx := -1
-	for i := titleLineIdx + 1; i < len(lines); i++ {
-		trimmed := strings.TrimSpace(lines[i])
-		if trimmed == "" {
-			continue
-		}
-		if note.IsTagOnlyLine(trimmed) {
-			continue
-		}
-		firstContentIdx = i
-		break
-	}
-
-	lastContentIdx := -1
-	for i := len(lines) - 1; i >= 0; i-- {
-		trimmed := strings.TrimSpace(lines[i])
-		if trimmed == "" {
-			continue
-		}
-		if note.IsTagOnlyLine(trimmed) {
-			continue
-		}
-		lastContentIdx = i
-		break
-	}
-
-	// No content body found
-	if firstContentIdx == -1 {
-		return nil
-	}
-
 	var matches []PickMatch
 
-	for i := firstContentIdx; i <= lastContentIdx; i++ {
-		line := lines[i]
+	for i, line := range lines {
 		trimmed := strings.TrimSpace(line)
 		if trimmed == "" {
 			continue
 		}
 
-		// Skip tag-only lines (these are global-style tags, not inline annotations)
+		// Skip title line
+		if strings.HasPrefix(trimmed, "# ") {
+			continue
+		}
+
+		// Skip tag-only lines (global tags)
 		if note.IsTagOnlyLine(trimmed) {
 			continue
 		}

@@ -202,54 +202,20 @@ func NormalizeTag(tag string) string {
 }
 
 // ClassifyTags separates tags into global tags and inline tags.
-// Global tags are those appearing:
-//   - Directly under the H1 title (before first paragraph)
-//   - At the end of the document (after last paragraph)
-//
-// Inline tags are those appearing within content paragraphs.
+// Global tags are those on tag-only lines (lines containing only tags and
+// separator characters like commas/whitespace), regardless of position.
+// Inline tags are those on lines that also contain non-tag content.
 func ClassifyTags(content string, title string) (globalTags []string, inlineTags []string) {
 	lines := strings.Split(content, "\n")
 
-	// Find title line index
-	titleLineIdx := -1
+	// Build set of tag-only line indices
+	tagOnlyLines := make(map[int]bool)
 	for i, line := range lines {
-		trimmed := strings.TrimSpace(line)
-		if strings.HasPrefix(trimmed, "# ") {
-			titleLineIdx = i
-			break
+		if IsTagOnlyLine(strings.TrimSpace(line)) {
+			tagOnlyLines[i] = true
 		}
 	}
 
-	// Find first content line (non-empty, non-tag-only line after title)
-	firstContentIdx := -1
-	for i := titleLineIdx + 1; i < len(lines); i++ {
-		trimmed := strings.TrimSpace(lines[i])
-		if trimmed == "" {
-			continue
-		}
-		// Check if line is only tags
-		if IsTagOnlyLine(trimmed) {
-			continue
-		}
-		firstContentIdx = i
-		break
-	}
-
-	// Find last content line (non-empty, non-tag-only line)
-	lastContentIdx := -1
-	for i := len(lines) - 1; i >= 0; i-- {
-		trimmed := strings.TrimSpace(lines[i])
-		if trimmed == "" {
-			continue
-		}
-		if IsTagOnlyLine(trimmed) {
-			continue
-		}
-		lastContentIdx = i
-		break
-	}
-
-	// Now classify each tag
 	allMatches := findAllTags(content)
 
 	// Calculate line offsets for position mapping
@@ -264,25 +230,10 @@ func ClassifyTags(content string, title string) (globalTags []string, inlineTags
 	seenInline := make(map[string]bool)
 
 	for _, match := range allMatches {
-		// Find which line this tag is on
 		lineIdx := findLineIndex(match.Start, lineOffsets)
-
 		normalized := NormalizeTag(match.Tag)
-		isGlobal := false
 
-		// Global if: between title and first content, or after last content
-		if firstContentIdx == -1 {
-			// No content, all tags are global
-			isGlobal = true
-		} else if lineIdx > titleLineIdx && lineIdx < firstContentIdx {
-			// Between title and first content
-			isGlobal = true
-		} else if lineIdx > lastContentIdx {
-			// After last content
-			isGlobal = true
-		}
-
-		if isGlobal {
+		if tagOnlyLines[lineIdx] {
 			if !seenGlobal[normalized] {
 				seenGlobal[normalized] = true
 				globalTags = append(globalTags, match.Tag)
