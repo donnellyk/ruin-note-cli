@@ -197,8 +197,8 @@ func pickLinesFromNote(n *note.Note, queryTags []string, anyMode bool, df doneFi
 			continue
 		}
 
-		// Skip title line
-		if strings.HasPrefix(trimmed, "# ") {
+		// Skip header lines (title)
+		if note.IsHeaderLine(trimmed) {
 			continue
 		}
 

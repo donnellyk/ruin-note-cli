@@ -54,7 +54,7 @@ See also:
   # With explicit title
   ruin log --title "Meeting Notes" "Discussion about X"
 
-  # Extract title from H1
+  # Extract title from first header
   ruin log --h1 "# Project Plan
 
 Details here..."
@@ -160,7 +160,7 @@ Details here..."
 	}
 
 	cmd.Flags().StringVarP(&title, "title", "t", "", "set filename explicitly")
-	cmd.Flags().BoolVar(&useH1, "h1", false, "extract filename from first H1 in content")
+	cmd.Flags().BoolVar(&useH1, "h1", false, "extract filename from first header in content")
 	cmd.Flags().BoolVar(&useStdin, "stdin", false, "read content from stdin")
 	cmd.Flags().StringVar(&parentRef, "parent", "", "set parent note (UUID, title, or path substring)")
 	cmd.Flags().IntVar(&orderVal, "order", 0, "set manual sort order")
@@ -219,7 +219,7 @@ func determineFilename(n *note.Note, titleFlag string, useH1 bool) string {
 		return note.SanitizeFilename(titleFlag)
 	}
 
-	// Priority 2: extract from H1 (only if --h1 flag is set)
+	// Priority 2: extract from header (only if --h1 flag is set)
 	if useH1 && n.Title != "" {
 		return note.SanitizeFilename(n.Title)
 	}

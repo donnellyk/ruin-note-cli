@@ -64,8 +64,8 @@ func Parse(content string) (*Note, error) {
 		}
 	}
 
-	// Extract title from H1
-	note.Title = extractH1Title(body)
+	// Extract title from first header
+	note.Title = extractTitle(body)
 
 	// Extract and classify tags
 	globalTags, inlineTags := ClassifyTags(body, note.Title)
@@ -91,9 +91,9 @@ func Load(path string) (*Note, error) {
 	return note, nil
 }
 
-// extractH1Title finds the first H1 header in the content.
-func extractH1Title(content string) string {
-	match := h1Pattern.FindStringSubmatch(content)
+// extractTitle finds the first markdown header (any level) in the content.
+func extractTitle(content string) string {
+	match := headerPattern.FindStringSubmatch(content)
 	if len(match) >= 2 {
 		return strings.TrimSpace(match[1])
 	}
@@ -224,7 +224,7 @@ func SanitizeFilename(name string) string {
 	return name
 }
 
-// ContentWithoutTitle returns the content with the H1 title line removed.
+// ContentWithoutTitle returns the content with the title header line removed.
 func (n *Note) ContentWithoutTitle() string {
 	if n.Title == "" {
 		return n.Content
@@ -235,7 +235,7 @@ func (n *Note) ContentWithoutTitle() string {
 	foundTitle := false
 
 	for _, line := range lines {
-		if !foundTitle && h1Pattern.MatchString(line) {
+		if !foundTitle && headerPattern.MatchString(line) {
 			foundTitle = true
 			continue
 		}

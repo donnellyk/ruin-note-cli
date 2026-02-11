@@ -47,7 +47,7 @@ ruin log [content]
 | Flag | Short | Description |
 |------|-------|-------------|
 | `--title` | `-t` | Set filename explicitly |
-| `--h1` | | Extract filename from first H1 |
+| `--h1` | | Extract filename from first header |
 | `--stdin` | | Read content from stdin |
 | `--parent` | | Set parent note (UUID, title, or path substring) |
 | `--order` | | Set manual sort order (integer) |
@@ -94,7 +94,7 @@ ruin search <query>
 | `--limit` | `-l` | Max results |
 | `--content` | | Include note content in JSON output (requires `--json`) |
 | `--strip-global-tags` | | Remove global tags from content (requires `--content`) |
-| `--strip-title` | | Remove H1 title from content (requires `--content`) |
+| `--strip-title` | | Remove title header from content (requires `--content`) |
 | `--global-tags` | | Only match global tags (categorization) |
 | `--inline-tags` | | Only match inline tags (contextual annotations) |
 
@@ -142,7 +142,7 @@ Requires one of `--path`, `--title`, or `--uuid` (mutually exclusive).
 | `--frontmatter` | | Include frontmatter (modes: `extra`, `full`, `none`) |
 | `--content` | | Include note content in JSON output (requires `--json`) |
 | `--strip-global-tags` | | Remove global tags from content (requires `--content`) |
-| `--strip-title` | | Remove H1 title from content (requires `--content`) |
+| `--strip-title` | | Remove title header from content (requires `--content`) |
 | `--edit` | `-e` | Open note in `$EDITOR` for editing |
 | `--force` | `-f` | Skip confirmation for deletions in edit mode |
 
@@ -410,7 +410,7 @@ ruin compose <note>
 | Flag | Short | Description |
 |------|-------|-------------|
 | `--depth` | | Max recursion depth (0 = unlimited) |
-| `--strip-title` | | Remove H1 from children |
+| `--strip-title` | | Remove title header from children |
 | `--strip-global-tags` | | Remove global tag lines |
 | `--sort` | | Child ordering: `title` (default), `created`, or `order` |
 | `--edit` | `-e` | Open tree notes in `$EDITOR` |

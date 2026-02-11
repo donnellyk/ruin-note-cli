@@ -249,6 +249,18 @@ func ClassifyTags(content string, title string) (globalTags []string, inlineTags
 	return globalTags, inlineTags
 }
 
+// IsHeaderLine returns true if the line is a markdown header (H1 through H6).
+func IsHeaderLine(line string) bool {
+	trimmed := strings.TrimSpace(line)
+	// Count leading # characters
+	i := 0
+	for i < len(trimmed) && trimmed[i] == '#' {
+		i++
+	}
+	// Must have 1-6 #'s followed by a space
+	return i >= 1 && i <= 6 && i < len(trimmed) && trimmed[i] == ' '
+}
+
 // IsTagOnlyLine returns true if the line contains only tags and separator characters.
 // Separator characters are whitespace and commas (e.g. "#log, #ruin").
 // Empty lines or whitespace-only lines return false.

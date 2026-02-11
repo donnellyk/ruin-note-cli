@@ -319,7 +319,7 @@ func TestNote_ContentWithoutTitle(t *testing.T) {
 	}
 }
 
-func TestExtractH1Title(t *testing.T) {
+func TestExtractTitle(t *testing.T) {
 	tests := []struct {
 		content string
 		want    string
@@ -327,15 +327,17 @@ func TestExtractH1Title(t *testing.T) {
 		{"# Simple Title\n\nContent", "Simple Title"},
 		{"# Title With Spaces  \n", "Title With Spaces"},
 		{"No title here", ""},
-		{"## H2 Not H1\n", ""},
+		{"## H2 Title\n", "H2 Title"},
+		{"### H3 Title\n", "H3 Title"},
 		{"Text\n# Title After\n", "Title After"},
+		{"Text\n## H2 After\n", "H2 After"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.want, func(t *testing.T) {
-			got := extractH1Title(tt.content)
+			got := extractTitle(tt.content)
 			if got != tt.want {
-				t.Errorf("extractH1Title() = %q, want %q", got, tt.want)
+				t.Errorf("extractTitle() = %q, want %q", got, tt.want)
 			}
 		})
 	}

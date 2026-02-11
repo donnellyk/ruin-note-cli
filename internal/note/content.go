@@ -27,7 +27,7 @@ func StripGlobalTags(content string, inlineTags []string) string {
 	return strings.Join(result, "\n")
 }
 
-// StripTitle removes the first H1 line if present at the start of content.
+// StripTitle removes the first header line if present at the start of content.
 // Also removes any immediately following empty lines.
 func StripTitle(content string) string {
 	lines := strings.Split(content, "\n")
@@ -45,10 +45,10 @@ func StripTitle(content string) string {
 		return content // All empty
 	}
 
-	// Check if first non-empty line is an H1
-	h1Pattern := regexp.MustCompile(`^#\s+.+$`)
-	if !h1Pattern.MatchString(strings.TrimSpace(lines[firstNonEmptyIdx])) {
-		return content // Not starting with H1
+	// Check if first non-empty line is a header
+	headerPattern := regexp.MustCompile(`^#{1,6}\s+.+$`)
+	if !headerPattern.MatchString(strings.TrimSpace(lines[firstNonEmptyIdx])) {
+		return content // Not starting with a header
 	}
 
 	// Remove the H1 line
