@@ -624,7 +624,7 @@ func BenchmarkCollectTreeNotes_Deep_3x10(b *testing.B) {
 // --- Helper functions ---
 
 func benchmarkTagSearch(b *testing.B, vlt *vault.Vault) {
-	matcher, _ := parseQuery("#daily")
+	matcher, _ := parseQuery("#daily", TagScopeAll)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -636,7 +636,7 @@ func benchmarkTagSearch(b *testing.B, vlt *vault.Vault) {
 }
 
 func benchmarkTextSearch(b *testing.B, vlt *vault.Vault) {
-	matcher, _ := parseQuery("lorem")
+	matcher, _ := parseQuery("lorem", TagScopeAll)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -648,7 +648,7 @@ func benchmarkTextSearch(b *testing.B, vlt *vault.Vault) {
 }
 
 func benchmarkParentSearch(b *testing.B, vlt *vault.Vault, parentValue string) {
-	matcher, _ := parseQuery("parent:" + parentValue)
+	matcher, _ := parseQuery("parent:"+parentValue, TagScopeAll)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {

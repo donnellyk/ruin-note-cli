@@ -49,6 +49,8 @@ type SortField struct {
 func NewSearchCmd(getVault func() *vault.Vault, jsonOutput *bool) *cobra.Command {
 	var flags SearchFlags
 
+	var globalTagsOnly, inlineTagsOnly bool
+
 	cmd := &cobra.Command{
 		Use:   "search <query>",
 		Short: "Search for notes",
@@ -79,6 +81,11 @@ Other filters:
   - path:TEXT        Notes with path containing text
   - parent:UUID      Notes with specific parent
   - parent:none      Notes with no parent
+
+Tag scope:
+  By default, tag searches check both global and inline tags.
+  - --global-tags    Only match global tags (categorization)
+  - --inline-tags    Only match inline tags (contextual annotations)
 
 See also:
   ruin query save    Save a search as a named query
@@ -127,9 +134,21 @@ See also:
 				return err
 			}
 
+			if globalTagsOnly && inlineTagsOnly {
+				return fmt.Errorf("--global-tags and --inline-tags are mutually exclusive")
+			}
+
+			// Determine tag scope
+			tagScope := TagScopeAll
+			if globalTagsOnly {
+				tagScope = TagScopeGlobal
+			} else if inlineTagsOnly {
+				tagScope = TagScopeInline
+			}
+
 			// Parse query
 			query := strings.Join(args, " ")
-			matcher, err := parseQuery(query)
+			matcher, err := parseQuery(query, tagScope)
 			if err != nil {
 				return fmt.Errorf("invalid query: %w", err)
 			}
@@ -207,6 +226,8 @@ See also:
 	}
 
 	AddSearchFlags(cmd, &flags, "created:desc")
+	cmd.Flags().BoolVar(&globalTagsOnly, "global-tags", false, "only match global tags (categorization)")
+	cmd.Flags().BoolVar(&inlineTagsOnly, "inline-tags", false, "only match inline tags (contextual annotations)")
 
 	return cmd
 }
@@ -214,9 +235,18 @@ See also:
 // QueryMatcher is a function that tests if a note matches the query.
 type QueryMatcher func(n *note.Note) bool
 
+// TagScope controls which tag fields are checked during tag search.
+type TagScope int
+
+const (
+	TagScopeAll    TagScope = iota // Check both global and inline tags (default)
+	TagScopeGlobal                 // Check only global tags (--global-tags)
+	TagScopeInline                 // Check only inline tags (--inline-tags)
+)
+
 // parseQuery parses a search query string into a matcher function.
 // MVP supports: tag search, text search, && (AND), space (implicit AND)
-func parseQuery(query string) (QueryMatcher, error) {
+func parseQuery(query string, tagScope TagScope) (QueryMatcher, error) {
 	query = strings.TrimSpace(query)
 	if query == "" {
 		return nil, fmt.Errorf("empty query")
@@ -235,7 +265,7 @@ func parseQuery(query string) (QueryMatcher, error) {
 		// Split by space for implicit AND
 		terms := splitTerms(part)
 		for _, term := range terms {
-			m, err := parseTermMatcher(term)
+			m, err := parseTermMatcher(term, tagScope)
 			if err != nil {
 				return nil, err
 			}
@@ -332,7 +362,7 @@ func splitTerms(part string) []string {
 }
 
 // parseTermMatcher creates a matcher for a single search term.
-func parseTermMatcher(term string) (QueryMatcher, error) {
+func parseTermMatcher(term string, tagScope TagScope) (QueryMatcher, error) {
 	term = strings.TrimSpace(term)
 	if term == "" {
 		return nil, fmt.Errorf("empty term")
@@ -340,7 +370,7 @@ func parseTermMatcher(term string) (QueryMatcher, error) {
 
 	// Tag search
 	if strings.HasPrefix(term, "#") {
-		return tagMatcher(term), nil
+		return tagMatcher(term, tagScope), nil
 	}
 
 	// Check for filter prefixes (field:value)
@@ -376,12 +406,22 @@ func parseTermMatcher(term string) (QueryMatcher, error) {
 }
 
 // tagMatcher returns a matcher that checks if a note has the given tag.
-func tagMatcher(tag string) QueryMatcher {
+// The scope controls which tag fields are checked.
+func tagMatcher(tag string, scope TagScope) QueryMatcher {
 	tagNorm := note.NormalizeTag(tag)
 	return func(n *note.Note) bool {
-		for _, t := range n.Tags {
-			if note.NormalizeTag(t) == tagNorm {
-				return true
+		if scope != TagScopeInline {
+			for _, t := range n.Tags {
+				if note.NormalizeTag(t) == tagNorm {
+					return true
+				}
+			}
+		}
+		if scope != TagScopeGlobal {
+			for _, t := range n.InlineTags {
+				if note.NormalizeTag(t) == tagNorm {
+					return true
+				}
 			}
 		}
 		return false
@@ -748,27 +788,29 @@ func formatExtraFields(extra map[string]interface{}) string {
 func outputJSON(results []SearchResult, fmMode FrontmatterMode, includeContent, stripGlobalTags, stripTitle bool) error {
 	// Create output with optional frontmatter fields
 	type jsonResult struct {
-		Path    string                 `json:"path"`
-		UUID    string                 `json:"uuid"`
-		Title   string                 `json:"title,omitempty"`
-		Tags    []string               `json:"tags,omitempty"`
-		Parent  string                 `json:"parent,omitempty"`
-		Created string                 `json:"created,omitempty"`
-		Updated string                 `json:"updated,omitempty"`
-		Extra   map[string]interface{} `json:"extra,omitempty"`
-		Content string                 `json:"content,omitempty"`
+		Path       string                 `json:"path"`
+		UUID       string                 `json:"uuid"`
+		Title      string                 `json:"title,omitempty"`
+		Tags       []string               `json:"tags,omitempty"`
+		InlineTags []string               `json:"inline_tags,omitempty"`
+		Parent     string                 `json:"parent,omitempty"`
+		Created    string                 `json:"created,omitempty"`
+		Updated    string                 `json:"updated,omitempty"`
+		Extra      map[string]interface{} `json:"extra,omitempty"`
+		Content    string                 `json:"content,omitempty"`
 	}
 
 	output := make([]jsonResult, len(results))
 	for i, r := range results {
 		jr := jsonResult{
-			Path:    r.Path,
-			UUID:    r.UUID,
-			Title:   r.Title,
-			Tags:    r.Tags,
-			Parent:  r.note.Parent,
-			Created: r.note.Created.Format(note.TimeFormat),
-			Updated: r.note.Updated.Format(note.TimeFormat),
+			Path:       r.Path,
+			UUID:       r.UUID,
+			Title:      r.Title,
+			Tags:       r.Tags,
+			InlineTags: r.note.InlineTags,
+			Parent:     r.note.Parent,
+			Created:    r.note.Created.Format(note.TimeFormat),
+			Updated:    r.note.Updated.Format(note.TimeFormat),
 		}
 
 		if fmMode == FrontmatterExtra && len(r.note.Extra) > 0 {
@@ -940,7 +982,7 @@ func handleEditSingle(vlt *vault.Vault, result SearchResult, force bool, fmMode 
 		if err := os.Remove(result.Path); err != nil {
 			return fmt.Errorf("failed to delete %s: %w", result.Path, err)
 		}
-		vlt.DecrementTagsIndex(result.note.Tags)
+		vlt.DecrementTagsIndex(result.note.AllTags())
 		vlt.RemoveTitleEntry(result.note.UUID)
 		fmt.Fprintf(os.Stderr, "Modified: 0, Deleted: 1\n")
 		return nil
@@ -987,7 +1029,7 @@ func handleEditSingle(vlt *vault.Vault, result SearchResult, force bool, fmMode 
 		return fmt.Errorf("failed to save: %w", err)
 	}
 
-	vlt.UpdateTagsIndex(result.note.Tags)
+	vlt.UpdateTagsIndex(result.note.AllTags())
 	vlt.UpdateTitleEntry(result.note.UUID, result.note.Title, result.note.FilePath, result.note.Parent)
 	fmt.Fprintf(os.Stderr, "Modified: 1, Deleted: 0\n")
 	return nil
@@ -1192,8 +1234,8 @@ func applyBulkChanges(vlt *vault.Vault, original, modified string, results []Sea
 			continue
 		}
 
-		// Update tags index
-		vlt.UpdateTagsIndex(result.note.Tags)
+		// Update tags index (global + inline)
+		vlt.UpdateTagsIndex(result.note.AllTags())
 		// Update titles index
 		vlt.UpdateTitleEntry(result.note.UUID, result.note.Title, result.note.FilePath, result.note.Parent)
 		modifiedCount++
@@ -1213,8 +1255,8 @@ func applyBulkChanges(vlt *vault.Vault, original, modified string, results []Sea
 			continue
 		}
 
-		// Decrement tags for deleted note
-		vlt.DecrementTagsIndex(result.note.Tags)
+		// Decrement tags for deleted note (global + inline)
+		vlt.DecrementTagsIndex(result.note.AllTags())
 		vlt.RemoveTitleEntry(result.note.UUID)
 		deletedCount++
 	}

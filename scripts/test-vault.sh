@@ -289,6 +289,12 @@ Actively maintained.
                 local daily_link
                 daily_link=$(pick "$daily_urls_md")
 
+                # Inline tag annotations (~50% of daily notes)
+                local daily_inline=""
+                if [ $(( RANDOM % 2 )) -eq 0 ]; then
+                    daily_inline="  #followup"
+                fi
+
                 content="# $title
 
 #daily #$cat1
@@ -296,7 +302,7 @@ Actively maintained.
 $opening
 
 ## Tasks
-- $task1
+- $task1$daily_inline
 - $task2
 - $task3
 
@@ -343,6 +349,12 @@ $closing"
                 code_plain_url=$(pick "$code_urls_plain")
                 code_md_url=$(pick "$code_urls_md")
 
+                # Inline tag annotations (~60% of code notes)
+                local code_inline=""
+                if [ $(( RANDOM % 5 )) -lt 3 ]; then
+                    code_inline="  #todo"
+                fi
+
                 content="# $title
 
 #code #$proj
@@ -358,7 +370,7 @@ $snippet
 Related: $code_md_url
 
 ## TODO
-- $todo1
+- $todo1$code_inline
 - $todo2
 - Review $code_plain_url
 
@@ -381,6 +393,12 @@ Related: $code_md_url
                 local meeting_link
                 meeting_link=$(pick "$meeting_urls")
 
+                # Inline tag annotations (~50% of meeting notes)
+                local meeting_inline=""
+                if [ $(( RANDOM % 2 )) -eq 0 ]; then
+                    meeting_inline="  #followup"
+                fi
+
                 content="# $title
 
 #meeting #$cat1
@@ -397,7 +415,7 @@ Discussed timelines and priorities. #work
 Resources: $meeting_link
 
 ## Action Items
-- $action1
+- $action1$meeting_inline
 - $action2"
                 ;;
 
@@ -473,12 +491,18 @@ Think about this more. Maybe prototype something. #draft"
                 # Task notes get sequential order values (1-15)
                 order=$(( note_num - 85 ))
 
+                # Inline tag annotations (~40% of task notes)
+                local task_inline=""
+                if [ $(( RANDOM % 5 )) -lt 2 ]; then
+                    task_inline="  #question"
+                fi
+
                 content="# $title
 
 #work #$proj #$status
 
 ## Open
-- [ ] $t1
+- [ ] $t1$task_inline
 - [ ] $t2
 
 ## In Progress

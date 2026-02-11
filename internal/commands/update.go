@@ -169,8 +169,8 @@ New UUIDs in the updated content are an error (use 'log' to create new notes).`,
 					continue
 				}
 
-				// Get old tags for decrementing
-				oldTags := n.Tags
+				// Get old tags for decrementing (global + inline)
+				oldTags := n.AllTags()
 
 				// Update content
 				n.Content = updatedMap[uuid]
@@ -189,9 +189,9 @@ New UUIDs in the updated content are an error (use 'log' to create new notes).`,
 						continue
 					}
 
-					// Update tags index: decrement old, increment new
+					// Update tags index: decrement old, increment new (global + inline)
 					vlt.DecrementTagsIndex(oldTags)
-					vlt.UpdateTagsIndex(n.Tags)
+					vlt.UpdateTagsIndex(n.AllTags())
 
 					// Update titles index
 					vlt.UpdateTitleEntry(n.UUID, n.Title, n.FilePath, n.Parent)

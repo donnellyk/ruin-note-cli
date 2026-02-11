@@ -19,8 +19,8 @@ type Note struct {
 	UUID       string
 	Created    time.Time
 	Updated    time.Time
-	Tags       []string // All tags (global + inline)
-	InlineTags []string // Tags within content body only
+	Tags       []string // Global tags (categorization)
+	InlineTags []string // Inline tags (contextual annotations within content)
 	Parent     string   // UUID of parent note
 	Order       *int     // Manual sort order (nil = unset)
 	LinkedCards []string // Resolved UUIDs from [[wiki links]]
@@ -69,7 +69,7 @@ func Parse(content string) (*Note, error) {
 
 	// Extract and classify tags
 	globalTags, inlineTags := ClassifyTags(body, note.Title)
-	note.Tags = MergeTags(globalTags, inlineTags)
+	note.Tags = globalTags
 	note.InlineTags = inlineTags
 
 	return note, nil
@@ -171,8 +171,14 @@ func (n *Note) SetTimestamps() {
 // RefreshTags re-extracts tags from the content.
 func (n *Note) RefreshTags() {
 	globalTags, inlineTags := ClassifyTags(n.Content, n.Title)
-	n.Tags = MergeTags(globalTags, inlineTags)
+	n.Tags = globalTags
 	n.InlineTags = inlineTags
+}
+
+// AllTags returns all tags (global + inline merged, deduplicated).
+// Use this for tag index operations where both types should be counted.
+func (n *Note) AllTags() []string {
+	return MergeTags(n.Tags, n.InlineTags)
 }
 
 // GenerateFilename creates a filename for the note based on title or timestamp.

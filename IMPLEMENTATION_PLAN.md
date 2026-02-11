@@ -67,10 +67,14 @@
   - [ ] 16.2 Graph export (DOT format)
   - [ ] 16.3 `links-to:` search filter
   - [ ] 16.4 Links index (`.ruin/links.yml` or similar)
-- [ ] **Phase 17**: Extended Functionality
+- [x] **Phase 17**: Tag Separation & Pick
   - [x] 17.1 Custom sort order (`order` field)
-  - [ ] 17.2 Note archiving
-  - [ ] 17.3 Extended search operators (OR, NOT, grouping, phrase)
+  - [x] 17.2 Separate global/inline tags in frontmatter (`tags` = global only, `inline-tags` = inline only)
+  - [x] 17.3 `--global-tags` / `--inline-tags` search flags
+  - [x] 17.4 `pick` command (inline tag line extraction with AND/OR mode)
+- [ ] **Phase 18**: Extended Functionality
+  - [ ] 18.1 Note archiving
+  - [ ] 18.2 Extended search operators (OR, NOT, grouping, phrase)
 
 ---
 

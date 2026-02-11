@@ -100,9 +100,9 @@ Does NOT update created or updated timestamps.`,
 					needsSave = true
 				}
 
-				// Reindex tags from content
+				// Reindex tags from content (compare all tags: global + inline)
 				oldTags := make(map[string]bool)
-				for _, t := range n.Tags {
+				for _, t := range n.AllTags() {
 					oldTags[note.NormalizeTag(t)] = true
 				}
 
@@ -110,7 +110,7 @@ Does NOT update created or updated timestamps.`,
 
 				// Check if tags changed
 				newTags := make(map[string]bool)
-				for _, t := range n.Tags {
+				for _, t := range n.AllTags() {
 					newTags[note.NormalizeTag(t)] = true
 				}
 
@@ -129,8 +129,8 @@ Does NOT update created or updated timestamps.`,
 					needsSave = true
 				}
 
-				// Count tags for rebuilding tags.yml
-				for _, t := range n.Tags {
+				// Count tags for rebuilding tags.yml (global + inline)
+				for _, t := range n.AllTags() {
 					tagCounts[t]++
 				}
 

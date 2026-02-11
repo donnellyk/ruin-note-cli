@@ -72,7 +72,7 @@ See also:
 			query := args[1]
 
 			// Validate the query by parsing it
-			matcher, err := parseQuery(query)
+			matcher, err := parseQuery(query, TagScopeAll)
 			if err != nil {
 				return fmt.Errorf("invalid query: %w", err)
 			}
@@ -359,7 +359,7 @@ See also:
 			}
 
 			// Parse query
-			matcher, err := parseQuery(query)
+			matcher, err := parseQuery(query, TagScopeAll)
 			if err != nil {
 				return fmt.Errorf("invalid query: %w", err)
 			}

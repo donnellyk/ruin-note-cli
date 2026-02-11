@@ -36,14 +36,19 @@ This is the content with #inline tag.`
 		t.Errorf("Created year = %d, want 2025", note.Created.Year())
 	}
 
-	// Should have 2 tags total
-	if len(note.Tags) != 2 {
-		t.Errorf("Tags = %v, want 2 tags", note.Tags)
+	// Should have 1 global tag
+	if len(note.Tags) != 1 {
+		t.Errorf("Tags = %v, want 1 global tag", note.Tags)
 	}
 
 	// Should have 1 inline tag
 	if len(note.InlineTags) != 1 {
-		t.Errorf("InlineTags = %v, want 1 tag", note.InlineTags)
+		t.Errorf("InlineTags = %v, want 1 inline tag", note.InlineTags)
+	}
+
+	// AllTags should have both
+	if len(note.AllTags()) != 2 {
+		t.Errorf("AllTags() = %v, want 2 tags total", note.AllTags())
 	}
 }
 
@@ -284,14 +289,19 @@ func TestNote_RefreshTags(t *testing.T) {
 
 	note.RefreshTags()
 
-	// Should now have the actual tags from content
-	if len(note.Tags) != 2 {
-		t.Errorf("Tags = %v, want 2 tags", note.Tags)
+	// Should now have 1 global tag
+	if len(note.Tags) != 1 || note.Tags[0] != "#old" {
+		t.Errorf("Tags = %v, want [#old]", note.Tags)
 	}
 
 	// #new should be inline
 	if len(note.InlineTags) != 1 || note.InlineTags[0] != "#new" {
 		t.Errorf("InlineTags = %v, want [#new]", note.InlineTags)
+	}
+
+	// AllTags should have both
+	if len(note.AllTags()) != 2 {
+		t.Errorf("AllTags() = %v, want 2 tags", note.AllTags())
 	}
 }
 

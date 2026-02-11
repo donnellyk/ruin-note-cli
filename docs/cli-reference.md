@@ -95,6 +95,28 @@ ruin search <query>
 | `--content` | | Include note content in JSON output (requires `--json`) |
 | `--strip-global-tags` | | Remove global tags from content (requires `--content`) |
 | `--strip-title` | | Remove H1 title from content (requires `--content`) |
+| `--global-tags` | | Only match global tags (categorization) |
+| `--inline-tags` | | Only match inline tags (contextual annotations) |
+
+By default, tag searches check both global and inline tags. Use `--global-tags` or `--inline-tags` to restrict scope (mutually exclusive).
+
+### pick
+
+Extract lines annotated with inline tags.
+
+```
+ruin pick <inline-tags...>
+```
+
+| Flag | Short | Description |
+|------|-------|-------------|
+| `--any` | | Match lines with any of the given tags (OR mode) |
+
+By default, multiple tags are combined with AND (lines must contain all tags).
+
+Lines are extracted from the content body only -- global tag lines at the top or bottom of a note are excluded.
+
+**JSON output** (`--json`): Results grouped by note with matches array containing line number, content, and all tags on each line.
 
 ### get
 
@@ -410,7 +432,7 @@ tags:
 Content with #tags inline.
 ```
 
-**Managed fields** (set by CLI): `uuid`, `created`, `updated`, `tags`, `inline-tags`, `parent`, `order`, `linked-cards`
+**Managed fields** (set by CLI): `uuid`, `created`, `updated`, `tags` (global only), `inline-tags` (inline only), `parent`, `order`, `linked-cards`
 
 **User fields**: Any other YAML keys are preserved.
 

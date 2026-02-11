@@ -66,6 +66,7 @@ ruin-note-cli/
 │       ├── parent.go         # parent command (set, get, remove, children, tree)
 │       ├── suggest.go        # suggest command (title prefix matching)
 │       ├── compose.go        # compose command (recursive document assembly)
+│       ├── pick.go           # pick command (inline tag line extraction)
 │       ├── resolve.go        # Note resolution (UUID, title, path lookup)
 │       └── links.go          # Wiki link resolution (RefreshLinkedCards)
 ├── scripts/
@@ -109,8 +110,8 @@ ruin-note-cli/
 - `uuid`: unique identifier
 - `created`: creation timestamp
 - `updated`: last modified timestamp
-- `tags`: all tags found in document
-- `inline-tags`: tags found within content body (not at top/end)
+- `tags`: global tags only (categorization, at top/end of note)
+- `inline-tags`: inline tags only (contextual annotations within content body)
 - `parent`: UUID of parent note (optional, omitted if empty)
 - `linked-cards`: resolved UUIDs from `[[wiki links]]` (optional, omitted if empty)
 

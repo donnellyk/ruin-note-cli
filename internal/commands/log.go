@@ -130,8 +130,8 @@ Details here..."
 				return fmt.Errorf("failed to save note: %w", err)
 			}
 
-			// Update tags index
-			if err := vlt.UpdateTagsIndex(n.Tags); err != nil {
+			// Update tags index (global + inline)
+			if err := vlt.UpdateTagsIndex(n.AllTags()); err != nil {
 				// Non-fatal: log warning but don't fail
 				fmt.Fprintf(os.Stderr, "warning: failed to update tags index: %v\n", err)
 			}
