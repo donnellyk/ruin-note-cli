@@ -204,7 +204,7 @@ func pickLinesFromNote(n *note.Note, queryTags []string, anyMode bool, df doneFi
 		if trimmed == "" {
 			continue
 		}
-		if isTagOnlyLine(trimmed) {
+		if note.IsTagOnlyLine(trimmed) {
 			continue
 		}
 		firstContentIdx = i
@@ -217,7 +217,7 @@ func pickLinesFromNote(n *note.Note, queryTags []string, anyMode bool, df doneFi
 		if trimmed == "" {
 			continue
 		}
-		if isTagOnlyLine(trimmed) {
+		if note.IsTagOnlyLine(trimmed) {
 			continue
 		}
 		lastContentIdx = i
@@ -239,7 +239,7 @@ func pickLinesFromNote(n *note.Note, queryTags []string, anyMode bool, df doneFi
 		}
 
 		// Skip tag-only lines (these are global-style tags, not inline annotations)
-		if isTagOnlyLine(trimmed) {
+		if note.IsTagOnlyLine(trimmed) {
 			continue
 		}
 
@@ -308,26 +308,6 @@ func pickLinesFromNote(n *note.Note, queryTags []string, anyMode bool, df doneFi
 	return matches
 }
 
-// isTagOnlyLine returns true if the line contains only tags and whitespace.
-func isTagOnlyLine(line string) bool {
-	trimmed := strings.TrimSpace(line)
-	if trimmed == "" {
-		return false
-	}
-
-	tags := note.ExtractTagMatches(line)
-	if len(tags) == 0 {
-		return false
-	}
-
-	remaining := line
-	for i := len(tags) - 1; i >= 0; i-- {
-		t := tags[i]
-		remaining = remaining[:t.Start] + remaining[t.End:]
-	}
-
-	return strings.TrimSpace(remaining) == ""
-}
 
 func outputPickJSON(results []PickResult) error {
 	enc := json.NewEncoder(os.Stdout)

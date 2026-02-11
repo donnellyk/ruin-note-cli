@@ -228,7 +228,7 @@ func ClassifyTags(content string, title string) (globalTags []string, inlineTags
 			continue
 		}
 		// Check if line is only tags
-		if isTagOnlyLine(trimmed) {
+		if IsTagOnlyLine(trimmed) {
 			continue
 		}
 		firstContentIdx = i
@@ -242,7 +242,7 @@ func ClassifyTags(content string, title string) (globalTags []string, inlineTags
 		if trimmed == "" {
 			continue
 		}
-		if isTagOnlyLine(trimmed) {
+		if IsTagOnlyLine(trimmed) {
 			continue
 		}
 		lastContentIdx = i
@@ -298,10 +298,10 @@ func ClassifyTags(content string, title string) (globalTags []string, inlineTags
 	return globalTags, inlineTags
 }
 
-// isTagOnlyLine returns true if the line contains only tags and separator characters.
+// IsTagOnlyLine returns true if the line contains only tags and separator characters.
 // Separator characters are whitespace and commas (e.g. "#log, #ruin").
 // Empty lines or whitespace-only lines return false.
-func isTagOnlyLine(line string) bool {
+func IsTagOnlyLine(line string) bool {
 	trimmed := strings.TrimSpace(line)
 	if trimmed == "" {
 		return false

@@ -291,6 +291,7 @@ func TestIsTagOnlyLine(t *testing.T) {
 		{"#daily #work", true},
 		{"#daily", true},
 		{"  #daily  ", true},
+		{"#wrap, #daily #ruin", true},
 		{"Content with #tag", false},
 		{"", false},
 		{"Just text", false},
@@ -298,8 +299,8 @@ func TestIsTagOnlyLine(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.line, func(t *testing.T) {
-			if got := isTagOnlyLine(tt.line); got != tt.want {
-				t.Errorf("isTagOnlyLine(%q) = %v, want %v", tt.line, got, tt.want)
+			if got := note.IsTagOnlyLine(tt.line); got != tt.want {
+				t.Errorf("IsTagOnlyLine(%q) = %v, want %v", tt.line, got, tt.want)
 			}
 		})
 	}

@@ -33,7 +33,7 @@ func StripGlobalTags(content string, inlineTags []string) string {
 		if trimmed == "" {
 			continue
 		}
-		if isTagOnlyLine(trimmed) {
+		if IsTagOnlyLine(trimmed) {
 			continue
 		}
 		firstContentIdx = i
@@ -47,7 +47,7 @@ func StripGlobalTags(content string, inlineTags []string) string {
 		if trimmed == "" {
 			continue
 		}
-		if isTagOnlyLine(trimmed) {
+		if IsTagOnlyLine(trimmed) {
 			continue
 		}
 		lastContentIdx = i
@@ -65,7 +65,7 @@ func StripGlobalTags(content string, inlineTags []string) string {
 				continue
 			}
 			// Skip tag-only lines
-			if isTagOnlyLine(trimmed) {
+			if IsTagOnlyLine(trimmed) {
 				continue
 			}
 			result = append(result, line)
@@ -90,14 +90,14 @@ func StripGlobalTags(content string, inlineTags []string) string {
 				// Keep empty lines only if not all lines between title and content are being removed
 				continue
 			}
-			if isTagOnlyLine(trimmed) {
+			if IsTagOnlyLine(trimmed) {
 				continue
 			}
 		}
 
 		// After last content: skip tag-only lines
 		if i > lastContentIdx {
-			if isTagOnlyLine(trimmed) {
+			if IsTagOnlyLine(trimmed) {
 				continue
 			}
 		}

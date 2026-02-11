@@ -232,8 +232,8 @@ func TestIsTagOnlyLine(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.line, func(t *testing.T) {
-			if got := isTagOnlyLine(tt.line); got != tt.want {
-				t.Errorf("isTagOnlyLine(%q) = %v, want %v", tt.line, got, tt.want)
+			if got := IsTagOnlyLine(tt.line); got != tt.want {
+				t.Errorf("IsTagOnlyLine(%q) = %v, want %v", tt.line, got, tt.want)
 			}
 		})
 	}
