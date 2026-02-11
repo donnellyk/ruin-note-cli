@@ -180,6 +180,26 @@ This paragraph has #tag1 and #tag2 inline.`
 	}
 }
 
+func TestClassifyTags_CommaSeparatedGlobal(t *testing.T) {
+	content := `# Ruin Log
+
+Some content with #inline here.
+
+#log, #ruin`
+
+	globalTags, inlineTags := ClassifyTags(content, "Ruin Log")
+
+	expectedGlobal := []string{"#log", "#ruin"}
+	if !reflect.DeepEqual(globalTags, expectedGlobal) {
+		t.Errorf("globalTags = %v, want %v", globalTags, expectedGlobal)
+	}
+
+	expectedInline := []string{"#inline"}
+	if !reflect.DeepEqual(inlineTags, expectedInline) {
+		t.Errorf("inlineTags = %v, want %v", inlineTags, expectedInline)
+	}
+}
+
 func TestMergeTags(t *testing.T) {
 	global := []string{"#a", "#b"}
 	inline := []string{"#b", "#c"}
@@ -200,6 +220,10 @@ func TestIsTagOnlyLine(t *testing.T) {
 		{"#foo #bar", true},
 		{"#foo", true},
 		{"  #foo  ", true},
+		{"#foo, #bar", true},
+		{"#foo; #bar", true},
+		{"#foo | #bar", true},
+		{"#foo, #bar, #baz", true},
 		{"Some text #foo", false},
 		{"#foo some text", false},
 		{"", false},

@@ -298,7 +298,8 @@ func ClassifyTags(content string, title string) (globalTags []string, inlineTags
 	return globalTags, inlineTags
 }
 
-// isTagOnlyLine returns true if the line contains only tags and whitespace.
+// isTagOnlyLine returns true if the line contains only tags and separator characters.
+// Separator characters are whitespace and commas (e.g. "#log, #ruin").
 // Empty lines or whitespace-only lines return false.
 func isTagOnlyLine(line string) bool {
 	trimmed := strings.TrimSpace(line)
@@ -312,7 +313,7 @@ func isTagOnlyLine(line string) bool {
 		return false
 	}
 
-	// Remove all matched tags from the line and check if only whitespace remains
+	// Remove all matched tags from the line and check if only separators remain
 	remaining := line
 	// Sort by position descending to remove from end first (preserves positions)
 	for i := len(tags) - 1; i >= 0; i-- {
@@ -320,7 +321,8 @@ func isTagOnlyLine(line string) bool {
 		remaining = remaining[:t.Start] + remaining[t.End:]
 	}
 
-	return strings.TrimSpace(remaining) == ""
+	// After removing tags, only whitespace and separator punctuation should remain
+	return strings.Trim(remaining, " \t,;|·•–—/") == ""
 }
 
 func findLineIndex(pos int, lineOffsets []int) int {

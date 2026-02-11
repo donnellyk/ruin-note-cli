@@ -85,6 +85,17 @@ Does NOT update created or updated timestamps.`,
 			}
 
 			for _, path := range notePaths {
+				// Read the raw frontmatter to compare against content-derived tags.
+				// note.Load -> Parse re-derives Tags/InlineTags from body content,
+				// discarding frontmatter values. We need the on-disk values to detect
+				// when classification has drifted (e.g. a tag in both fields).
+				rawBytes, err := os.ReadFile(path)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "%swarning: failed to read %s: %v\n", prefix, path, err)
+					continue
+				}
+				rawFM, _, _ := note.ParseFrontmatter(string(rawBytes))
+
 				n, err := note.Load(path)
 				if err != nil {
 					fmt.Fprintf(os.Stderr, "%swarning: failed to parse %s: %v\n", prefix, path, err)
@@ -100,31 +111,10 @@ Does NOT update created or updated timestamps.`,
 					needsSave = true
 				}
 
-				// Reindex tags from content (compare all tags: global + inline)
-				oldTags := make(map[string]bool)
-				for _, t := range n.AllTags() {
-					oldTags[note.NormalizeTag(t)] = true
-				}
-
-				n.RefreshTags()
-
-				// Check if tags changed
-				newTags := make(map[string]bool)
-				for _, t := range n.AllTags() {
-					newTags[note.NormalizeTag(t)] = true
-				}
-
-				tagsChanged := len(oldTags) != len(newTags)
-				if !tagsChanged {
-					for t := range oldTags {
-						if !newTags[t] {
-							tagsChanged = true
-							break
-						}
-					}
-				}
-
-				if tagsChanged {
+				// Compare on-disk frontmatter tags against the content-derived
+				// classification (already computed by Parse). This detects both
+				// tag additions/removals AND misclassification between global/inline.
+				if !normalizedTagsEqual(rawFM.Tags, n.Tags) || !normalizedTagsEqual(rawFM.InlineTags, n.InlineTags) {
 					output.TagsReindexed = append(output.TagsReindexed, path)
 					needsSave = true
 				}
@@ -273,4 +263,18 @@ Does NOT update created or updated timestamps.`,
 	cmd.Flags().BoolVarP(&dryRun, "dry-run", "n", false, "show what would change without writing")
 
 	return cmd
+}
+
+// normalizedTagsEqual compares two tag slices for equality after normalizing.
+// Order matters (classification may reorder), and comparison is case-insensitive.
+func normalizedTagsEqual(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if note.NormalizeTag(a[i]) != note.NormalizeTag(b[i]) {
+			return false
+		}
+	}
+	return true
 }
