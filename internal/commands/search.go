@@ -982,7 +982,7 @@ func handleEditSingle(vlt *vault.Vault, result SearchResult, force bool, fmMode 
 		if err := os.Remove(result.Path); err != nil {
 			return fmt.Errorf("failed to delete %s: %w", result.Path, err)
 		}
-		vlt.DecrementTagsIndex(result.note.AllTags())
+		vlt.DecrementTagsIndex(result.note.Tags, result.note.InlineTags)
 		vlt.RemoveTitleEntry(result.note.UUID)
 		fmt.Fprintf(os.Stderr, "Modified: 0, Deleted: 1\n")
 		return nil
@@ -1029,7 +1029,7 @@ func handleEditSingle(vlt *vault.Vault, result SearchResult, force bool, fmMode 
 		return fmt.Errorf("failed to save: %w", err)
 	}
 
-	vlt.UpdateTagsIndex(result.note.AllTags())
+	vlt.UpdateTagsIndex(result.note.Tags, result.note.InlineTags)
 	vlt.UpdateTitleEntry(result.note.UUID, result.note.Title, result.note.FilePath, result.note.Parent)
 	fmt.Fprintf(os.Stderr, "Modified: 1, Deleted: 0\n")
 	return nil
@@ -1235,7 +1235,7 @@ func applyBulkChanges(vlt *vault.Vault, original, modified string, results []Sea
 		}
 
 		// Update tags index (global + inline)
-		vlt.UpdateTagsIndex(result.note.AllTags())
+		vlt.UpdateTagsIndex(result.note.Tags, result.note.InlineTags)
 		// Update titles index
 		vlt.UpdateTitleEntry(result.note.UUID, result.note.Title, result.note.FilePath, result.note.Parent)
 		modifiedCount++
@@ -1256,7 +1256,7 @@ func applyBulkChanges(vlt *vault.Vault, original, modified string, results []Sea
 		}
 
 		// Decrement tags for deleted note (global + inline)
-		vlt.DecrementTagsIndex(result.note.AllTags())
+		vlt.DecrementTagsIndex(result.note.Tags, result.note.InlineTags)
 		vlt.RemoveTitleEntry(result.note.UUID)
 		deletedCount++
 	}

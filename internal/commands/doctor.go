@@ -72,6 +72,8 @@ Does NOT update created or updated timestamps.`,
 
 			// Track all tags across the vault for rebuilding tags.yml
 			tagCounts := make(map[string]int)
+			globalTagSet := make(map[string]bool)
+			inlineTagSet := make(map[string]bool)
 
 			// Track all titles for rebuilding titles.json
 			titleEntries := make(map[string]vault.TitleEntry)
@@ -122,6 +124,12 @@ Does NOT update created or updated timestamps.`,
 				// Count tags for rebuilding tags.yml (global + inline)
 				for _, t := range n.AllTags() {
 					tagCounts[t]++
+				}
+				for _, t := range n.Tags {
+					globalTagSet[t] = true
+				}
+				for _, t := range n.InlineTags {
+					inlineTagSet[t] = true
 				}
 
 				// Collect title entry
@@ -178,7 +186,7 @@ Does NOT update created or updated timestamps.`,
 
 			// Rebuild tags.yml
 			if !dryRun {
-				if err := vlt.RebuildTagsIndex(tagCounts); err != nil {
+				if err := vlt.RebuildTagsIndex(tagCounts, globalTagSet, inlineTagSet); err != nil {
 					fmt.Fprintf(os.Stderr, "%swarning: failed to rebuild tags.yml: %v\n", prefix, err)
 				} else {
 					output.TagsYMLUpdated = true

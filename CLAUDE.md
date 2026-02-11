@@ -94,7 +94,7 @@ ruin-note-cli/
 ```
 <vault_path>/
 ├── .ruin/
-│   ├── tags.yml      # All tags index
+│   ├── tags.yml      # All tags index (name, count, scope)
 │   ├── queries.yml   # Saved search queries
 │   └── titles.json   # Titles index (UUID to title/path/parent)
 ├── Note Title 1.md

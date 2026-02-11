@@ -104,7 +104,7 @@ See also:
 			}
 
 			for _, t := range filtered {
-				fmt.Printf("%s (%d)\n", t.Name, t.Count)
+				fmt.Printf("%s (%d) [%s]\n", t.Name, t.Count, strings.Join(t.Scope, ", "))
 			}
 			return nil
 		},
@@ -175,7 +175,7 @@ See also:
 				if err != nil {
 					continue
 				}
-				for _, t := range n.Tags {
+				for _, t := range n.AllTags() {
 					if strings.EqualFold(t, oldTag) {
 						toUpdate = append(toUpdate, path)
 						break
@@ -318,7 +318,7 @@ See also:
 				if err != nil {
 					continue
 				}
-				for _, t := range n.Tags {
+				for _, t := range n.AllTags() {
 					if strings.EqualFold(t, tag) {
 						toUpdate = append(toUpdate, path)
 						break
@@ -429,16 +429,24 @@ func rebuildTagsIndex(vlt *vault.Vault) error {
 		return err
 	}
 
-	tagCounts := make(map[string]int)
+	totalCounts := make(map[string]int)
+	globalTags := make(map[string]bool)
+	inlineTags := make(map[string]bool)
 	for _, path := range notePaths {
 		n, err := note.Load(path)
 		if err != nil {
 			continue
 		}
+		for _, t := range n.AllTags() {
+			totalCounts[t]++
+		}
 		for _, t := range n.Tags {
-			tagCounts[t]++
+			globalTags[t] = true
+		}
+		for _, t := range n.InlineTags {
+			inlineTags[t] = true
 		}
 	}
 
-	return vlt.RebuildTagsIndex(tagCounts)
+	return vlt.RebuildTagsIndex(totalCounts, globalTags, inlineTags)
 }

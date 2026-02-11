@@ -234,6 +234,8 @@ Manage tags in the vault.
 ruin tags list
 ```
 
+Lists all tags with usage counts and scope. Each tag is annotated with its scope: `global` (categorization tags), `inline` (contextual annotations within content), or `both`.
+
 | Flag | Short | Description |
 |------|-------|-------------|
 | `--sort` | `-s` | Sort by: `name`, `name:desc`, `count`, `count:asc`, `count:desc` |
@@ -469,7 +471,7 @@ Content of second note...
 ```
 <vault>/
 ├── .ruin/
-│   ├── tags.yml      # Tag index
+│   ├── tags.yml      # Tag index (name, count, scope: global/inline/both)
 │   ├── queries.yml   # Saved queries
 │   ├── parents.yml   # Saved parent bookmarks
 │   └── titles.json   # Titles index (UUID to title/path/parent)

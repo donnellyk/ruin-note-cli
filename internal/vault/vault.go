@@ -188,10 +188,17 @@ func (v *Vault) ListNotes() ([]string, error) {
 	return notes, nil
 }
 
+// Tag scope constants for tags.yml.
+const (
+	ScopeGlobal = "global"
+	ScopeInline = "inline"
+)
+
 // TagEntry represents a tag in the tags index.
 type TagEntry struct {
-	Name  string `yaml:"name"`
-	Count int    `yaml:"count"`
+	Name  string   `yaml:"name" json:"name"`
+	Count int      `yaml:"count" json:"count"`
+	Scope []string `yaml:"scope" json:"scope"`
 }
 
 // TagsIndex represents the contents of tags.yml.
@@ -231,10 +238,10 @@ func (v *Vault) SaveTags(index *TagsIndex) error {
 	return nil
 }
 
-// UpdateTagsIndex updates the tags index with the given tags.
-// It increments the count for existing tags and adds new ones.
-func (v *Vault) UpdateTagsIndex(tags []string) error {
-	if len(tags) == 0 {
+// UpdateTagsIndex updates the tags index with the given global and inline tags.
+// It increments the count for existing tags (deduped) and merges scope.
+func (v *Vault) UpdateTagsIndex(globalTags, inlineTags []string) error {
+	if len(globalTags) == 0 && len(inlineTags) == 0 {
 		return nil
 	}
 
@@ -249,15 +256,39 @@ func (v *Vault) UpdateTagsIndex(tags []string) error {
 		tagMap[strings.ToLower(index.Tags[i].Name)] = &index.Tags[i]
 	}
 
-	// Add or increment tags
-	for _, tag := range tags {
-		key := strings.ToLower(tag)
+	// Track which tags appear in which scope for this note
+	globalSet := make(map[string]bool)
+	for _, t := range globalTags {
+		globalSet[strings.ToLower(t)] = true
+	}
+	inlineSet := make(map[string]bool)
+	for _, t := range inlineTags {
+		inlineSet[strings.ToLower(t)] = true
+	}
+
+	// Dedup union of all tags for count increment
+	allTags := make(map[string]string) // lowercase -> original
+	for _, t := range globalTags {
+		allTags[strings.ToLower(t)] = t
+	}
+	for _, t := range inlineTags {
+		key := strings.ToLower(t)
+		if _, exists := allTags[key]; !exists {
+			allTags[key] = t
+		}
+	}
+
+	for key, tag := range allTags {
+		noteScope := scopeFromSets(globalSet[key], inlineSet[key])
+
 		if entry, ok := tagMap[key]; ok {
 			entry.Count++
+			entry.Scope = mergeScope(entry.Scope, noteScope)
 		} else {
 			index.Tags = append(index.Tags, TagEntry{
 				Name:  tag,
 				Count: 1,
+				Scope: noteScope,
 			})
 			tagMap[key] = &index.Tags[len(index.Tags)-1]
 		}
@@ -266,10 +297,38 @@ func (v *Vault) UpdateTagsIndex(tags []string) error {
 	return v.SaveTags(index)
 }
 
-// DecrementTagsIndex decrements the count for the given tags.
+// scopeFromSets returns the scope list for a tag based on its presence in global/inline sets.
+func scopeFromSets(isGlobal, isInline bool) []string {
+	var scope []string
+	if isGlobal {
+		scope = append(scope, ScopeGlobal)
+	}
+	if isInline {
+		scope = append(scope, ScopeInline)
+	}
+	return scope
+}
+
+// mergeScope widens the scope of a tag entry by adding any new scope values.
+func mergeScope(existing, incoming []string) []string {
+	has := make(map[string]bool)
+	for _, s := range existing {
+		has[s] = true
+	}
+	for _, s := range incoming {
+		if !has[s] {
+			existing = append(existing, s)
+			has[s] = true
+		}
+	}
+	return existing
+}
+
+// DecrementTagsIndex decrements the count for the given tags (deduped from global + inline).
 // Tags with count <= 0 are removed from the index.
-func (v *Vault) DecrementTagsIndex(tags []string) error {
-	if len(tags) == 0 {
+// Scope is not narrowed on decrement; use RebuildTagsIndex for accurate scope.
+func (v *Vault) DecrementTagsIndex(globalTags, inlineTags []string) error {
+	if len(globalTags) == 0 && len(inlineTags) == 0 {
 		return nil
 	}
 
@@ -284,10 +343,18 @@ func (v *Vault) DecrementTagsIndex(tags []string) error {
 		tagMap[strings.ToLower(index.Tags[i].Name)] = i
 	}
 
+	// Dedup union of all tags
+	allKeys := make(map[string]bool)
+	for _, t := range globalTags {
+		allKeys[strings.ToLower(t)] = true
+	}
+	for _, t := range inlineTags {
+		allKeys[strings.ToLower(t)] = true
+	}
+
 	// Decrement tags
 	toRemove := make(map[int]bool)
-	for _, tag := range tags {
-		key := strings.ToLower(tag)
+	for key := range allKeys {
 		if idx, ok := tagMap[key]; ok {
 			index.Tags[idx].Count--
 			if index.Tags[idx].Count <= 0 {
@@ -311,15 +378,17 @@ func (v *Vault) DecrementTagsIndex(tags []string) error {
 }
 
 // RebuildTagsIndex rebuilds the entire tags index from all notes.
-// This is useful for the doctor command.
-func (v *Vault) RebuildTagsIndex(tagCounts map[string]int) error {
-	index := &TagsIndex{Tags: make([]TagEntry, 0, len(tagCounts))}
+// totalCounts is the deduped per-note count. globalTags and inlineTags
+// are sets indicating which scopes each tag has been seen in.
+func (v *Vault) RebuildTagsIndex(totalCounts map[string]int, globalTags, inlineTags map[string]bool) error {
+	index := &TagsIndex{Tags: make([]TagEntry, 0, len(totalCounts))}
 
-	for tag, count := range tagCounts {
+	for tag, count := range totalCounts {
 		if count > 0 {
 			index.Tags = append(index.Tags, TagEntry{
 				Name:  tag,
 				Count: count,
+				Scope: scopeFromSets(globalTags[tag], inlineTags[tag]),
 			})
 		}
 	}

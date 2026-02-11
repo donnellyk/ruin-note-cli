@@ -131,7 +131,7 @@ Details here..."
 			}
 
 			// Update tags index (global + inline)
-			if err := vlt.UpdateTagsIndex(n.AllTags()); err != nil {
+			if err := vlt.UpdateTagsIndex(n.Tags, n.InlineTags); err != nil {
 				// Non-fatal: log warning but don't fail
 				fmt.Fprintf(os.Stderr, "warning: failed to update tags index: %v\n", err)
 			}

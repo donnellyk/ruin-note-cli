@@ -170,7 +170,8 @@ New UUIDs in the updated content are an error (use 'log' to create new notes).`,
 				}
 
 				// Get old tags for decrementing (global + inline)
-				oldTags := n.AllTags()
+				oldGlobalTags := n.Tags
+				oldInlineTags := n.InlineTags
 
 				// Update content
 				n.Content = updatedMap[uuid]
@@ -190,8 +191,8 @@ New UUIDs in the updated content are an error (use 'log' to create new notes).`,
 					}
 
 					// Update tags index: decrement old, increment new (global + inline)
-					vlt.DecrementTagsIndex(oldTags)
-					vlt.UpdateTagsIndex(n.AllTags())
+					vlt.DecrementTagsIndex(oldGlobalTags, oldInlineTags)
+					vlt.UpdateTagsIndex(n.Tags, n.InlineTags)
 
 					// Update titles index
 					vlt.UpdateTitleEntry(n.UUID, n.Title, n.FilePath, n.Parent)
@@ -216,9 +217,9 @@ New UUIDs in the updated content are an error (use 'log' to create new notes).`,
 						continue
 					}
 
-					// Decrement tags for deleted note
+					// Decrement tags for deleted note (global + inline)
 					if n != nil {
-						vlt.DecrementTagsIndex(n.Tags)
+						vlt.DecrementTagsIndex(n.Tags, n.InlineTags)
 						vlt.RemoveTitleEntry(n.UUID)
 					}
 				}
