@@ -116,6 +116,8 @@ func parseFMLines(data []byte, fm *Frontmatter) error {
 				fm.Tags = list
 			case "inline-tags":
 				fm.InlineTags = list
+			case "dates":
+				fm.Dates = list
 			case "linked-cards":
 				fm.LinkedCards = list
 			}
@@ -129,6 +131,8 @@ func parseFMLines(data []byte, fm *Frontmatter) error {
 				currentList = &fm.Tags
 			case "inline-tags":
 				currentList = &fm.InlineTags
+			case "dates":
+				currentList = &fm.Dates
 			case "linked-cards":
 				currentList = &fm.LinkedCards
 			default:
@@ -157,6 +161,8 @@ func parseFMLines(data []byte, fm *Frontmatter) error {
 			fm.Tags = []string{strVal}
 		case "inline-tags":
 			fm.InlineTags = []string{strVal}
+		case "dates":
+			fm.Dates = []string{strVal}
 		case "linked-cards":
 			fm.LinkedCards = []string{strVal}
 		default:
@@ -239,6 +245,7 @@ func LoadFrontmatterOnly(path string) (*Note, error) {
 		LinkedCards: fm.LinkedCards,
 		Tags:        fm.Tags,
 		InlineTags:  fm.InlineTags,
+		Dates:       fm.Dates,
 		FilePath:    path,
 	}
 

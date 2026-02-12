@@ -144,6 +144,18 @@ func doctorFiles(vlt *vault.Vault, paths []string, dryRun bool, jsonOutput bool)
 			needsSave = true
 		}
 
+		// Resolve date tokens and refresh dates
+		resolvedContent := note.ResolveDateTokens(n.Content)
+		if resolvedContent != n.Content {
+			n.Content = resolvedContent
+			needsSave = true
+		}
+		oldDates := n.Dates
+		n.RefreshDates()
+		if !stringSlicesEqual(oldDates, n.Dates) {
+			needsSave = true
+		}
+
 		// Resolve linked-cards
 		oldLinkedCards := make(map[string]bool)
 		for _, lc := range n.LinkedCards {
@@ -262,6 +274,18 @@ func doctorFullScan(vlt *vault.Vault, dryRun bool, jsonOutput bool) error {
 		// tag additions/removals AND misclassification between global/inline.
 		if !normalizedTagsEqual(rawFM.Tags, n.Tags) || !normalizedTagsEqual(rawFM.InlineTags, n.InlineTags) {
 			output.TagsReindexed = append(output.TagsReindexed, path)
+			needsSave = true
+		}
+
+		// Resolve date tokens and refresh dates
+		resolvedContent := note.ResolveDateTokens(n.Content)
+		if resolvedContent != n.Content {
+			n.Content = resolvedContent
+			needsSave = true
+		}
+		oldDates := n.Dates
+		n.RefreshDates()
+		if !stringSlicesEqual(oldDates, n.Dates) {
 			needsSave = true
 		}
 
@@ -413,6 +437,19 @@ func doctorPrintOutput(output *DoctorOutput, prefix string, jsonOutput bool) err
 	}
 
 	return nil
+}
+
+// stringSlicesEqual compares two string slices for exact equality.
+func stringSlicesEqual(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }
 
 // normalizedTagsEqual compares two tag slices for equality after normalizing.

@@ -177,6 +177,10 @@ New UUIDs in the updated content are an error (use 'log' to create new notes).`,
 				n.Content = updatedMap[uuid]
 				n.RefreshTags()
 
+				// Resolve date tokens and extract dates
+				n.Content = note.ResolveDateTokens(n.Content)
+				n.RefreshDates()
+
 				// Refresh linked-cards from wiki links
 				if titlesErr == nil {
 					RefreshLinkedCards(n, titlesIndex)

@@ -872,3 +872,91 @@ func TestSearchOptions_EarlyTermination(t *testing.T) {
 		t.Errorf("with limit=1, found %d results, want 1", len(lines))
 	}
 }
+
+func TestSearchCmd_DateSearch(t *testing.T) {
+	tmpDir := t.TempDir()
+	vlt := vault.New(tmpDir)
+	if _, err := vlt.Initialize(false); err != nil {
+		t.Fatalf("failed to initialize vault: %v", err)
+	}
+
+	// Create a note with a resolved date
+	content := "---\nuuid: uuid-date-1\ncreated: \"2025-01-01T10:00:00-05:00\"\nupdated: \"2025-01-01T10:00:00-05:00\"\ntags:\n  - \"#followup\"\ndates:\n  - \"2026-03-15\"\n---\n# Follow Up\n#followup\n\nNeed to follow up @2026-03-15\n"
+	path := filepath.Join(tmpDir, "date-note.md")
+	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+		t.Fatalf("failed to create test note: %v", err)
+	}
+
+	// Search by exact date
+	matcher, info, err := parseQuery("@2026-03-15", TagScopeAll)
+	if err != nil {
+		t.Fatalf("parseQuery error: %v", err)
+	}
+
+	results, err := searchNotes(vlt, matcher, info)
+	if err != nil {
+		t.Fatalf("searchNotes error: %v", err)
+	}
+
+	if len(results) != 1 {
+		t.Fatalf("expected 1 result, got %d", len(results))
+	}
+	if results[0].UUID != "uuid-date-1" {
+		t.Errorf("expected uuid-date-1, got %s", results[0].UUID)
+	}
+
+	// Search by date + tag
+	matcher, info, err = parseQuery("#followup @2026-03-15", TagScopeAll)
+	if err != nil {
+		t.Fatalf("parseQuery error: %v", err)
+	}
+
+	results, err = searchNotes(vlt, matcher, info)
+	if err != nil {
+		t.Fatalf("searchNotes error: %v", err)
+	}
+
+	if len(results) != 1 {
+		t.Fatalf("expected 1 result for tag+date, got %d", len(results))
+	}
+
+	// Search by non-matching date
+	matcher, info, err = parseQuery("@2026-12-25", TagScopeAll)
+	if err != nil {
+		t.Fatalf("parseQuery error: %v", err)
+	}
+
+	results, err = searchNotes(vlt, matcher, info)
+	if err != nil {
+		t.Fatalf("searchNotes error: %v", err)
+	}
+
+	if len(results) != 0 {
+		t.Errorf("expected 0 results for non-matching date, got %d", len(results))
+	}
+}
+
+func TestIsDateTerm(t *testing.T) {
+	tests := []struct {
+		term string
+		want bool
+	}{
+		{"@2026-02-13", true},
+		{"@2025-12-31", true},
+		{"@today", false},
+		{"@tomorrow", false},
+		{"#tag", false},
+		{"text", false},
+		{"@2026-1-1", false},    // wrong format
+		{"@20260213", false},     // no hyphens
+		{"@2026-02-133", false},  // too long
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.term, func(t *testing.T) {
+			if got := isDateTerm(tt.term); got != tt.want {
+				t.Errorf("isDateTerm(%q) = %v, want %v", tt.term, got, tt.want)
+			}
+		})
+	}
+}

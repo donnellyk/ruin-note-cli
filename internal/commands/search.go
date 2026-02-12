@@ -58,11 +58,19 @@ func NewSearchCmd(getVault func() *vault.Vault, jsonOutput *bool) *cobra.Command
 
 Query syntax:
   - Tag search: #tagname (requires # prefix)
+  - Date search: @date (matches dates in note body)
   - Text search: word (case-insensitive)
   - AND (explicit): term1 && term2
   - AND (implicit): term1 term2 (space-separated)
 
-Date filters:
+Date tokens (@ syntax):
+  - @today, @tomorrow, @yesterday
+  - @monday .. @sunday (next occurrence)
+  - @next-week, @next-month, @next-year
+  - @2-days, @3-weeks, @2-months (relative offset)
+  - @2026-02-13 (exact date)
+
+Date filters (metadata):
   - created:DATE     Notes created on date
   - updated:DATE     Notes updated on date
   - on:DATE          Alias for created:DATE
@@ -112,7 +120,11 @@ See also:
   # Sorted by newest
   ruin search "#log" -s created:desc -l 10
 
-  # Date filters
+  # Date tokens (in note body)
+  ruin search "@tomorrow"
+  ruin search "#followup @next-week"
+
+  # Date filters (metadata)
   ruin search "created:today"
   ruin search "#daily && created:this-week"
   ruin search "updated:7d"
@@ -253,11 +265,15 @@ const (
 
 // parseQuery parses a search query string into a matcher function.
 // MVP supports: tag search, text search, && (AND), space (implicit AND)
+// Date tokens (@today, @tomorrow, etc.) are resolved before parsing.
 func parseQuery(query string, tagScope TagScope) (QueryMatcher, MatcherInfo, error) {
 	query = strings.TrimSpace(query)
 	if query == "" {
 		return nil, MatcherInfo{}, fmt.Errorf("empty query")
 	}
+
+	// Resolve date tokens in query (@tomorrow → @2026-02-13)
+	query = note.ResolveDateTokensInQuery(query)
 
 	// Split by && first
 	parts := strings.Split(query, "&&")
@@ -382,6 +398,12 @@ func parseTermMatcher(term string, tagScope TagScope) (QueryMatcher, MatcherInfo
 	fmOnly := MatcherInfo{NeedsBody: false}
 	needsBody := MatcherInfo{NeedsBody: true}
 
+	// Date search: @YYYY-MM-DD matches against frontmatter dates field
+	if isDateTerm(term) {
+		dateStr := term[1:] // strip @
+		return dateMatcher(dateStr), fmOnly, nil
+	}
+
 	// Tag search
 	if strings.HasPrefix(term, "#") {
 		return tagMatcher(term, tagScope), fmOnly, nil
@@ -423,6 +445,39 @@ func parseTermMatcher(term string, tagScope TagScope) (QueryMatcher, MatcherInfo
 
 	// Text search (case-insensitive)
 	return textMatcher(term), needsBody, nil
+}
+
+// isDateTerm returns true if the term is a resolved date term (@YYYY-MM-DD).
+func isDateTerm(term string) bool {
+	if len(term) != 11 || term[0] != '@' {
+		return false
+	}
+	// Check format: @YYYY-MM-DD
+	for i, ch := range term[1:] {
+		switch {
+		case i == 4 || i == 7:
+			if ch != '-' {
+				return false
+			}
+		default:
+			if ch < '0' || ch > '9' {
+				return false
+			}
+		}
+	}
+	return true
+}
+
+// dateMatcher returns a matcher that checks if a note has the given date in its dates field.
+func dateMatcher(dateStr string) QueryMatcher {
+	return func(n *note.Note) bool {
+		for _, d := range n.Dates {
+			if d == dateStr {
+				return true
+			}
+		}
+		return false
+	}
 }
 
 // tagMatcher returns a matcher that checks if a note has the given tag.
@@ -1059,6 +1114,10 @@ func handleEditSingle(vlt *vault.Vault, result SearchResult, force bool, fmMode 
 		result.note.RefreshTags()
 	}
 
+	// Resolve date tokens and extract dates
+	result.note.Content = note.ResolveDateTokens(result.note.Content)
+	result.note.RefreshDates()
+
 	result.note.SetTimestamps()
 
 	// Refresh linked-cards from wiki links
@@ -1262,6 +1321,10 @@ func applyBulkChanges(vlt *vault.Vault, original, modified string, results []Sea
 		if !strings.HasPrefix(strings.TrimLeft(modContent, "\n\r"), "---") {
 			result.note.RefreshTags()
 		}
+
+		// Resolve date tokens and extract dates
+		result.note.Content = note.ResolveDateTokens(result.note.Content)
+		result.note.RefreshDates()
 
 		// Refresh linked-cards from wiki links
 		if titlesErr == nil {

@@ -142,9 +142,79 @@ func parseNaturalLanguage(s string, now time.Time) (DateRange, bool) {
 			Start: lastYear,
 			End:   thisYear,
 		}, true
+
+	case "next-week":
+		nextMon := nextWeekday(today, time.Monday)
+		return DateRange{
+			Start: nextMon,
+			End:   nextMon.AddDate(0, 0, 7),
+		}, true
+
+	case "next-month":
+		thisMonth := startOfMonth(today)
+		nextMonth := thisMonth.AddDate(0, 1, 0)
+		return DateRange{
+			Start: nextMonth,
+			End:   nextMonth.AddDate(0, 1, 0),
+		}, true
+
+	case "next-year":
+		thisYear := startOfYear(today)
+		nextYear := thisYear.AddDate(1, 0, 0)
+		return DateRange{
+			Start: nextYear,
+			End:   nextYear.AddDate(1, 0, 0),
+		}, true
+
+	case "monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday":
+		day := parseDayOfWeek(s)
+		target := nextOrCurrentWeekday(today, day)
+		return DateRange{
+			Start: target,
+			End:   target.AddDate(0, 0, 1),
+		}, true
 	}
 
 	return DateRange{}, false
+}
+
+// nextWeekday returns the next occurrence of the given weekday strictly after today.
+func nextWeekday(today time.Time, day time.Weekday) time.Time {
+	daysUntil := int(day) - int(today.Weekday())
+	if daysUntil <= 0 {
+		daysUntil += 7
+	}
+	return today.AddDate(0, 0, daysUntil)
+}
+
+// nextOrCurrentWeekday returns today if it matches the given weekday,
+// otherwise the next occurrence.
+func nextOrCurrentWeekday(today time.Time, day time.Weekday) time.Time {
+	if today.Weekday() == day {
+		return today
+	}
+	return nextWeekday(today, day)
+}
+
+// parseDayOfWeek converts a lowercase day name to time.Weekday.
+func parseDayOfWeek(s string) time.Weekday {
+	switch s {
+	case "sunday":
+		return time.Sunday
+	case "monday":
+		return time.Monday
+	case "tuesday":
+		return time.Tuesday
+	case "wednesday":
+		return time.Wednesday
+	case "thursday":
+		return time.Thursday
+	case "friday":
+		return time.Friday
+	case "saturday":
+		return time.Saturday
+	}
+	return time.Sunday // unreachable if called correctly
 }
 
 // Patterns for relative durations
@@ -152,6 +222,7 @@ var (
 	daysPattern   = regexp.MustCompile(`^(\d+)(?:d|-days?)$`)
 	weeksPattern  = regexp.MustCompile(`^(\d+)(?:w|-weeks?)$`)
 	monthsPattern = regexp.MustCompile(`^(\d+)(?:m|-months?)$`)
+	yearsPattern  = regexp.MustCompile(`^(\d+)(?:y|-years?)$`)
 )
 
 // parseRelativeDuration handles duration expressions like "7d", "2-weeks", etc.
@@ -178,6 +249,13 @@ func parseRelativeDuration(s string, now time.Time) (DateRange, bool) {
 	if matches := monthsPattern.FindStringSubmatch(s); len(matches) == 2 {
 		months, _ := strconv.Atoi(matches[1])
 		start := today.AddDate(0, -months, 1)
+		return DateRange{Start: start, End: endOfToday}, true
+	}
+
+	// Years: 2y, 2-years, 2-year
+	if matches := yearsPattern.FindStringSubmatch(s); len(matches) == 2 {
+		years, _ := strconv.Atoi(matches[1])
+		start := today.AddDate(-years, 0, 1)
 		return DateRange{Start: start, End: endOfToday}, true
 	}
 

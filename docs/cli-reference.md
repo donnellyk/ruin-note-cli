@@ -64,18 +64,29 @@ ruin search <query>
 
 **Query syntax:**
 - Tag: `#tagname`
+- Date: `@date` (matches dates referenced in note body)
 - Text: `word` (case-insensitive)
 - AND: `term1 && term2` or `term1 term2`
 
-**Date filters:**
+**Date tokens (`@` syntax):**
+- `@today`, `@tomorrow`, `@yesterday`
+- `@monday` .. `@sunday` (next occurrence)
+- `@next-week`, `@next-month`, `@next-year`
+- `@2-days`, `@3-weeks`, `@2-months` (relative offset)
+- `@2026-02-13` (exact date)
+
+Date tokens in queries are resolved dynamically. In note content, they are resolved to `@YYYY-MM-DD` for consistency. See [Date Tokens](date-tokens.md) for details.
+
+**Date filters (metadata):**
 - `created:DATE`, `updated:DATE`, `on:DATE`
 - `before:DATE`, `after:DATE`
 - `between:DATE,DATE`
 
-**Date formats:**
+**Date formats** (for filters):
 - Exact: `2025-01-28`, `2025-01`, `2025`
 - Natural: `today`, `yesterday`, `tomorrow`
-- Relative: `this-week`, `last-week`, `this-month`, `last-month`
+- Relative: `this-week`, `last-week`, `this-month`, `last-month`, `next-week`, `next-month`, `next-year`
+- Day names: `monday`, `tuesday`, etc.
 - Duration: `7d`, `2w`, `3m`
 
 **Other filters:**
@@ -116,7 +127,7 @@ ruin pick <inline-tags...>
 
 By default, multiple tags are combined with AND (lines must contain all tags).
 
-Lines containing `#done` are excluded by default, since `#done` marks a line as resolved/completed. Use `--all` to include both open and done lines, or `--done` to show only completed lines.
+Lines containing `#done` are excluded by default, `#done` is reserved to mark a line as resolved/completed. Use `--all` to include both open and done lines, or `--done` to show only completed lines.
 
 Tag-only lines (lines containing only tags and separators like commas) are treated as global tags and excluded from pick results.
 
@@ -150,7 +161,7 @@ Returns the first match if multiple notes match. Returns an error if no match fo
 
 ### update
 
-Apply changes from bulk edit.
+Apply changes from a `--bulk --edit`.
 
 ```
 ruin update -o <original> -u <updated>
@@ -296,13 +307,14 @@ ruin doctor [paths...]
 With no arguments, performs a full vault scan:
 - Generate UUIDs for notes missing one
 - Reindex tags from document content
+- Resolve date tokens and rebuild `dates` frontmatter
 - Resolve [[wiki links]] and rebuild linked-cards
 - Rebuild `.ruin/tags.yml`
 - Rebuild `.ruin/titles.json`
 - Detect orphaned parent references
 
 With file path arguments, reindexes only the specified files:
-- Same per-file operations (UUID, tags, linked-cards)
+- Same per-file operations (UUID, tags, dates, linked-cards)
 - Incremental index updates (no full rebuild)
 - Useful after manual edits outside of ruin
 
@@ -445,14 +457,16 @@ updated: 2025-01-28T10:00:00-08:00
 tags:
   - "#daily"
   - "#work"
+dates:
+  - "2025-02-03"
 ---
 
 # Note Title
 
-Content with #tags inline.
+Content with #tags inline and a date reference @2025-02-03.
 ```
 
-**Managed fields** (set by CLI): `uuid`, `created`, `updated`, `tags` (global only), `inline-tags` (inline only), `parent`, `order`, `linked-cards`
+**Managed fields** (set by CLI): `uuid`, `created`, `updated`, `tags` (global only), `inline-tags` (inline only), `dates` (referenced dates), `parent`, `order`, `linked-cards`
 
 **User fields**: Any other YAML keys are preserved.
 

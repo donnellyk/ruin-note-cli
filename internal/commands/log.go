@@ -93,6 +93,10 @@ Details here..."
 			// Refresh tags from content
 			n.RefreshTags()
 
+			// Resolve date tokens and extract dates
+			n.Content = note.ResolveDateTokens(n.Content)
+			n.RefreshDates()
+
 			// Refresh linked-cards from wiki links
 			if titlesIndex, err := vlt.LoadTitles(); err == nil {
 				RefreshLinkedCards(n, titlesIndex)

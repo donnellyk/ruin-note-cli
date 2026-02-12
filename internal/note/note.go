@@ -21,6 +21,7 @@ type Note struct {
 	Updated    time.Time
 	Tags       []string // Global tags (categorization)
 	InlineTags []string // Inline tags (contextual annotations within content)
+	Dates      []string // Dates referenced in content (@YYYY-MM-DD tokens)
 	Parent     string   // UUID of parent note
 	Order       *int     // Manual sort order (nil = unset)
 	LinkedCards []string // Resolved UUIDs from [[wiki links]]
@@ -72,6 +73,9 @@ func Parse(content string) (*Note, error) {
 	note.Tags = globalTags
 	note.InlineTags = inlineTags
 
+	// Extract dates from content
+	note.Dates = ExtractDates(body)
+
 	return note, nil
 }
 
@@ -106,6 +110,7 @@ func (n *Note) Serialize() (string, error) {
 		UUID:        n.UUID,
 		Tags:        n.Tags,
 		InlineTags:  n.InlineTags,
+		Dates:       n.Dates,
 		Parent:      n.Parent,
 		Order:       n.Order,
 		LinkedCards: n.LinkedCards,
@@ -173,6 +178,11 @@ func (n *Note) RefreshTags() {
 	globalTags, inlineTags := ClassifyTags(n.Content, n.Title)
 	n.Tags = globalTags
 	n.InlineTags = inlineTags
+}
+
+// RefreshDates re-extracts dates from the content.
+func (n *Note) RefreshDates() {
+	n.Dates = ExtractDates(n.Content)
 }
 
 // AllTags returns all tags (global + inline merged, deduplicated).

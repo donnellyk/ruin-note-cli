@@ -19,6 +19,7 @@ type Frontmatter struct {
 	Updated    string   `yaml:"updated,omitempty"`
 	Tags       []string `yaml:"tags,omitempty"`
 	InlineTags []string `yaml:"inline-tags,omitempty"`
+	Dates      []string `yaml:"dates,omitempty"`
 	Parent     string   `yaml:"parent,omitempty"`
 	Order       *int     `yaml:"order,omitempty"`
 	LinkedCards []string `yaml:"linked-cards,omitempty"`
@@ -97,6 +98,10 @@ func parseFrontmatterYAML(yamlContent string) (*Frontmatter, error) {
 	if v, ok := raw["inline-tags"]; ok {
 		fm.InlineTags = toStringSlice(v)
 		delete(raw, "inline-tags")
+	}
+	if v, ok := raw["dates"]; ok {
+		fm.Dates = toStringSlice(v)
+		delete(raw, "dates")
 	}
 	if v, ok := raw["parent"].(string); ok {
 		fm.Parent = v
@@ -182,6 +187,9 @@ func (fm *Frontmatter) Serialize() (string, error) {
 	if len(fm.InlineTags) > 0 {
 		data["inline-tags"] = fm.InlineTags
 	}
+	if len(fm.Dates) > 0 {
+		data["dates"] = fm.Dates
+	}
 	if fm.Parent != "" {
 		data["parent"] = fm.Parent
 	}
@@ -217,6 +225,7 @@ func (fm *Frontmatter) IsEmpty() bool {
 		fm.Updated == "" &&
 		len(fm.Tags) == 0 &&
 		len(fm.InlineTags) == 0 &&
+		len(fm.Dates) == 0 &&
 		fm.Parent == "" &&
 		fm.Order == nil &&
 		len(fm.LinkedCards) == 0 &&
@@ -244,6 +253,9 @@ func (fm *Frontmatter) Merge(other *Frontmatter) {
 	}
 	if len(other.InlineTags) > 0 {
 		fm.InlineTags = other.InlineTags
+	}
+	if len(other.Dates) > 0 {
+		fm.Dates = other.Dates
 	}
 	if other.Parent != "" {
 		fm.Parent = other.Parent

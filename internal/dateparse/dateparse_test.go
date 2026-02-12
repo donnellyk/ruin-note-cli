@@ -60,6 +60,37 @@ func TestParseNaturalLanguage(t *testing.T) {
 			wantStart: time.Date(2024, 1, 1, 0, 0, 0, 0, time.Local),
 			wantEnd:   time.Date(2025, 1, 1, 0, 0, 0, 0, time.Local),
 		},
+		// New terms
+		{
+			input:     "next-week",
+			wantStart: time.Date(2025, 2, 3, 0, 0, 0, 0, time.Local),  // next Monday
+			wantEnd:   time.Date(2025, 2, 10, 0, 0, 0, 0, time.Local), // following Monday
+		},
+		{
+			input:     "next-month",
+			wantStart: time.Date(2025, 2, 1, 0, 0, 0, 0, time.Local),
+			wantEnd:   time.Date(2025, 3, 1, 0, 0, 0, 0, time.Local),
+		},
+		{
+			input:     "next-year",
+			wantStart: time.Date(2026, 1, 1, 0, 0, 0, 0, time.Local),
+			wantEnd:   time.Date(2027, 1, 1, 0, 0, 0, 0, time.Local),
+		},
+		{
+			input:     "monday",
+			wantStart: time.Date(2025, 2, 3, 0, 0, 0, 0, time.Local), // next Monday (ref is Wed)
+			wantEnd:   time.Date(2025, 2, 4, 0, 0, 0, 0, time.Local),
+		},
+		{
+			input:     "wednesday",
+			wantStart: time.Date(2025, 1, 29, 0, 0, 0, 0, time.Local), // today (ref is Wed)
+			wantEnd:   time.Date(2025, 1, 30, 0, 0, 0, 0, time.Local),
+		},
+		{
+			input:     "friday",
+			wantStart: time.Date(2025, 1, 31, 0, 0, 0, 0, time.Local),
+			wantEnd:   time.Date(2025, 2, 1, 0, 0, 0, 0, time.Local),
+		},
 	}
 
 	for _, tt := range tests {
