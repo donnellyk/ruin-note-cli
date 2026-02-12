@@ -621,14 +621,51 @@ func BenchmarkCollectTreeNotes_Deep_3x10(b *testing.B) {
 	benchmarkCollectTree(b, vlt, rootUUID, 0)
 }
 
+// --- Fast path tag search benchmarks (for comparison) ---
+
+func BenchmarkSearch_TagOnly_1000_FastPath(b *testing.B) {
+	vlt := setupBenchmarkVault(b, 1000)
+	benchmarkTagSearchFastPath(b, vlt)
+}
+
+func BenchmarkSearch_TagOnly_5000_Realistic_FastPath(b *testing.B) {
+	vlt := setupRealisticVault(b, 5000)
+	benchmarkTagSearchFastPath(b, vlt)
+}
+
+func BenchmarkSearch_TagOnly_10000_FastPath(b *testing.B) {
+	vlt := setupBenchmarkVault(b, 10000)
+	benchmarkTagSearchFastPath(b, vlt)
+}
+
+func BenchmarkSearch_TagOnly_1000_LargeNotes_FastPath(b *testing.B) {
+	vlt := setupLargeNoteVault(b, 1000)
+	benchmarkTagSearchFastPath(b, vlt)
+}
+
 // --- Helper functions ---
 
-func benchmarkTagSearch(b *testing.B, vlt *vault.Vault) {
-	matcher, _ := parseQuery("#daily", TagScopeAll)
+func benchmarkTagSearchFastPath(b *testing.B, vlt *vault.Vault) {
+	matcher, info, _ := parseQuery("#daily", TagScopeAll)
+	if info.NeedsBody {
+		b.Fatal("tag search should not need body")
+	}
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, err := searchNotesWithOptions(vlt, matcher, SearchOptions{})
+		_, err := searchNotesWithOptions(vlt, matcher, info, SearchOptions{})
+		if err != nil {
+			b.Fatalf("search failed: %v", err)
+		}
+	}
+}
+
+func benchmarkTagSearch(b *testing.B, vlt *vault.Vault) {
+	matcher, info, _ := parseQuery("#daily", TagScopeAll)
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		_, err := searchNotesWithOptions(vlt, matcher, info, SearchOptions{})
 		if err != nil {
 			b.Fatalf("search failed: %v", err)
 		}
@@ -636,11 +673,11 @@ func benchmarkTagSearch(b *testing.B, vlt *vault.Vault) {
 }
 
 func benchmarkTextSearch(b *testing.B, vlt *vault.Vault) {
-	matcher, _ := parseQuery("lorem", TagScopeAll)
+	matcher, info, _ := parseQuery("lorem", TagScopeAll)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, err := searchNotesWithOptions(vlt, matcher, SearchOptions{})
+		_, err := searchNotesWithOptions(vlt, matcher, info, SearchOptions{})
 		if err != nil {
 			b.Fatalf("search failed: %v", err)
 		}
@@ -648,11 +685,11 @@ func benchmarkTextSearch(b *testing.B, vlt *vault.Vault) {
 }
 
 func benchmarkParentSearch(b *testing.B, vlt *vault.Vault, parentValue string) {
-	matcher, _ := parseQuery("parent:"+parentValue, TagScopeAll)
+	matcher, info, _ := parseQuery("parent:"+parentValue, TagScopeAll)
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		_, err := searchNotesWithOptions(vlt, matcher, SearchOptions{})
+		_, err := searchNotesWithOptions(vlt, matcher, info, SearchOptions{})
 		if err != nil {
 			b.Fatalf("search failed: %v", err)
 		}

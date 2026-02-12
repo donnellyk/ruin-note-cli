@@ -556,7 +556,7 @@ func TestParseQuery(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := parseQuery(tt.query, TagScopeAll)
+			_, _, err := parseQuery(tt.query, TagScopeAll)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("parseQuery() error = %v, wantErr %v", err, tt.wantErr)
 			}
@@ -809,7 +809,7 @@ func TestDateFilters(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := parseTermMatcher(tt.term, TagScopeAll)
+			_, _, err := parseTermMatcher(tt.term, TagScopeAll)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("parseTermMatcher(%q) error = %v, wantErr %v", tt.term, err, tt.wantErr)
 			}
@@ -833,7 +833,7 @@ func TestParseQuery_WithFilters(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := parseQuery(tt.query, TagScopeAll)
+			_, _, err := parseQuery(tt.query, TagScopeAll)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("parseQuery(%q) error = %v, wantErr %v", tt.query, err, tt.wantErr)
 			}

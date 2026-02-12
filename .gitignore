@@ -31,5 +31,8 @@ vendor/
 .DS_Store
 Thumbs.db
 
+# Benchmarks
+benchmarks/
+
 # Debug
 __debug_bin*

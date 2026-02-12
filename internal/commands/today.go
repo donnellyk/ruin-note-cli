@@ -185,8 +185,14 @@ func runDateCommand(
 		}
 	}
 
-	// Find matching notes
-	results, err := searchNotes(vlt, matcher)
+	// Find matching notes (date matchers don't need body)
+	info := MatcherInfo{NeedsBody: false}
+	var opts SearchOptions
+	if flags.Limit > 0 && len(sortFields) == 0 {
+		opts.Limit = flags.Limit
+	}
+	opts.NeedFullNote = flags.Bulk || flags.First || flags.Edit || flags.Content || flags.Frontmatter != ""
+	results, err := searchNotesWithOptions(vlt, matcher, info, opts)
 	if err != nil {
 		return fmt.Errorf("search failed: %w", err)
 	}

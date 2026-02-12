@@ -486,8 +486,8 @@ func TestQuerySaveCmd_NonInteractive(t *testing.T) {
 func TestCountMatches(t *testing.T) {
 	vlt := setupTestVault(t)
 
-	matcher, _ := parseQuery("#daily", TagScopeAll)
-	count, err := countMatches(vlt, matcher)
+	matcher, info, _ := parseQuery("#daily", TagScopeAll)
+	count, err := countMatches(vlt, matcher, info)
 
 	if err != nil {
 		t.Fatalf("countMatches() error = %v", err)

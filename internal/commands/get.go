@@ -102,8 +102,8 @@ Returns an error if no match is found.`,
 					matcher = titleMatcher(titleFilter)
 				}
 
-				// Find matching notes
-				results, err := searchNotes(vlt, matcher)
+				// Find matching notes (path/title matchers don't need body, but get always outputs full note)
+				results, err := searchNotesWithOptions(vlt, matcher, MatcherInfo{NeedsBody: false}, SearchOptions{NeedFullNote: true})
 				if err != nil {
 					return fmt.Errorf("search failed: %w", err)
 				}

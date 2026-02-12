@@ -124,13 +124,20 @@ fast lookups, then extracts matching lines from the content body.`,
 			var results []PickResult
 
 			for _, path := range notePaths {
-				n, err := note.Load(path)
+				// Fast pre-filter: check inline tags from frontmatter only
+				fast, err := note.LoadFrontmatterOnly(path)
 				if err != nil {
 					continue
 				}
 
 				// Pre-filter: note must have at least one queried tag as inline
-				if !noteHasInlineTag(n, queryTags) {
+				if !noteHasInlineTag(fast, queryTags) {
+					continue
+				}
+
+				// Full load only for notes that pass pre-filter
+				n, err := note.Load(path)
+				if err != nil {
 					continue
 				}
 

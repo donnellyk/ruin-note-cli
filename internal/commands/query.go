@@ -72,13 +72,13 @@ See also:
 			query := args[1]
 
 			// Validate the query by parsing it
-			matcher, err := parseQuery(query, TagScopeAll)
+			matcher, info, err := parseQuery(query, TagScopeAll)
 			if err != nil {
 				return fmt.Errorf("invalid query: %w", err)
 			}
 
 			// Test the query to count matching notes
-			matchCount, err := countMatches(vlt, matcher)
+			matchCount, err := countMatches(vlt, matcher, info)
 			if err != nil {
 				return fmt.Errorf("failed to test query: %w", err)
 			}
@@ -359,7 +359,7 @@ See also:
 			}
 
 			// Parse query
-			matcher, err := parseQuery(query, TagScopeAll)
+			matcher, info, err := parseQuery(query, TagScopeAll)
 			if err != nil {
 				return fmt.Errorf("invalid query: %w", err)
 			}
@@ -374,7 +374,12 @@ See also:
 			}
 
 			// Find matching notes
-			results, err := searchNotes(vlt, matcher)
+			var opts SearchOptions
+			if flags.Limit > 0 && len(sortFields) == 0 {
+				opts.Limit = flags.Limit
+			}
+			opts.NeedFullNote = flags.Bulk || flags.First || flags.Edit || flags.Content || flags.Frontmatter != ""
+			results, err := searchNotesWithOptions(vlt, matcher, info, opts)
 			if err != nil {
 				return fmt.Errorf("search failed: %w", err)
 			}
@@ -429,7 +434,7 @@ See also:
 }
 
 // countMatches counts how many notes match the given query.
-func countMatches(vlt *vault.Vault, matcher QueryMatcher) (int, error) {
+func countMatches(vlt *vault.Vault, matcher QueryMatcher, info MatcherInfo) (int, error) {
 	notePaths, err := vlt.ListNotes()
 	if err != nil {
 		return 0, err
@@ -437,7 +442,12 @@ func countMatches(vlt *vault.Vault, matcher QueryMatcher) (int, error) {
 
 	count := 0
 	for _, path := range notePaths {
-		n, err := note.Load(path)
+		var n *note.Note
+		if !info.NeedsBody {
+			n, err = note.LoadFrontmatterOnly(path)
+		} else {
+			n, err = note.Load(path)
+		}
 		if err != nil {
 			continue
 		}

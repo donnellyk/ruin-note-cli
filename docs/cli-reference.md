@@ -286,20 +286,34 @@ Available keys: `vault_path`
 Scan and repair vault metadata.
 
 ```
-ruin doctor
+ruin doctor [paths...]
 ```
 
 | Flag | Short | Description |
 |------|-------|-------------|
 | `--dry-run` | `-n` | Show changes without writing |
 
-Operations:
+With no arguments, performs a full vault scan:
 - Generate UUIDs for notes missing one
 - Reindex tags from document content
 - Resolve [[wiki links]] and rebuild linked-cards
 - Rebuild `.ruin/tags.yml`
 - Rebuild `.ruin/titles.json`
 - Detect orphaned parent references
+
+With file path arguments, reindexes only the specified files:
+- Same per-file operations (UUID, tags, linked-cards)
+- Incremental index updates (no full rebuild)
+- Useful after manual edits outside of ruin
+
+```bash
+# Full vault scan
+ruin doctor
+
+# Reindex specific files after manual edits
+ruin doctor notes/edited-file.md
+ruin doctor file1.md file2.md
+```
 
 ### parent
 

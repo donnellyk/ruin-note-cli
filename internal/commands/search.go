@@ -148,7 +148,7 @@ See also:
 
 			// Parse query
 			query := strings.Join(args, " ")
-			matcher, err := parseQuery(query, tagScope)
+			matcher, info, err := parseQuery(query, tagScope)
 			if err != nil {
 				return fmt.Errorf("invalid query: %w", err)
 			}
@@ -168,9 +168,11 @@ See also:
 			if flags.Limit > 0 && len(sortFields) == 0 {
 				opts.Limit = flags.Limit
 			}
+			// Need full note content for output modes that access body/extra
+			opts.NeedFullNote = flags.Bulk || flags.First || flags.Edit || flags.Content || flags.Frontmatter != ""
 
 			// Find matching notes
-			results, err := searchNotesWithOptions(vlt, matcher, opts)
+			results, err := searchNotesWithOptions(vlt, matcher, info, opts)
 			if err != nil {
 				return fmt.Errorf("search failed: %w", err)
 			}
@@ -235,6 +237,11 @@ See also:
 // QueryMatcher is a function that tests if a note matches the query.
 type QueryMatcher func(n *note.Note) bool
 
+// MatcherInfo describes matcher properties for optimization.
+type MatcherInfo struct {
+	NeedsBody bool // true if the matcher needs full note content (e.g., text search)
+}
+
 // TagScope controls which tag fields are checked during tag search.
 type TagScope int
 
@@ -246,15 +253,16 @@ const (
 
 // parseQuery parses a search query string into a matcher function.
 // MVP supports: tag search, text search, && (AND), space (implicit AND)
-func parseQuery(query string, tagScope TagScope) (QueryMatcher, error) {
+func parseQuery(query string, tagScope TagScope) (QueryMatcher, MatcherInfo, error) {
 	query = strings.TrimSpace(query)
 	if query == "" {
-		return nil, fmt.Errorf("empty query")
+		return nil, MatcherInfo{}, fmt.Errorf("empty query")
 	}
 
 	// Split by && first
 	parts := strings.Split(query, "&&")
 	var matchers []QueryMatcher
+	info := MatcherInfo{}
 
 	for _, part := range parts {
 		part = strings.TrimSpace(part)
@@ -265,16 +273,19 @@ func parseQuery(query string, tagScope TagScope) (QueryMatcher, error) {
 		// Split by space for implicit AND
 		terms := splitTerms(part)
 		for _, term := range terms {
-			m, err := parseTermMatcher(term, tagScope)
+			m, termInfo, err := parseTermMatcher(term, tagScope)
 			if err != nil {
-				return nil, err
+				return nil, MatcherInfo{}, err
 			}
 			matchers = append(matchers, m)
+			if termInfo.NeedsBody {
+				info.NeedsBody = true
+			}
 		}
 	}
 
 	if len(matchers) == 0 {
-		return nil, fmt.Errorf("no valid search terms")
+		return nil, MatcherInfo{}, fmt.Errorf("no valid search terms")
 	}
 
 	// Combine all matchers with AND
@@ -285,7 +296,7 @@ func parseQuery(query string, tagScope TagScope) (QueryMatcher, error) {
 			}
 		}
 		return true
-	}, nil
+	}, info, nil
 }
 
 // splitTerms splits a query part into individual terms.
@@ -362,15 +373,18 @@ func splitTerms(part string) []string {
 }
 
 // parseTermMatcher creates a matcher for a single search term.
-func parseTermMatcher(term string, tagScope TagScope) (QueryMatcher, error) {
+func parseTermMatcher(term string, tagScope TagScope) (QueryMatcher, MatcherInfo, error) {
 	term = strings.TrimSpace(term)
 	if term == "" {
-		return nil, fmt.Errorf("empty term")
+		return nil, MatcherInfo{}, fmt.Errorf("empty term")
 	}
+
+	fmOnly := MatcherInfo{NeedsBody: false}
+	needsBody := MatcherInfo{NeedsBody: true}
 
 	// Tag search
 	if strings.HasPrefix(term, "#") {
-		return tagMatcher(term, tagScope), nil
+		return tagMatcher(term, tagScope), fmOnly, nil
 	}
 
 	// Check for filter prefixes (field:value)
@@ -380,29 +394,35 @@ func parseTermMatcher(term string, tagScope TagScope) (QueryMatcher, error) {
 
 		switch field {
 		case "created":
-			return createdDateMatcher(value)
+			m, err := createdDateMatcher(value)
+			return m, fmOnly, err
 		case "updated":
-			return updatedDateMatcher(value)
+			m, err := updatedDateMatcher(value)
+			return m, fmOnly, err
 		case "before":
-			return beforeDateMatcher(value)
+			m, err := beforeDateMatcher(value)
+			return m, fmOnly, err
 		case "after":
-			return afterDateMatcher(value)
+			m, err := afterDateMatcher(value)
+			return m, fmOnly, err
 		case "on":
-			return createdDateMatcher(value) // alias for created:
+			m, err := createdDateMatcher(value) // alias for created:
+			return m, fmOnly, err
 		case "between":
-			return betweenDateMatcher(value)
+			m, err := betweenDateMatcher(value)
+			return m, fmOnly, err
 		case "title":
-			return titleMatcher(value), nil
+			return titleMatcher(value), fmOnly, nil
 		case "path":
-			return pathMatcher(value), nil
+			return pathMatcher(value), fmOnly, nil
 		case "parent":
-			return parentMatcher(value), nil
+			return parentMatcher(value), fmOnly, nil
 		}
 		// If not a recognized filter, fall through to text search
 	}
 
 	// Text search (case-insensitive)
-	return textMatcher(term), nil
+	return textMatcher(term), needsBody, nil
 }
 
 // tagMatcher returns a matcher that checks if a note has the given tag.
@@ -592,16 +612,22 @@ type SearchOptions struct {
 	// Limit is the maximum number of results to return (0 = unlimited).
 	// When set and no sorting is requested, enables early termination.
 	Limit int
+	// NeedFullNote indicates that matched notes require full content loaded.
+	// When false and MatcherInfo.NeedsBody is false, the fast path skips
+	// full file reads for non-matching notes and defers full load for matches.
+	NeedFullNote bool
 }
 
 // searchNotes finds all notes matching the query.
-func searchNotes(vlt *vault.Vault, matcher QueryMatcher) ([]SearchResult, error) {
-	return searchNotesWithOptions(vlt, matcher, SearchOptions{})
+func searchNotes(vlt *vault.Vault, matcher QueryMatcher, info MatcherInfo) ([]SearchResult, error) {
+	return searchNotesWithOptions(vlt, matcher, info, SearchOptions{})
 }
 
 // searchNotesWithOptions finds notes with performance optimizations.
 // Uses concurrent file reading for improved performance.
-func searchNotesWithOptions(vlt *vault.Vault, matcher QueryMatcher, opts SearchOptions) ([]SearchResult, error) {
+// When info.NeedsBody is false, uses LoadFrontmatterOnly for the initial match,
+// then defers to full Load only for matches that need content.
+func searchNotesWithOptions(vlt *vault.Vault, matcher QueryMatcher, info MatcherInfo, opts SearchOptions) ([]SearchResult, error) {
 	notePaths, err := vlt.ListNotes()
 	if err != nil {
 		return nil, err
@@ -633,12 +659,27 @@ func searchNotesWithOptions(vlt *vault.Vault, matcher QueryMatcher, opts SearchO
 	processNote := func() {
 		defer wg.Done()
 		for path := range pathsChan {
-			n, err := note.Load(path)
-			if err != nil {
+			var n *note.Note
+			var loadErr error
+
+			if !info.NeedsBody {
+				n, loadErr = note.LoadFrontmatterOnly(path)
+			} else {
+				n, loadErr = note.Load(path)
+			}
+			if loadErr != nil {
 				continue
 			}
 
 			if matcher(n) {
+				// If we matched on frontmatter-only but need full content for output
+				if !info.NeedsBody && opts.NeedFullNote {
+					full, err := note.Load(path)
+					if err != nil {
+						continue
+					}
+					n = full
+				}
 				resultsChan <- SearchResult{
 					Path:   path,
 					UUID:   n.UUID,
