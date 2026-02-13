@@ -470,7 +470,7 @@ ruin compose <note>
 | Flag | Short | Description |
 |------|-------|-------------|
 | `--depth` | | Max recursion depth (0 = unlimited) |
-| `--strip-title` | | Remove title header from children |
+| `--strip-title` | | Remove title header from root note |
 | `--strip-global-tags` | | Remove global tag lines |
 | `--sort` | | Child ordering: `title` (default), `created`, or `order` |
 | `--edit` | `-e` | Open tree notes in `$EDITOR` |

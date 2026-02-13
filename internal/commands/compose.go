@@ -110,7 +110,7 @@ Children are sorted by title by default.`,
 	}
 
 	cmd.Flags().IntVar(&maxDepth, "depth", 0, "max recursion depth (0 = unlimited)")
-	cmd.Flags().BoolVar(&stripTitle, "strip-title", false, "remove H1 from children")
+	cmd.Flags().BoolVar(&stripTitle, "strip-title", false, "remove H1 title from root note")
 	cmd.Flags().BoolVar(&stripGlobalTag, "strip-global-tags", false, "remove global tag lines")
 	cmd.Flags().StringVar(&sortBy, "sort", "title", "child ordering: title, created, or order")
 	cmd.Flags().BoolVarP(&edit, "edit", "e", false, "open tree notes in $EDITOR")
@@ -226,8 +226,8 @@ func composeText(vlt *vault.Vault, index *vault.TitlesIndex, childrenMap map[str
 
 	content := n.Content
 
-	// Strip title from children (not root)
-	if depth > 0 && stripTitle {
+	// Strip title from root only
+	if depth == 0 && stripTitle {
 		content = note.StripTitle(content)
 	}
 
@@ -305,7 +305,7 @@ func composeJSON(vlt *vault.Vault, index *vault.TitlesIndex, childrenMap map[str
 	}
 
 	content := n.Content
-	if depth > 0 && stripTitle {
+	if depth == 0 && stripTitle {
 		content = note.StripTitle(content)
 	}
 	if stripGlobalTags {
