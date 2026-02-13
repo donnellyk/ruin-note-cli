@@ -90,14 +90,25 @@ No parent.`,
 	return vlt
 }
 
-func TestParentSet_Basic(t *testing.T) {
+// setParentHelper uses "note set --parent" to set a parent on a note.
+func setParentHelper(t *testing.T, vlt *vault.Vault, childID, parentID string) {
+	t.Helper()
+	jsonOut := false
+	cmd := NewNoteCmd(func() *vault.Vault { return vlt }, &jsonOut)
+	cmd.SetArgs([]string{"set", childID, "--parent", parentID, "--force"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("note set --parent error = %v", err)
+	}
+}
+
+func TestNoteSet_Parent_Basic(t *testing.T) {
 	vlt := setupParentTestVault(t)
 	jsonOut := false
-	cmd := NewParentCmd(func() *vault.Vault { return vlt }, &jsonOut)
+	cmd := NewNoteCmd(func() *vault.Vault { return vlt }, &jsonOut)
 
-	cmd.SetArgs([]string{"set", "uuid-child", "uuid-root"})
+	cmd.SetArgs([]string{"set", "uuid-child", "--parent", "uuid-root"})
 	if err := cmd.Execute(); err != nil {
-		t.Fatalf("parent set error = %v", err)
+		t.Fatalf("note set --parent error = %v", err)
 	}
 
 	// Verify parent was set
@@ -113,12 +124,12 @@ func TestParentSet_Basic(t *testing.T) {
 	}
 }
 
-func TestParentSet_SelfReference(t *testing.T) {
+func TestNoteSet_Parent_SelfReference(t *testing.T) {
 	vlt := setupParentTestVault(t)
 	jsonOut := false
-	cmd := NewParentCmd(func() *vault.Vault { return vlt }, &jsonOut)
+	cmd := NewNoteCmd(func() *vault.Vault { return vlt }, &jsonOut)
 
-	cmd.SetArgs([]string{"set", "uuid-root", "uuid-root"})
+	cmd.SetArgs([]string{"set", "uuid-root", "--parent", "uuid-root"})
 	err := cmd.Execute()
 	if err == nil {
 		t.Fatal("expected self-reference error")
@@ -128,24 +139,20 @@ func TestParentSet_SelfReference(t *testing.T) {
 	}
 }
 
-func TestParentSet_Cycle(t *testing.T) {
+func TestNoteSet_Parent_Cycle(t *testing.T) {
 	vlt := setupParentTestVault(t)
 	jsonOut := false
-	cmd := NewParentCmd(func() *vault.Vault { return vlt }, &jsonOut)
 
 	// Set up chain: child -> root
-	cmd.SetArgs([]string{"set", "uuid-child", "uuid-root"})
-	cmd.Execute()
+	setParentHelper(t, vlt, "uuid-child", "uuid-root")
 
 	// Set up: grandchild -> child
-	cmd2 := NewParentCmd(func() *vault.Vault { return vlt }, &jsonOut)
-	cmd2.SetArgs([]string{"set", "uuid-grandchild", "uuid-child"})
-	cmd2.Execute()
+	setParentHelper(t, vlt, "uuid-grandchild", "uuid-child")
 
-	// Try to create cycle: root -> grandchild (would make root -> grandchild -> child -> root)
-	cmd3 := NewParentCmd(func() *vault.Vault { return vlt }, &jsonOut)
-	cmd3.SetArgs([]string{"set", "uuid-root", "uuid-grandchild"})
-	err := cmd3.Execute()
+	// Try to create cycle: root -> grandchild
+	cmd := NewNoteCmd(func() *vault.Vault { return vlt }, &jsonOut)
+	cmd.SetArgs([]string{"set", "uuid-root", "--parent", "uuid-grandchild"})
+	err := cmd.Execute()
 	if err == nil {
 		t.Fatal("expected cycle detection error")
 	}
@@ -154,28 +161,26 @@ func TestParentSet_Cycle(t *testing.T) {
 	}
 }
 
-func TestParentSet_OverwriteRequiresForce(t *testing.T) {
+func TestNoteSet_Parent_OverwriteRequiresForce(t *testing.T) {
 	vlt := setupParentTestVault(t)
 	jsonOut := false
 
 	// Set initial parent
-	cmd := NewParentCmd(func() *vault.Vault { return vlt }, &jsonOut)
-	cmd.SetArgs([]string{"set", "uuid-child", "uuid-root"})
-	cmd.Execute()
+	setParentHelper(t, vlt, "uuid-child", "uuid-root")
 
 	// Try to overwrite without --force
-	cmd2 := NewParentCmd(func() *vault.Vault { return vlt }, &jsonOut)
-	cmd2.SetArgs([]string{"set", "uuid-child", "uuid-orphan"})
-	err := cmd2.Execute()
+	cmd := NewNoteCmd(func() *vault.Vault { return vlt }, &jsonOut)
+	cmd.SetArgs([]string{"set", "uuid-child", "--parent", "uuid-orphan"})
+	err := cmd.Execute()
 	if err == nil {
 		t.Fatal("expected overwrite error without --force")
 	}
 
 	// With --force
-	cmd3 := NewParentCmd(func() *vault.Vault { return vlt }, &jsonOut)
-	cmd3.SetArgs([]string{"set", "--force", "uuid-child", "uuid-orphan"})
-	if err := cmd3.Execute(); err != nil {
-		t.Fatalf("parent set --force error = %v", err)
+	cmd2 := NewNoteCmd(func() *vault.Vault { return vlt }, &jsonOut)
+	cmd2.SetArgs([]string{"set", "uuid-child", "--parent", "uuid-orphan", "--force"})
+	if err := cmd2.Execute(); err != nil {
+		t.Fatalf("note set --parent --force error = %v", err)
 	}
 
 	n, _ := ResolveNote(vlt, "uuid-child")
@@ -188,19 +193,17 @@ func TestParentGet_WithParent(t *testing.T) {
 	vlt := setupParentTestVault(t)
 	jsonOut := true
 
-	// Set parent first
-	cmd := NewParentCmd(func() *vault.Vault { return vlt }, &jsonOut)
-	cmd.SetArgs([]string{"set", "uuid-child", "uuid-root"})
-	cmd.Execute()
+	// Set parent first via note set
+	setParentHelper(t, vlt, "uuid-child", "uuid-root")
 
 	// Get parent
-	cmd2 := NewParentCmd(func() *vault.Vault { return vlt }, &jsonOut)
+	cmd := NewParentCmd(func() *vault.Vault { return vlt }, &jsonOut)
 	oldStdout := os.Stdout
 	r, w, _ := os.Pipe()
 	os.Stdout = w
 
-	cmd2.SetArgs([]string{"get", "uuid-child"})
-	err := cmd2.Execute()
+	cmd.SetArgs([]string{"get", "uuid-child"})
+	err := cmd.Execute()
 
 	w.Close()
 	os.Stdout = oldStdout
@@ -239,20 +242,18 @@ func TestParentGet_NoParent(t *testing.T) {
 	}
 }
 
-func TestParentRemove(t *testing.T) {
+func TestNoteSet_NoParent(t *testing.T) {
 	vlt := setupParentTestVault(t)
 	jsonOut := false
 
 	// Set parent
-	cmd := NewParentCmd(func() *vault.Vault { return vlt }, &jsonOut)
-	cmd.SetArgs([]string{"set", "uuid-child", "uuid-root"})
-	cmd.Execute()
+	setParentHelper(t, vlt, "uuid-child", "uuid-root")
 
-	// Remove parent
-	cmd2 := NewParentCmd(func() *vault.Vault { return vlt }, &jsonOut)
-	cmd2.SetArgs([]string{"remove", "uuid-child"})
-	if err := cmd2.Execute(); err != nil {
-		t.Fatalf("parent remove error = %v", err)
+	// Remove parent via note set --no-parent
+	cmd := NewNoteCmd(func() *vault.Vault { return vlt }, &jsonOut)
+	cmd.SetArgs([]string{"set", "uuid-child", "--no-parent"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("note set --no-parent error = %v", err)
 	}
 
 	n, _ := ResolveNote(vlt, "uuid-child")
@@ -261,39 +262,22 @@ func TestParentRemove(t *testing.T) {
 	}
 }
 
-func TestParentRemove_NoParent(t *testing.T) {
-	vlt := setupParentTestVault(t)
-	jsonOut := false
-	cmd := NewParentCmd(func() *vault.Vault { return vlt }, &jsonOut)
-
-	cmd.SetArgs([]string{"remove", "uuid-root"})
-	err := cmd.Execute()
-	if err == nil {
-		t.Fatal("expected error removing parent from note with no parent")
-	}
-}
-
 func TestParentChildren(t *testing.T) {
 	vlt := setupParentTestVault(t)
 	jsonOut := true
 
 	// Set up hierarchy: root -> child, root -> orphan
-	cmd := NewParentCmd(func() *vault.Vault { return vlt }, &jsonOut)
-	cmd.SetArgs([]string{"set", "uuid-child", "uuid-root"})
-	cmd.Execute()
-
-	cmd2 := NewParentCmd(func() *vault.Vault { return vlt }, &jsonOut)
-	cmd2.SetArgs([]string{"set", "uuid-orphan", "uuid-root", "--force"})
-	cmd2.Execute()
+	setParentHelper(t, vlt, "uuid-child", "uuid-root")
+	setParentHelper(t, vlt, "uuid-orphan", "uuid-root")
 
 	// List children
-	cmd3 := NewParentCmd(func() *vault.Vault { return vlt }, &jsonOut)
+	cmd := NewParentCmd(func() *vault.Vault { return vlt }, &jsonOut)
 	oldStdout := os.Stdout
 	r, w, _ := os.Pipe()
 	os.Stdout = w
 
-	cmd3.SetArgs([]string{"children", "uuid-root"})
-	err := cmd3.Execute()
+	cmd.SetArgs([]string{"children", "uuid-root"})
+	err := cmd.Execute()
 
 	w.Close()
 	os.Stdout = oldStdout
@@ -319,22 +303,17 @@ func TestParentChildren_Recursive(t *testing.T) {
 	jsonOut := true
 
 	// root -> child -> grandchild
-	cmd := NewParentCmd(func() *vault.Vault { return vlt }, &jsonOut)
-	cmd.SetArgs([]string{"set", "uuid-child", "uuid-root"})
-	cmd.Execute()
-
-	cmd2 := NewParentCmd(func() *vault.Vault { return vlt }, &jsonOut)
-	cmd2.SetArgs([]string{"set", "uuid-grandchild", "uuid-child"})
-	cmd2.Execute()
+	setParentHelper(t, vlt, "uuid-child", "uuid-root")
+	setParentHelper(t, vlt, "uuid-grandchild", "uuid-child")
 
 	// List recursive children of root
-	cmd3 := NewParentCmd(func() *vault.Vault { return vlt }, &jsonOut)
+	cmd := NewParentCmd(func() *vault.Vault { return vlt }, &jsonOut)
 	oldStdout := os.Stdout
 	r, w, _ := os.Pipe()
 	os.Stdout = w
 
-	cmd3.SetArgs([]string{"children", "--recursive", "uuid-root"})
-	err := cmd3.Execute()
+	cmd.SetArgs([]string{"children", "--recursive", "uuid-root"})
+	err := cmd.Execute()
 
 	w.Close()
 	os.Stdout = oldStdout
@@ -363,22 +342,17 @@ func TestParentTree(t *testing.T) {
 	jsonOut := false
 
 	// Set up hierarchy
-	cmd := NewParentCmd(func() *vault.Vault { return vlt }, &jsonOut)
-	cmd.SetArgs([]string{"set", "uuid-child", "uuid-root"})
-	cmd.Execute()
-
-	cmd2 := NewParentCmd(func() *vault.Vault { return vlt }, &jsonOut)
-	cmd2.SetArgs([]string{"set", "uuid-grandchild", "uuid-child"})
-	cmd2.Execute()
+	setParentHelper(t, vlt, "uuid-child", "uuid-root")
+	setParentHelper(t, vlt, "uuid-grandchild", "uuid-child")
 
 	// Full forest
-	cmd3 := NewParentCmd(func() *vault.Vault { return vlt }, &jsonOut)
+	cmd := NewParentCmd(func() *vault.Vault { return vlt }, &jsonOut)
 	oldStdout := os.Stdout
 	r, w, _ := os.Pipe()
 	os.Stdout = w
 
-	cmd3.SetArgs([]string{"tree"})
-	err := cmd3.Execute()
+	cmd.SetArgs([]string{"tree"})
+	err := cmd.Execute()
 
 	w.Close()
 	os.Stdout = oldStdout

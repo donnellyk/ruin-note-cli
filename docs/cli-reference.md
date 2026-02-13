@@ -327,21 +327,63 @@ ruin doctor notes/edited-file.md
 ruin doctor file1.md file2.md
 ```
 
-### parent
+### note
 
-Manage parent-child note relationships.
+Mutate individual notes (metadata, content, merging).
 
-#### parent set
+#### note set
 
 ```
-ruin parent set <child> <parent>
+ruin note set <note> [flags]
 ```
 
 | Flag | Short | Description |
 |------|-------|-------------|
-| `--force` | `-f` | Skip confirmation when overwriting existing parent |
+| `--add-tag` | | Add a global tag (repeatable, `#` auto-added if missing) |
+| `--remove-tag` | | Remove a tag from all occurrences (repeatable) |
+| `--order` | | Set `order` frontmatter field |
+| `--no-order` | | Unset `order` field |
+| `--field` | | Set extra frontmatter field (`key=value`, empty value deletes) |
+| `--parent` | | Set parent (UUID, title, path, or bookmark) |
+| `--no-parent` | | Remove parent |
+| `--force` | `-f` | Skip confirmation |
 
-Both `<child>` and `<parent>` are resolved via UUID, title substring, or path substring. Validates no self-reference or cycle.
+At least one mutation flag required. Replaces `parent set` and `parent remove`.
+
+#### note append
+
+```
+ruin note append <note> [text] [flags]
+```
+
+| Flag | Short | Description |
+|------|-------|-------------|
+| `--line` | | Target content line (1-indexed, after frontmatter) |
+| `--suffix` | | Append to end of line (requires `--line`) |
+| `--raw-line` | | Line numbers count from top of file (including frontmatter) |
+| `--stdin` | | Read text from stdin |
+| `--force` | `-f` | Skip confirmation |
+
+Without `--line`: appends at end. With `--line N`: inserts before line N. With `--line N --suffix`: appends to end of line N. With `--raw-line`: line numbers include frontmatter lines.
+
+#### note merge
+
+```
+ruin note merge <target> <source> [flags]
+```
+
+| Flag | Short | Description |
+|------|-------|-------------|
+| `--delete-source` | | Delete source note after merge |
+| `--strip-title` | | Strip source's H1 title before appending |
+| `--dry-run` | `-n` | Preview changes without writing |
+| `--force` | `-f` | Skip confirmation |
+
+Merges source into target: frontmatter Extra fields (target takes precedence), global tags (deduplicated), content appended. Source's children are reparented to target.
+
+### parent
+
+Read-only parent-child queries and bookmark management.
 
 #### parent get
 
@@ -350,14 +392,6 @@ ruin parent get <note>
 ```
 
 Shows the parent of a note. Returns the parent's path (default) or JSON `{uuid, title, path}`.
-
-#### parent remove
-
-```
-ruin parent remove <note>
-```
-
-Removes the parent relationship from a note.
 
 #### parent children
 

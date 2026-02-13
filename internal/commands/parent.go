@@ -16,107 +16,17 @@ import (
 func NewParentCmd(getVault func() *vault.Vault, jsonOutput *bool) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "parent",
-		Short: "Manage parent-child note relationships",
-		Long:  `Commands for setting, viewing, and removing parent-child relationships between notes.`,
+		Short: "Query parent-child relationships and manage bookmarks",
+		Long:  `Commands for viewing parent-child relationships and managing named parent bookmarks.`,
 	}
 
-	cmd.AddCommand(newParentSetCmd(getVault, jsonOutput))
 	cmd.AddCommand(newParentGetCmd(getVault, jsonOutput))
-	cmd.AddCommand(newParentRemoveCmd(getVault, jsonOutput))
 	cmd.AddCommand(newParentChildrenCmd(getVault, jsonOutput))
 	cmd.AddCommand(newParentTreeCmd(getVault, jsonOutput))
 	cmd.AddCommand(newParentSaveCmd(getVault, jsonOutput))
 	cmd.AddCommand(newParentListCmd(getVault, jsonOutput))
 	cmd.AddCommand(newParentDeleteCmd(getVault, jsonOutput))
 
-	return cmd
-}
-
-func newParentSetCmd(getVault func() *vault.Vault, jsonOutput *bool) *cobra.Command {
-	var force bool
-
-	cmd := &cobra.Command{
-		Use:   "set <child> <parent>",
-		Short: "Set the parent of a note",
-		Long: `Set a parent-child relationship between two notes.
-
-Both <child> and <parent> can be a UUID, title substring, or path substring.
-
-Validates that:
-  - The child and parent are different notes
-  - No cycle would be created`,
-		Example: `  ruin parent set "My Child Note" "My Parent Note"
-  ruin parent set <child-uuid> <parent-uuid>`,
-		Args: cobra.ExactArgs(2),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			vlt := getVault()
-			if vlt == nil {
-				return fmt.Errorf("vault not configured")
-			}
-
-			child, err := ResolveNote(vlt, args[0])
-			if err != nil {
-				return fmt.Errorf("child: %w", err)
-			}
-
-			parent, err := ResolveNote(vlt, args[1])
-			if err != nil {
-				return fmt.Errorf("parent: %w", err)
-			}
-
-			// Self-reference check
-			if child.UUID == parent.UUID {
-				return fmt.Errorf("a note cannot be its own parent")
-			}
-
-			// Cycle detection
-			index, err := vlt.LoadTitles()
-			if err != nil {
-				return fmt.Errorf("failed to load titles index: %w", err)
-			}
-			if err := detectCycle(index, child.UUID, parent.UUID); err != nil {
-				return err
-			}
-
-			// Check existing parent
-			if child.Parent != "" && child.Parent != parent.UUID && !force {
-				existingTitle := child.Parent
-				if entry, ok := index.Titles[child.Parent]; ok {
-					existingTitle = entry.Title
-				}
-				return fmt.Errorf("note already has parent %q (use --force to overwrite)", existingTitle)
-			}
-
-			child.Parent = parent.UUID
-			child.SetTimestamps()
-			if err := child.Save(); err != nil {
-				return fmt.Errorf("failed to save: %w", err)
-			}
-
-			// Update titles index
-			if err := vlt.UpdateTitleEntry(child.UUID, child.Title, child.FilePath, child.Parent); err != nil {
-				fmt.Fprintf(os.Stderr, "warning: failed to update titles index: %v\n", err)
-			}
-
-			if *jsonOutput {
-				output := struct {
-					Child  string `json:"child"`
-					Parent string `json:"parent"`
-				}{
-					Child:  child.UUID,
-					Parent: parent.UUID,
-				}
-				enc := json.NewEncoder(os.Stdout)
-				enc.SetIndent("", "  ")
-				return enc.Encode(output)
-			}
-
-			fmt.Fprintf(os.Stderr, "Set parent of %q to %q\n", child.Title, parent.Title)
-			return nil
-		},
-	}
-
-	cmd.Flags().BoolVarP(&force, "force", "f", false, "skip confirmation when overwriting existing parent")
 	return cmd
 }
 
@@ -178,56 +88,6 @@ func newParentGetCmd(getVault func() *vault.Vault, jsonOutput *bool) *cobra.Comm
 			}
 
 			fmt.Println(entry.Path)
-			return nil
-		},
-	}
-
-	return cmd
-}
-
-func newParentRemoveCmd(getVault func() *vault.Vault, jsonOutput *bool) *cobra.Command {
-	cmd := &cobra.Command{
-		Use:   "remove <note>",
-		Short: "Remove the parent of a note",
-		Example: `  ruin parent remove "My Note"
-  ruin parent remove <uuid>`,
-		Args: cobra.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			vlt := getVault()
-			if vlt == nil {
-				return fmt.Errorf("vault not configured")
-			}
-
-			n, err := ResolveNote(vlt, args[0])
-			if err != nil {
-				return err
-			}
-
-			if n.Parent == "" {
-				return fmt.Errorf("note %q has no parent", n.Title)
-			}
-
-			n.Parent = ""
-			n.SetTimestamps()
-			if err := n.Save(); err != nil {
-				return fmt.Errorf("failed to save: %w", err)
-			}
-
-			if err := vlt.UpdateTitleEntry(n.UUID, n.Title, n.FilePath, ""); err != nil {
-				fmt.Fprintf(os.Stderr, "warning: failed to update titles index: %v\n", err)
-			}
-
-			if *jsonOutput {
-				output := struct {
-					UUID    string `json:"uuid"`
-					Removed bool   `json:"removed"`
-				}{UUID: n.UUID, Removed: true}
-				enc := json.NewEncoder(os.Stdout)
-				enc.SetIndent("", "  ")
-				return enc.Encode(output)
-			}
-
-			fmt.Fprintf(os.Stderr, "Removed parent from %q\n", n.Title)
 			return nil
 		},
 	}
