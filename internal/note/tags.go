@@ -14,6 +14,9 @@ var (
 
 	// spacedTagPattern is not used as a simple regex due to complexity.
 	// Instead, we detect spaced tags programmatically.
+
+	// markdownLinkPattern matches [text](url) to exclude tag-like strings inside links.
+	markdownLinkPattern = regexp.MustCompile(`\[[^\]]*\]\([^)]*\)`)
 )
 
 // TagMatch represents a found tag with its position.
@@ -35,9 +38,22 @@ func ExtractTagMatches(content string) []TagMatch {
 	return findAllTags(content)
 }
 
+// insideLinkRanges returns true if position pos falls within any of the excluded ranges.
+func insideLinkRanges(pos int, ranges [][2]int) bool {
+	for _, r := range ranges {
+		if pos >= r[0] && pos < r[1] {
+			return true
+		}
+	}
+	return false
+}
+
 func findAllTags(content string) []TagMatch {
 	var matches []TagMatch
 	seen := make(map[int]bool) // Track start positions to avoid overlaps
+
+	// Find markdown link regions [text](url) to exclude from tag extraction
+	linkRanges := findMarkdownLinkRanges(content)
 
 	// Find spaced tags first (they take precedence)
 	// A spaced tag: #content with space#
@@ -47,6 +63,11 @@ func findAllTags(content string) []TagMatch {
 	// - Must NOT contain another # in the content (which would indicate a broken tag)
 	for i := 0; i < len(content); i++ {
 		if content[i] != '#' {
+			continue
+		}
+
+		// Skip if inside a markdown link
+		if insideLinkRanges(i, linkRanges) {
 			continue
 		}
 
@@ -66,12 +87,12 @@ func findAllTags(content string) []TagMatch {
 		}
 	}
 
-	// Find simple tags, skip if overlapping with spaced tags
+	// Find simple tags, skip if overlapping with spaced tags or inside links
 	simpleMatches := simpleTagPattern.FindAllStringIndex(content, -1)
 	for _, loc := range simpleMatches {
 		start, end := loc[0], loc[1]
-		if seen[start] {
-			continue // Skip if this position is part of a spaced tag
+		if seen[start] || insideLinkRanges(start, linkRanges) {
+			continue
 		}
 		tag := content[start:end]
 		matches = append(matches, TagMatch{
@@ -82,6 +103,16 @@ func findAllTags(content string) []TagMatch {
 	}
 
 	return matches
+}
+
+// findMarkdownLinkRanges returns byte ranges for all [text](url) markdown links.
+func findMarkdownLinkRanges(content string) [][2]int {
+	locs := markdownLinkPattern.FindAllStringIndex(content, -1)
+	ranges := make([][2]int, len(locs))
+	for i, loc := range locs {
+		ranges[i] = [2]int{loc[0], loc[1]}
+	}
+	return ranges
 }
 
 // tryParseSpacedTag attempts to parse a spaced tag starting at position start.

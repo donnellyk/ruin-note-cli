@@ -124,6 +124,54 @@ func TestExtractTags_SpacedTagEdgeCases(t *testing.T) {
 	}
 }
 
+func TestExtractTags_MarkdownLinks(t *testing.T) {
+	tests := []struct {
+		name    string
+		content string
+		want    []string
+	}{
+		{
+			name:    "tag-like text inside link text and URL",
+			content: `Related: [Issue #53: Streaming support](https://github.com/acme/platform/issues/53) #done`,
+			want:    []string{"#done"},
+		},
+		{
+			name:    "tag inside link text only",
+			content: `See [#foo docs](https://example.com) for details`,
+			want:    nil,
+		},
+		{
+			name:    "tag inside URL only",
+			content: `See [docs](https://example.com/#section) #ref`,
+			want:    []string{"#ref"},
+		},
+		{
+			name:    "multiple links with real tags",
+			content: `[#1](url1) and [#2](url2) #real`,
+			want:    []string{"#real"},
+		},
+		{
+			name:    "link with no tag-like content",
+			content: `See [docs](https://example.com) #tag`,
+			want:    []string{"#tag"},
+		},
+		{
+			name:    "bare hash in link text",
+			content: `Check [issue #42](https://github.com/org/repo/issues/42)`,
+			want:    nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := ExtractTags(tt.content)
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("ExtractTags() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestClassifyTags(t *testing.T) {
 	content := `# My Note
 #global1 #global2
@@ -251,6 +299,7 @@ func TestIsTagOnlyLine(t *testing.T) {
 		{"#foo, #bar, #baz", true},
 		{"Some text #foo", false},
 		{"#foo some text", false},
+		{"[Issue #53](https://github.com/issues/53)", false},
 		{"", false},
 		{"   ", false},
 	}
