@@ -6,8 +6,8 @@ A Zettelkasten-inspired note-taking CLI written in Go.
 - This is a CLI with downstream dependencies. Avoid breaking changes unless necessary. Highlight breaking changes.
 - Do not edit `Todos` section in "IMPLEMENTATION_PLAN.md`
 - When running `go test` directly, always set `EDITOR=true` to prevent editor popups (or use `make test` which does this automatically).
-- When running the `ruin` binary for manual testing, always use `--vault /tmp/ruin-test-vault` (create it first with `./scripts/test-vault.sh create` if needed). Never run against the user's real vault.
-- Never modify `~/.config/ruin` when testing. Use `--vault` to point at a test vault instead of running `ruin config` or `ruin init` without an explicit path.
+- When running the `ruin` binary for manual testing, always use `--vault /tmp/ruin-test-vault` (create it first with `ruin dev seed` if needed). Never run against the user's real vault.
+- Never modify `~/.config/ruin`. Use `--vault`. Do not run `config vault_path ~/path`. Stop before changing vault path.
 
 ## Project Setup
 
@@ -70,7 +70,7 @@ ruin-note-cli/
 │       ├── resolve.go        # Note resolution (UUID, title, path lookup)
 │       └── links.go          # Wiki link resolution (RefreshLinkedCards)
 ├── scripts/
-│   └── test-vault.sh         # Test vault helper script
+│   └── create-benchmark-vault.sh  # Benchmark vault generator
 ├── go.mod
 ├── go.sum
 ├── Makefile
@@ -128,12 +128,12 @@ go fmt ./...
 ```
 
 ### Test Vault
-Use the helper script to create a test vault for manual testing:
+Use the `dev seed` command to create a test vault for manual testing (build first with `make build`):
 ```bash
-./scripts/test-vault.sh create           # Create at /tmp/ruin-test-vault
-./scripts/test-vault.sh create ~/my-vault # Create at custom path
-./scripts/test-vault.sh clean            # Remove test vault
-./scripts/test-vault.sh reset            # Clean and recreate
+./ruin dev seed                          # Create at /tmp/ruin-test-vault
+./ruin dev seed ~/my-vault               # Create at custom path
+./ruin dev seed --clean                  # Remove test vault
+./ruin dev seed --reset                  # Clean and recreate
 ```
 
 Then test commands against it:

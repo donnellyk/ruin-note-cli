@@ -48,7 +48,7 @@ tags, and powerful search capabilities.`,
 	SilenceErrors: true,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		// Skip config loading for commands that don't need it
-		if cmd.Name() == "version" || cmd.Name() == "help" || cmd.Name() == "init" {
+		if cmd.Name() == "version" || cmd.Name() == "help" || cmd.Name() == "init" || cmd.Name() == "dev" || cmd.Name() == "seed" {
 			return nil
 		}
 
@@ -123,6 +123,7 @@ func init() {
 	rootCmd.AddCommand(commands.NewComposeCmd(getVault, &jsonOut))
 	rootCmd.AddCommand(commands.NewPickCmd(getVault, &jsonOut))
 	rootCmd.AddCommand(commands.NewNoteCmd(getVault, &jsonOut))
+	rootCmd.AddCommand(commands.NewDevCmd(&jsonOut))
 }
 
 // getVault returns the current vault instance.

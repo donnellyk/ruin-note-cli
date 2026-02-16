@@ -90,13 +90,13 @@ clean:
 
 # Create/reset test vault
 .PHONY: test-vault
-test-vault:
-	./scripts/test-vault.sh reset
+test-vault: build
+	./$(BINARY_NAME) dev seed --reset
 
 # Clean test vault
 .PHONY: test-vault-clean
-test-vault-clean:
-	./scripts/test-vault.sh clean
+test-vault-clean: build
+	./$(BINARY_NAME) dev seed --clean
 
 # Benchmarking
 BENCH_DIR := ./benchmarks
