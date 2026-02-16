@@ -55,22 +55,19 @@ func TestResolveDateTokens(t *testing.T) {
 			contain: "plain text without any tokens",
 		},
 		{
-			name:    "resolve @monday",
+			name:    "leave @monday alone (removed)",
 			input:   "meeting @monday",
-			contain: "meeting @20",
-			absent:  "@monday",
+			contain: "@monday",
 		},
 		{
-			name:    "resolve @next-week",
+			name:    "leave @next-week alone (removed)",
 			input:   "review @next-week",
-			contain: "review @20",
-			absent:  "@next-week",
+			contain: "@next-week",
 		},
 		{
-			name:    "resolve @2-days",
+			name:    "leave @2-days alone (removed)",
 			input:   "deadline @2-days",
-			contain: "deadline @20",
-			absent:  "@2-days",
+			contain: "@2-days",
 		},
 		{
 			name:    "underscore prefix leaves alone",

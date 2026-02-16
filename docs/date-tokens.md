@@ -6,17 +6,9 @@ Date tokens use the `@` prefix to reference dates in note content. They support 
 
 | Token | Resolves to | Example |
 |-------|-------------|---------|
-| `@today` | Current date | `@2026-02-12` |
-| `@tomorrow` | Next day | `@2026-02-13` |
-| `@yesterday` | Previous day | `@2026-02-11` |
-| `@monday` .. `@sunday` | Next occurrence (today if it matches) | `@2026-02-16` |
-| `@next-week` | Next Monday | `@2026-02-16` |
-| `@next-month` | 1st of next month | `@2026-03-01` |
-| `@next-year` | Jan 1 of next year | `@2027-01-01` |
-| `@2-days` | 2 days from now | `@2026-02-14` |
-| `@3-weeks` | 3 weeks from now | `@2026-03-05` |
-| `@2-months` | 2 months from now | `@2026-04-12` |
-| `@2-years` | 2 years from now | `@2028-02-12` |
+| `@today` | Current date | `@2026-02-16` |
+| `@tomorrow` | Next day | `@2026-02-17` |
+| `@yesterday` | Previous day | `@2026-02-15` |
 | `@2026-02-13` | Literal (unchanged) | `@2026-02-13` |
 
 Unrecognized tokens (e.g., `@kevin`, `@deprecated`) are left unchanged. Email addresses (`user@company.com`) are not affected.
@@ -30,9 +22,9 @@ Relative date tokens are resolved to `@YYYY-MM-DD` format at **save time**. Once
 Follow up with client @tomorrow #followup
 ```
 
-**After save (if today is 2026-02-12):**
+**After save (if today is 2026-02-16):**
 ```
-Follow up with client @2026-02-13 #followup
+Follow up with client @2026-02-17 #followup
 ```
 
 Re-saving a note does not re-resolve already-resolved dates.
@@ -44,12 +36,12 @@ All `@YYYY-MM-DD` dates found in the note body are extracted into a `dates` fron
 ```yaml
 ---
 uuid: abc-123
-created: 2026-02-12T10:00:00-08:00
-updated: 2026-02-12T10:00:00-08:00
+created: 2026-02-16T10:00:00-08:00
+updated: 2026-02-16T10:00:00-08:00
 inline-tags:
   - "#followup"
 dates:
-  - "2026-02-13"
+  - "2026-02-17"
 ---
 ```
 
@@ -90,8 +82,8 @@ These are complementary features:
 They can be combined:
 
 ```bash
-# Notes created today that reference next week
-ruin search "created:today @next-week"
+# Notes created today that reference tomorrow
+ruin search "created:today @tomorrow"
 ```
 
 ## Supported Commands

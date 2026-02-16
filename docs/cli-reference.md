@@ -70,9 +70,6 @@ ruin search <query>
 
 **Date tokens (`@` syntax):**
 - `@today`, `@tomorrow`, `@yesterday`
-- `@monday` .. `@sunday` (next occurrence)
-- `@next-week`, `@next-month`, `@next-year`
-- `@2-days`, `@3-weeks`, `@2-months` (relative offset)
 - `@2026-02-13` (exact date)
 
 Date tokens in queries are resolved dynamically. In note content, they are resolved to `@YYYY-MM-DD` for consistency. See [Date Tokens](date-tokens.md) for details.
@@ -85,9 +82,6 @@ Date tokens in queries are resolved dynamically. In note content, they are resol
 **Date formats** (for filters):
 - Exact: `2025-01-28`, `2025-01`, `2025`
 - Natural: `today`, `yesterday`, `tomorrow`
-- Relative: `this-week`, `last-week`, `this-month`, `last-month`, `next-week`, `next-month`, `next-year`
-- Day names: `monday`, `tuesday`, etc.
-- Duration: `7d`, `2w`, `3m`
 
 **Other filters:**
 - `title:TEXT`, `path:TEXT`

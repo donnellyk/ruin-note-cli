@@ -1,5 +1,41 @@
 # Breaking Changes
 
+## Date grammar simplified
+
+**Version**: Current
+
+The date parser has been simplified to only support ISO formats and simple helpers. The following date syntax has been removed:
+
+### Removed from date filters (`created:`, `updated:`, `before:`, `after:`)
+- `this-week`, `last-week`, `next-week`
+- `this-month`, `last-month`, `next-month`
+- `this-year`, `last-year`, `next-year`
+- Day names: `monday` through `sunday`
+- Duration shorthand: `7d`, `2w`, `3m`, `2y`
+- Duration longhand: `7-days`, `2-weeks`, `3-months`, `2-years`
+
+### Removed from date tokens (`@` syntax)
+- `@monday` through `@sunday`
+- `@next-week`, `@next-month`, `@next-year`
+- `@2-days`, `@3-weeks`, `@2-months`, `@2-years`
+
+### What remains
+- **ISO formats**: `2025-01-28`, `2025-01`, `2025`
+- **Simple helpers**: `today`, `yesterday`, `tomorrow`
+
+### Migration
+
+| Before | After |
+|--------|-------|
+| `created:this-week` | `created:2025-01-27` (use explicit start date) |
+| `created:7d` | `created:2025-01-22` (use explicit start date) |
+| `created:last-month` | `created:2024-12` |
+| `@next-week` | `@2025-02-03` (use explicit date) |
+| `@monday` | `@2025-02-03` (use explicit date) |
+| `@2-days` | `@2025-01-30` (use explicit date) |
+
+---
+
 ## `parent set` and `parent remove` removed
 
 **Version**: Current (note commands)

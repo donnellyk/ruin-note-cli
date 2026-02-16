@@ -65,9 +65,6 @@ Query syntax:
 
 Date tokens (@ syntax):
   - @today, @tomorrow, @yesterday
-  - @monday .. @sunday (next occurrence)
-  - @next-week, @next-month, @next-year
-  - @2-days, @3-weeks, @2-months (relative offset)
   - @2026-02-13 (exact date)
 
 Date filters (metadata):
@@ -81,8 +78,6 @@ Date filters (metadata):
 Date formats:
   - Exact: 2025-01-28, 2025-01, 2025
   - Natural: today, yesterday, tomorrow
-  - Relative: this-week, last-week, this-month, last-month
-  - Duration: 7d, 2w, 3m (last N days/weeks/months)
 
 Other filters:
   - title:TEXT       Notes with title containing text
@@ -122,14 +117,12 @@ See also:
 
   # Date tokens (in note body)
   ruin search "@tomorrow"
-  ruin search "#followup @next-week"
+  ruin search "#followup @2025-02-03"
 
   # Date filters (metadata)
   ruin search "created:today"
-  ruin search "#daily && created:this-week"
-  ruin search "updated:7d"
+  ruin search "created:yesterday"
   ruin search "between:2025-01-01,2025-01-31"
-  ruin search "before:last-month"
 
   # Title and path filters
   ruin search "title:meeting"
@@ -596,7 +589,7 @@ func afterDateMatcher(value string) (QueryMatcher, error) {
 }
 
 // betweenDateMatcher returns a matcher for notes created between two dates.
-// Format: DATE,DATE (e.g., "2025-01-01,2025-01-31" or "last-month,today")
+// Format: DATE,DATE (e.g., "2025-01-01,2025-01-31" or "2025-01,today")
 func betweenDateMatcher(value string) (QueryMatcher, error) {
 	parts := strings.SplitN(value, ",", 2)
 	if len(parts) != 2 {

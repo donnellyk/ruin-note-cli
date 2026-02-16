@@ -30,67 +30,6 @@ func TestParseNaturalLanguage(t *testing.T) {
 			wantStart: time.Date(2025, 1, 30, 0, 0, 0, 0, time.Local),
 			wantEnd:   time.Date(2025, 1, 31, 0, 0, 0, 0, time.Local),
 		},
-		{
-			input:     "this-week",
-			wantStart: time.Date(2025, 1, 27, 0, 0, 0, 0, time.Local), // Monday
-			wantEnd:   time.Date(2025, 2, 3, 0, 0, 0, 0, time.Local),  // Next Monday
-		},
-		{
-			input:     "last-week",
-			wantStart: time.Date(2025, 1, 20, 0, 0, 0, 0, time.Local), // Previous Monday
-			wantEnd:   time.Date(2025, 1, 27, 0, 0, 0, 0, time.Local),
-		},
-		{
-			input:     "this-month",
-			wantStart: time.Date(2025, 1, 1, 0, 0, 0, 0, time.Local),
-			wantEnd:   time.Date(2025, 2, 1, 0, 0, 0, 0, time.Local),
-		},
-		{
-			input:     "last-month",
-			wantStart: time.Date(2024, 12, 1, 0, 0, 0, 0, time.Local),
-			wantEnd:   time.Date(2025, 1, 1, 0, 0, 0, 0, time.Local),
-		},
-		{
-			input:     "this-year",
-			wantStart: time.Date(2025, 1, 1, 0, 0, 0, 0, time.Local),
-			wantEnd:   time.Date(2026, 1, 1, 0, 0, 0, 0, time.Local),
-		},
-		{
-			input:     "last-year",
-			wantStart: time.Date(2024, 1, 1, 0, 0, 0, 0, time.Local),
-			wantEnd:   time.Date(2025, 1, 1, 0, 0, 0, 0, time.Local),
-		},
-		// New terms
-		{
-			input:     "next-week",
-			wantStart: time.Date(2025, 2, 3, 0, 0, 0, 0, time.Local),  // next Monday
-			wantEnd:   time.Date(2025, 2, 10, 0, 0, 0, 0, time.Local), // following Monday
-		},
-		{
-			input:     "next-month",
-			wantStart: time.Date(2025, 2, 1, 0, 0, 0, 0, time.Local),
-			wantEnd:   time.Date(2025, 3, 1, 0, 0, 0, 0, time.Local),
-		},
-		{
-			input:     "next-year",
-			wantStart: time.Date(2026, 1, 1, 0, 0, 0, 0, time.Local),
-			wantEnd:   time.Date(2027, 1, 1, 0, 0, 0, 0, time.Local),
-		},
-		{
-			input:     "monday",
-			wantStart: time.Date(2025, 2, 3, 0, 0, 0, 0, time.Local), // next Monday (ref is Wed)
-			wantEnd:   time.Date(2025, 2, 4, 0, 0, 0, 0, time.Local),
-		},
-		{
-			input:     "wednesday",
-			wantStart: time.Date(2025, 1, 29, 0, 0, 0, 0, time.Local), // today (ref is Wed)
-			wantEnd:   time.Date(2025, 1, 30, 0, 0, 0, 0, time.Local),
-		},
-		{
-			input:     "friday",
-			wantStart: time.Date(2025, 1, 31, 0, 0, 0, 0, time.Local),
-			wantEnd:   time.Date(2025, 2, 1, 0, 0, 0, 0, time.Local),
-		},
 	}
 
 	for _, tt := range tests {
@@ -112,63 +51,22 @@ func TestParseNaturalLanguage(t *testing.T) {
 	}
 }
 
-func TestParseRelativeDuration(t *testing.T) {
+func TestParseRemovedTermsError(t *testing.T) {
 	ref := time.Date(2025, 1, 29, 14, 30, 0, 0, time.Local)
 
-	tests := []struct {
-		input     string
-		wantStart time.Time
-		wantEnd   time.Time
-	}{
-		{
-			input:     "7d",
-			wantStart: time.Date(2025, 1, 23, 0, 0, 0, 0, time.Local), // 6 days back + today
-			wantEnd:   time.Date(2025, 1, 30, 0, 0, 0, 0, time.Local),
-		},
-		{
-			input:     "7-days",
-			wantStart: time.Date(2025, 1, 23, 0, 0, 0, 0, time.Local),
-			wantEnd:   time.Date(2025, 1, 30, 0, 0, 0, 0, time.Local),
-		},
-		{
-			input:     "1d",
-			wantStart: time.Date(2025, 1, 29, 0, 0, 0, 0, time.Local), // Just today
-			wantEnd:   time.Date(2025, 1, 30, 0, 0, 0, 0, time.Local),
-		},
-		{
-			input:     "2w",
-			wantStart: time.Date(2025, 1, 16, 0, 0, 0, 0, time.Local), // 13 days back + today
-			wantEnd:   time.Date(2025, 1, 30, 0, 0, 0, 0, time.Local),
-		},
-		{
-			input:     "2-weeks",
-			wantStart: time.Date(2025, 1, 16, 0, 0, 0, 0, time.Local),
-			wantEnd:   time.Date(2025, 1, 30, 0, 0, 0, 0, time.Local),
-		},
-		{
-			input:     "1m",
-			wantStart: time.Date(2024, 12, 30, 0, 0, 0, 0, time.Local),
-			wantEnd:   time.Date(2025, 1, 30, 0, 0, 0, 0, time.Local),
-		},
-		{
-			input:     "3-months",
-			wantStart: time.Date(2024, 10, 30, 0, 0, 0, 0, time.Local),
-			wantEnd:   time.Date(2025, 1, 30, 0, 0, 0, 0, time.Local),
-		},
+	removed := []string{
+		"this-week", "last-week", "next-week",
+		"this-month", "last-month", "next-month",
+		"this-year", "last-year", "next-year",
+		"monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday",
+		"7d", "7-days", "2w", "2-weeks", "3m", "3-months",
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.input, func(t *testing.T) {
-			got, err := ParseWithReference(tt.input, ref)
-			if err != nil {
-				t.Errorf("ParseWithReference(%q) error = %v", tt.input, err)
-				return
-			}
-			if !got.Start.Equal(tt.wantStart) {
-				t.Errorf("ParseWithReference(%q).Start = %v, want %v", tt.input, got.Start, tt.wantStart)
-			}
-			if !got.End.Equal(tt.wantEnd) {
-				t.Errorf("ParseWithReference(%q).End = %v, want %v", tt.input, got.End, tt.wantEnd)
+	for _, input := range removed {
+		t.Run(input, func(t *testing.T) {
+			_, err := ParseWithReference(input, ref)
+			if err == nil {
+				t.Errorf("ParseWithReference(%q) should error, but got nil", input)
 			}
 		})
 	}
@@ -277,7 +175,7 @@ func TestDateRangeContains(t *testing.T) {
 func TestCaseInsensitive(t *testing.T) {
 	ref := time.Date(2025, 1, 29, 14, 30, 0, 0, time.Local)
 
-	tests := []string{"TODAY", "Today", "YESTERDAY", "Yesterday", "THIS-WEEK", "This-Week"}
+	tests := []string{"TODAY", "Today", "YESTERDAY", "Yesterday"}
 
 	for _, input := range tests {
 		t.Run(input, func(t *testing.T) {

@@ -715,11 +715,11 @@ func TestTextMatcher(t *testing.T) {
 		text string
 		want bool
 	}{
-		{"test", true},      // in title
-		{"TEST", true},      // case insensitive
-		{"content", true},   // in content
-		{"testing", true},   // in content
-		{"missing", false},  // not found
+		{"test", true},     // in title
+		{"TEST", true},     // case insensitive
+		{"content", true},  // in content
+		{"testing", true},  // in content
+		{"missing", false}, // not found
 	}
 
 	for _, tt := range tests {
@@ -794,13 +794,11 @@ func TestDateFilters(t *testing.T) {
 		{"created:year", "created:2025", false},
 		{"created:today", "created:today", false},
 		{"created:yesterday", "created:yesterday", false},
-		{"created:7d", "created:7d", false},
 		{"updated:date", "updated:2025-01-28", false},
 		{"before:date", "before:2025-01-28", false},
 		{"after:date", "after:2025-01-28", false},
 		{"on:date", "on:2025-01-28", false},
 		{"between:dates", "between:2025-01-01,2025-01-31", false},
-		{"between:natural", "between:last-month,today", false},
 		{"title:text", "title:meeting", false},
 		{"path:text", "path:projects/", false},
 		{"created:invalid", "created:invalid-date", true},
@@ -828,7 +826,7 @@ func TestParseQuery_WithFilters(t *testing.T) {
 		{"multiple filters", "title:meeting && path:projects/", false},
 		{"tag and title filter", "#work title:report", false},
 		{"between filter", "between:2025-01-01,2025-01-31", false},
-		{"duration filter", "updated:7d", false},
+		{"date filter", "updated:yesterday", false},
 	}
 
 	for _, tt := range tests {
@@ -948,8 +946,8 @@ func TestIsDateTerm(t *testing.T) {
 		{"#tag", false},
 		{"text", false},
 		{"@2026-1-1", false},    // wrong format
-		{"@20260213", false},     // no hyphens
-		{"@2026-02-133", false},  // too long
+		{"@20260213", false},    // no hyphens
+		{"@2026-02-133", false}, // too long
 	}
 
 	for _, tt := range tests {
