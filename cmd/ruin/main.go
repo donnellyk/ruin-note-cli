@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/spf13/cobra"
 	"kvnd/ruin-note-cli/internal/commands"
 	"kvnd/ruin-note-cli/internal/config"
 	"kvnd/ruin-note-cli/internal/vault"
-	"github.com/spf13/cobra"
 )
 
 var (
@@ -133,10 +133,10 @@ func getVault() *vault.Vault {
 
 // exitCode constants for consistent exit behavior
 const (
-	exitSuccess      = 0
-	exitError        = 1
-	exitUsageError   = 2
-	exitUserAborted  = 3
+	exitSuccess     = 0
+	exitError       = 1
+	exitUsageError  = 2
+	exitUserAborted = 3
 )
 
 // printError writes an error message to stderr

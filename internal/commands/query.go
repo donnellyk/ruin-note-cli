@@ -7,9 +7,9 @@ import (
 	"os"
 	"strings"
 
+	"github.com/spf13/cobra"
 	"kvnd/ruin-note-cli/internal/note"
 	"kvnd/ruin-note-cli/internal/vault"
-	"github.com/spf13/cobra"
 )
 
 // ErrUserAborted is returned when the user declines a confirmation prompt.
@@ -459,4 +459,3 @@ func countMatches(vlt *vault.Vault, matcher QueryMatcher, info MatcherInfo) (int
 
 	return count, nil
 }
-

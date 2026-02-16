@@ -31,9 +31,9 @@ func NewNoteCmd(getVault func() *vault.Vault, jsonOutput *bool) *cobra.Command {
 // --- note set ---
 
 type noteSetChange struct {
-	Field  string      `json:"field"`
-	Action string      `json:"action"`
-	Value  any `json:"value"`
+	Field  string `json:"field"`
+	Action string `json:"action"`
+	Value  any    `json:"value"`
 }
 
 type noteSetOutput struct {

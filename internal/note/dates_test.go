@@ -40,14 +40,14 @@ func TestResolveDateTokens(t *testing.T) {
 			contain: "@kevin",
 		},
 		{
-			name:    "multiple tokens",
-			input:   "@today and @tomorrow",
-			absent:  "@today",
+			name:   "multiple tokens",
+			input:  "@today and @tomorrow",
+			absent: "@today",
 		},
 		{
-			name:    "token at start of line",
-			input:   "@tomorrow do the thing",
-			absent:  "@tomorrow",
+			name:   "token at start of line",
+			input:  "@tomorrow do the thing",
+			absent: "@tomorrow",
 		},
 		{
 			name:    "no tokens",

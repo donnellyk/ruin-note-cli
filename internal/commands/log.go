@@ -10,9 +10,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/spf13/cobra"
 	"kvnd/ruin-note-cli/internal/note"
 	"kvnd/ruin-note-cli/internal/vault"
-	"github.com/spf13/cobra"
 )
 
 // LogOutput represents the JSON output for the log command.
@@ -235,4 +235,3 @@ func determineFilename(n *note.Note, titleFlag string, useH1 bool) string {
 	}
 	return t.Format("2006-01-02T15-04-05")
 }
-

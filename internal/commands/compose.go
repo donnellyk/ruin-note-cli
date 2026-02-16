@@ -8,9 +8,9 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/spf13/cobra"
 	"kvnd/ruin-note-cli/internal/note"
 	"kvnd/ruin-note-cli/internal/vault"
-	"github.com/spf13/cobra"
 )
 
 var headingPattern = regexp.MustCompile(`(?m)^(#{1,6})\s`)

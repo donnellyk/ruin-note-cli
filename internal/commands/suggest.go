@@ -7,9 +7,9 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/spf13/cobra"
 	"kvnd/ruin-note-cli/internal/note"
 	"kvnd/ruin-note-cli/internal/vault"
-	"github.com/spf13/cobra"
 )
 
 // NewSuggestCmd creates the suggest command.

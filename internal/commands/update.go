@@ -7,9 +7,9 @@ import (
 	"os"
 	"strings"
 
+	"github.com/spf13/cobra"
 	"kvnd/ruin-note-cli/internal/note"
 	"kvnd/ruin-note-cli/internal/vault"
-	"github.com/spf13/cobra"
 )
 
 // UpdateOutput represents the JSON output for the update command.
@@ -81,9 +81,9 @@ New UUIDs in the updated content are an error (use 'log' to create new notes).`,
 			}
 
 			// Identify changes
-			var toModify []string   // UUIDs to modify
-			var toDelete []string   // UUIDs to delete
-			var newUUIDs []string   // UUIDs only in updated (error)
+			var toModify []string // UUIDs to modify
+			var toDelete []string // UUIDs to delete
+			var newUUIDs []string // UUIDs only in updated (error)
 			var errors []string
 
 			// Check for modifications and deletions

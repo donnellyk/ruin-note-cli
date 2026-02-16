@@ -292,8 +292,8 @@ func TestFrontmatter_Merge(t *testing.T) {
 
 func TestFrontmatter_MergeParent(t *testing.T) {
 	fm1 := &Frontmatter{
-		UUID:   "child",
-		Extra:  map[string]interface{}{},
+		UUID:  "child",
+		Extra: map[string]interface{}{},
 	}
 
 	fm2 := &Frontmatter{

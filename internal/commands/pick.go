@@ -279,7 +279,6 @@ func pickLinesFromNote(n *note.Note, queryTags []string, anyMode bool, df doneFi
 	return matches
 }
 
-
 func outputPickJSON(results []PickResult) error {
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "  ")

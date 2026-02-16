@@ -6,8 +6,8 @@ import (
 	"os"
 	"reflect"
 
-	"kvnd/ruin-note-cli/internal/config"
 	"github.com/spf13/cobra"
+	"kvnd/ruin-note-cli/internal/config"
 )
 
 // NewConfigCmd creates the config command.

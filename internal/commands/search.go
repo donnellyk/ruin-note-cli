@@ -10,10 +10,10 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/spf13/cobra"
 	"kvnd/ruin-note-cli/internal/dateparse"
 	"kvnd/ruin-note-cli/internal/note"
 	"kvnd/ruin-note-cli/internal/vault"
-	"github.com/spf13/cobra"
 )
 
 // ErrNoMatches is returned when a search finds no results.
@@ -1369,4 +1369,3 @@ func applyBulkChanges(vlt *vault.Vault, original, modified string, results []Sea
 
 	return nil
 }
-

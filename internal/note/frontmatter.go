@@ -14,13 +14,13 @@ const frontmatterDelimiter = "---"
 
 // Frontmatter represents the YAML frontmatter of a note.
 type Frontmatter struct {
-	UUID       string   `yaml:"uuid,omitempty"`
-	Created    string   `yaml:"created,omitempty"`
-	Updated    string   `yaml:"updated,omitempty"`
-	Tags       []string `yaml:"tags,omitempty"`
-	InlineTags []string `yaml:"inline-tags,omitempty"`
-	Dates      []string `yaml:"dates,omitempty"`
-	Parent     string   `yaml:"parent,omitempty"`
+	UUID        string   `yaml:"uuid,omitempty"`
+	Created     string   `yaml:"created,omitempty"`
+	Updated     string   `yaml:"updated,omitempty"`
+	Tags        []string `yaml:"tags,omitempty"`
+	InlineTags  []string `yaml:"inline-tags,omitempty"`
+	Dates       []string `yaml:"dates,omitempty"`
+	Parent      string   `yaml:"parent,omitempty"`
 	Order       *int     `yaml:"order,omitempty"`
 	LinkedCards []string `yaml:"linked-cards,omitempty"`
 

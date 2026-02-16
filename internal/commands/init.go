@@ -6,9 +6,9 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/spf13/cobra"
 	"kvnd/ruin-note-cli/internal/config"
 	"kvnd/ruin-note-cli/internal/vault"
-	"github.com/spf13/cobra"
 )
 
 // InitOutput represents the JSON output for the init command.
