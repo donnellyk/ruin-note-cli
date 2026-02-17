@@ -1280,17 +1280,152 @@ func TestNoteSet_ToggleTodo_Sink(t *testing.T) {
 	n, _ := ResolveNote(vlt, "uuid-todo")
 	lines := strings.Split(n.Content, "\n")
 
-	// After sink: the checked item should be at the bottom of the checkbox block (line 7)
-	// Lines 4-6 should now be: Send email, Write report, Old done task... wait.
-	// Original: 4=Buy, 5=Send, 6=Write, 7=Old done
-	// After toggle+sink: 4=Send, 5=Write, 6=Old done, 7=Buy(checked)
+	// After sink: completed item moves below open todos, above completed ones
+	// Original: 4=Buy(open), 5=Send(open), 6=Write(open), 7=Old done(checked)
+	// After toggle+sink: 4=Send, 5=Write, 6=Buy(checked), 7=Old done(checked)
 	if !strings.Contains(lines[3], "Send email") {
 		t.Errorf("line 4 = %q, want Send email", lines[3])
 	}
-	if !strings.Contains(lines[6], "Buy groceries") {
-		t.Errorf("line 7 = %q, want Buy groceries", lines[6])
+	if !strings.Contains(lines[4], "Write report") {
+		t.Errorf("line 5 = %q, want Write report", lines[4])
 	}
-	if !strings.Contains(lines[6], "[x]") {
-		t.Errorf("line 7 = %q, expected [x]", lines[6])
+	if !strings.Contains(lines[5], "Buy groceries") || !strings.Contains(lines[5], "[x]") {
+		t.Errorf("line 6 = %q, want [x] Buy groceries", lines[5])
+	}
+	if !strings.Contains(lines[6], "Old done task") || !strings.Contains(lines[6], "[x]") {
+		t.Errorf("line 7 = %q, want [x] Old done task", lines[6])
+	}
+}
+
+func TestNoteSet_ToggleTodo_SinkUncheck(t *testing.T) {
+	vlt := setupTodoTestVault(t)
+	jsonOut := false
+	cmd := NewNoteCmd(func() *vault.Vault { return vlt }, &jsonOut)
+
+	// Toggle line 7 "- [x] Old done task" → [ ], and sink moves it to bottom of open todos
+	// Original: 4=Buy(open), 5=Send(open), 6=Write(open), 7=Old done(checked)
+	cmd.SetArgs([]string{"set", "uuid-todo", "--toggle-todo", "--sink", "--line", "7"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("error = %v", err)
+	}
+
+	n, _ := ResolveNote(vlt, "uuid-todo")
+	lines := strings.Split(n.Content, "\n")
+
+	// After unchecking+sink: unchecked item moves to bottom of open todos
+	// Expected: 4=Buy(open), 5=Send(open), 6=Write(open), 7=Old done(now open)
+	// (Already at the boundary, so no movement in this case)
+	if !strings.Contains(lines[3], "Buy groceries") || !strings.Contains(lines[3], "[ ]") {
+		t.Errorf("line 4 = %q, want [ ] Buy groceries", lines[3])
+	}
+	if !strings.Contains(lines[6], "Old done task") || !strings.Contains(lines[6], "[ ]") {
+		t.Errorf("line 7 = %q, want [ ] Old done task", lines[6])
+	}
+}
+
+func TestNoteSet_ToggleTodo_SinkUncheckMiddle(t *testing.T) {
+	// Test unchecking a completed todo in a sorted block (open first, completed last)
+	tmpDir := t.TempDir()
+	vlt := vault.New(tmpDir)
+	if _, err := vlt.Initialize(false); err != nil {
+		t.Fatalf("failed to initialize vault: %v", err)
+	}
+
+	content := `---
+uuid: uuid-todo2
+created: "2025-01-01T10:00:00-05:00"
+updated: "2025-01-01T10:00:00-05:00"
+tags: []
+---
+# Mixed todos
+- [ ] Open A
+- [ ] Open B
+- [x] Done C
+- [x] Done D`
+
+	path := filepath.Join(tmpDir, "mixed-todos.md")
+	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+		t.Fatalf("failed to write test note: %v", err)
+	}
+	vlt.UpdateTitleEntry("uuid-todo2", "Mixed todos", path, "")
+
+	jsonOut := false
+	cmd := NewNoteCmd(func() *vault.Vault { return vlt }, &jsonOut)
+
+	// Toggle line 4 "- [x] Done C" → [ ], sink should move it to bottom of open todos
+	cmd.SetArgs([]string{"set", "uuid-todo2", "--toggle-todo", "--sink", "--line", "4"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("error = %v", err)
+	}
+
+	n, _ := ResolveNote(vlt, "uuid-todo2")
+	lines := strings.Split(n.Content, "\n")
+
+	// Expected order: Open A, Open B, Done C (now open), Done D
+	// Done C was already at the boundary, and after unchecking it's the last open item
+	if !strings.Contains(lines[1], "Open A") || !strings.Contains(lines[1], "[ ]") {
+		t.Errorf("line 2 = %q, want [ ] Open A", lines[1])
+	}
+	if !strings.Contains(lines[2], "Open B") || !strings.Contains(lines[2], "[ ]") {
+		t.Errorf("line 3 = %q, want [ ] Open B", lines[2])
+	}
+	if !strings.Contains(lines[3], "Done C") || !strings.Contains(lines[3], "[ ]") {
+		t.Errorf("line 4 = %q, want [ ] Done C (unchecked)", lines[3])
+	}
+	if !strings.Contains(lines[4], "Done D") || !strings.Contains(lines[4], "[x]") {
+		t.Errorf("line 5 = %q, want [x] Done D", lines[4])
+	}
+}
+
+func TestNoteSet_ToggleTodo_SinkCompleteMiddle(t *testing.T) {
+	// Test completing an open todo that's not the last open one
+	tmpDir := t.TempDir()
+	vlt := vault.New(tmpDir)
+	if _, err := vlt.Initialize(false); err != nil {
+		t.Fatalf("failed to initialize vault: %v", err)
+	}
+
+	content := `---
+uuid: uuid-todo3
+created: "2025-01-01T10:00:00-05:00"
+updated: "2025-01-01T10:00:00-05:00"
+tags: []
+---
+# Todos
+- [ ] Task A
+- [ ] Task B
+- [ ] Task C
+- [x] Task D`
+
+	path := filepath.Join(tmpDir, "complete-middle.md")
+	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+		t.Fatalf("failed to write test note: %v", err)
+	}
+	vlt.UpdateTitleEntry("uuid-todo3", "Todos", path, "")
+
+	jsonOut := false
+	cmd := NewNoteCmd(func() *vault.Vault { return vlt }, &jsonOut)
+
+	// Toggle line 3 "- [ ] Task B" → [x], sink should move it below open, above completed
+	cmd.SetArgs([]string{"set", "uuid-todo3", "--toggle-todo", "--sink", "--line", "3"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("error = %v", err)
+	}
+
+	n, _ := ResolveNote(vlt, "uuid-todo3")
+	lines := strings.Split(n.Content, "\n")
+
+	// Expected: Task A (open), Task C (open), Task B (checked), Task D (checked)
+	if !strings.Contains(lines[1], "Task A") || !strings.Contains(lines[1], "[ ]") {
+		t.Errorf("line 2 = %q, want [ ] Task A", lines[1])
+	}
+	if !strings.Contains(lines[2], "Task C") || !strings.Contains(lines[2], "[ ]") {
+		t.Errorf("line 3 = %q, want [ ] Task C", lines[2])
+	}
+	if !strings.Contains(lines[3], "Task B") || !strings.Contains(lines[3], "[x]") {
+		t.Errorf("line 4 = %q, want [x] Task B", lines[3])
+	}
+	if !strings.Contains(lines[4], "Task D") || !strings.Contains(lines[4], "[x]") {
+		t.Errorf("line 5 = %q, want [x] Task D", lines[4])
 	}
 }

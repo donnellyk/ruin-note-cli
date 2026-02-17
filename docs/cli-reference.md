@@ -368,7 +368,7 @@ ruin note set <note> [flags]
 | `--parent` | | Set parent (UUID, title, path, or bookmark) |
 | `--no-parent` | | Remove parent |
 | `--toggle-todo` | | Flip checkbox state `[ ]` ↔ `[x]` (requires `--line`) |
-| `--sink` | | Move checked item to bottom of contiguous checkbox block (requires `--toggle-todo`) |
+| `--sink` | | Reposition toggled item: completed items move below open todos, uncompleted items move to bottom of open todos (requires `--toggle-todo`) |
 | `--force` | `-f` | Skip confirmation |
 
 At least one mutation flag required. Use `--line N` to target a specific content line for tag, date, and todo operations.

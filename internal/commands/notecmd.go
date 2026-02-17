@@ -241,11 +241,20 @@ Without --line, tags are added globally and removed from all lines.`,
 				wasChecked := note.IsCheckedLine(contentLines[idx])
 				contentLines[idx] = note.ToggleCheckbox(contentLines[idx])
 				toggledContent := strings.TrimSpace(contentLines[idx])
-				nowChecked := !wasChecked
 
-				// --sink: move checked item to bottom of contiguous checkbox block
-				if sink && nowChecked {
-					// Find end of contiguous checkbox block from this line
+				// --sink: reposition within contiguous checkbox block
+				//   Completing: move below all open todos, above completed ones
+				//   Uncompleting: move to bottom of open todos
+				if sink {
+					// Find boundaries of contiguous checkbox block
+					blockStart := idx
+					for j := idx - 1; j >= 0; j-- {
+						if note.IsCheckboxLine(contentLines[j]) {
+							blockStart = j
+						} else {
+							break
+						}
+					}
 					blockEnd := idx
 					for j := idx + 1; j < len(contentLines); j++ {
 						if note.IsCheckboxLine(contentLines[j]) {
@@ -254,11 +263,29 @@ Without --line, tags are added globally and removed from all lines.`,
 							break
 						}
 					}
-					if blockEnd > idx {
-						toggled := contentLines[idx]
-						copy(contentLines[idx:blockEnd], contentLines[idx+1:blockEnd+1])
-						contentLines[blockEnd] = toggled
+
+					// Remove the toggled line from its current position
+					toggled := contentLines[idx]
+					remaining := make([]string, 0, len(contentLines)-1)
+					remaining = append(remaining, contentLines[:idx]...)
+					remaining = append(remaining, contentLines[idx+1:]...)
+
+					// Adjust block bounds for the shortened slice
+					adjEnd := blockEnd - 1 // blockStart unchanged since idx >= blockStart
+
+					// Find insertion point: after last open todo in the block
+					insertAt := blockStart
+					for j := blockStart; j <= adjEnd; j++ {
+						if !note.IsCheckedLine(remaining[j]) {
+							insertAt = j + 1
+						}
 					}
+
+					// Re-insert at the boundary
+					contentLines = make([]string, 0, len(remaining)+1)
+					contentLines = append(contentLines, remaining[:insertAt]...)
+					contentLines = append(contentLines, toggled)
+					contentLines = append(contentLines, remaining[insertAt:]...)
 				}
 
 				n.Content = strings.Join(contentLines, "\n")
@@ -378,7 +405,7 @@ Without --line, tags are added globally and removed from all lines.`,
 	cmd.Flags().StringVar(&parent, "parent", "", "set parent (UUID, title, path, or bookmark)")
 	cmd.Flags().BoolVar(&noParent, "no-parent", false, "remove parent")
 	cmd.Flags().BoolVar(&toggleTodo, "toggle-todo", false, "flip checkbox state (requires --line)")
-	cmd.Flags().BoolVar(&sink, "sink", false, "move checked item to bottom of checkbox block (requires --toggle-todo)")
+	cmd.Flags().BoolVar(&sink, "sink", false, "reposition toggled item: completed below open, uncompleted to bottom of open (requires --toggle-todo)")
 	cmd.Flags().BoolVarP(&force, "force", "f", false, "skip confirmation")
 
 	return cmd
