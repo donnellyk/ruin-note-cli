@@ -190,21 +190,9 @@ func doctorFiles(vlt *vault.Vault, paths []string, dryRun bool, jsonOutput bool)
 
 		// Incremental index updates
 		if !dryRun {
-			// Decrement old tag counts, then increment new ones
-			if err := vlt.DecrementTagsIndex(rawFM.Tags, rawFM.InlineTags); err != nil {
-				fmt.Fprintf(os.Stderr, "%swarning: failed to decrement tags for %s: %v\n", prefix, path, err)
-			}
-			if err := vlt.UpdateTagsIndex(n.Tags, n.InlineTags); err != nil {
-				fmt.Fprintf(os.Stderr, "%swarning: failed to update tags for %s: %v\n", prefix, path, err)
-			}
+			vlt.SaveNote(n, rawFM.Tags, rawFM.InlineTags, "")
 			output.TagsYMLUpdated = true
-
-			// Update title entry
-			if err := vlt.UpdateTitleEntry(n.UUID, n.Title, n.FilePath, n.Parent); err != nil {
-				fmt.Fprintf(os.Stderr, "%swarning: failed to update title entry for %s: %v\n", prefix, path, err)
-			} else {
-				output.TitlesUpdated = true
-			}
+			output.TitlesUpdated = true
 		} else {
 			output.TagsYMLUpdated = true
 			output.TitlesUpdated = true

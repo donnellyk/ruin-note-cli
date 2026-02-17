@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"gopkg.in/yaml.v3"
+	"kvnd/ruin-note-cli/internal/note"
 	"kvnd/ruin-note-cli/internal/versioning"
 )
 
@@ -36,14 +37,48 @@ func (v *Vault) SetVersioning(g *versioning.GitVersioning) {
 }
 
 // Commit creates a git commit with the given message if versioning is enabled.
-// This is a no-op if versioning is nil. Errors are logged to stderr as warnings.
+// This is a no-op if versioning is nil or msg is empty. Errors are logged to stderr as warnings.
 func (v *Vault) Commit(msg string) {
-	if v.versioning == nil {
+	if v.versioning == nil || msg == "" {
 		return
 	}
 	if err := v.versioning.Commit(msg); err != nil {
 		fmt.Fprintf(os.Stderr, "warning: git commit failed: %v\n", err)
 	}
+}
+
+// SaveNote updates vault indexes after a note has been modified and saved.
+// It decrements old tag counts, increments new ones, updates the title entry,
+// and commits. Does not call n.Save() — that's the caller's responsibility.
+func (v *Vault) SaveNote(n *note.Note, oldGlobalTags, oldInlineTags []string, commitMsg string) {
+	v.DecrementTagsIndex(oldGlobalTags, oldInlineTags)
+	v.UpdateTagsIndex(n.Tags, n.InlineTags)
+	v.UpdateTitleEntry(n.UUID, n.Title, n.FilePath, n.Parent)
+	v.Commit(commitMsg)
+}
+
+// DeleteNote removes a note file and cleans up its vault indexes.
+// Returns error only if file removal fails.
+func (v *Vault) DeleteNote(n *note.Note, commitMsg string) error {
+	if err := os.Remove(n.FilePath); err != nil {
+		return fmt.Errorf("failed to delete %s: %w", n.FilePath, err)
+	}
+	v.DecrementTagsIndex(n.Tags, n.InlineTags)
+	v.RemoveTitleEntry(n.UUID)
+	v.Commit(commitMsg)
+	return nil
+}
+
+// CreateNote indexes a newly created note in the vault.
+// Index errors are non-fatal (logged to stderr as warnings).
+func (v *Vault) CreateNote(n *note.Note, commitMsg string) {
+	if err := v.UpdateTagsIndex(n.Tags, n.InlineTags); err != nil {
+		fmt.Fprintf(os.Stderr, "warning: failed to update tags index: %v\n", err)
+	}
+	if err := v.UpdateTitleEntry(n.UUID, n.Title, n.FilePath, n.Parent); err != nil {
+		fmt.Fprintf(os.Stderr, "warning: failed to update titles index: %v\n", err)
+	}
+	v.Commit(commitMsg)
 }
 
 // RuinDir returns the path to the .ruin metadata directory.

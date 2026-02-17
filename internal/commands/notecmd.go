@@ -348,12 +348,11 @@ Without --line, tags are added globally and removed from all lines.`,
 			}
 
 			// Shared post-modification flow
-			if err := saveWithIndexUpdate(n, vlt, oldGlobal, oldInline); err != nil {
+			if err := saveWithIndexUpdate(n, vlt); err != nil {
 				return err
 			}
 
-			// Commit to version history
-			vlt.Commit(fmt.Sprintf("ruin note set: Update %q", n.Title))
+			vlt.SaveNote(n, oldGlobal, oldInline, fmt.Sprintf("ruin note set: Update %q", n.Title))
 
 			if *jsonOutput {
 				out := noteSetOutput{Path: n.FilePath, UUID: n.UUID, Title: n.Title, Changes: changes}
@@ -513,12 +512,11 @@ Text comes from a positional argument or --stdin (mutually exclusive).`,
 				}
 			}
 
-			if err := saveWithIndexUpdate(n, vlt, oldGlobal, oldInline); err != nil {
+			if err := saveWithIndexUpdate(n, vlt); err != nil {
 				return err
 			}
 
-			// Commit to version history
-			vlt.Commit(fmt.Sprintf("ruin note append: Update %q", n.Title))
+			vlt.SaveNote(n, oldGlobal, oldInline, fmt.Sprintf("ruin note append: Update %q", n.Title))
 
 			if *jsonOutput {
 				out := noteAppendOutput{Path: n.FilePath, UUID: n.UUID, Line: resultLine, Action: action}
@@ -695,26 +693,21 @@ Source's children are reparented to target.`,
 			}
 
 			// Save target with full pipeline
-			if err := saveWithIndexUpdate(target, vlt, oldTargetGlobal, oldTargetInline); err != nil {
+			if err := saveWithIndexUpdate(target, vlt); err != nil {
 				return err
 			}
+
+			commitMsg := fmt.Sprintf("ruin note merge: Merge %q into %q", source.Title, target.Title)
+			vlt.SaveNote(target, oldTargetGlobal, oldTargetInline, commitMsg)
 
 			// 5. Delete source if requested
 			sourceDeleted := false
 			if deleteSource {
-				oldSourceGlobal := source.Tags
-				oldSourceInline := source.InlineTags
-
-				if err := os.Remove(source.FilePath); err != nil {
+				if err := vlt.DeleteNote(source, commitMsg); err != nil {
 					return fmt.Errorf("failed to delete source: %w", err)
 				}
-				vlt.DecrementTagsIndex(oldSourceGlobal, oldSourceInline)
-				vlt.RemoveTitleEntry(source.UUID)
 				sourceDeleted = true
 			}
-
-			// Commit to version history
-			vlt.Commit(fmt.Sprintf("ruin note merge: Merge %q into %q", source.Title, target.Title))
 
 			out := noteMergeOutput{
 				TargetPath:    target.FilePath,
@@ -791,13 +784,9 @@ Requires confirmation unless --force is set.`,
 				}
 			}
 
-			if err := os.Remove(n.FilePath); err != nil {
-				return fmt.Errorf("failed to delete: %w", err)
+			if err := vlt.DeleteNote(n, fmt.Sprintf("ruin note delete: Delete %q", n.Title)); err != nil {
+				return err
 			}
-
-			vlt.DecrementTagsIndex(n.Tags, n.InlineTags)
-			vlt.RemoveTitleEntry(n.UUID)
-			vlt.Commit(fmt.Sprintf("ruin note delete: Delete %q", n.Title))
 
 			if *jsonOutput {
 				out := noteDeleteOutput{Path: n.FilePath, UUID: n.UUID, Title: n.Title}
@@ -832,8 +821,10 @@ func frontmatterLineCount(n *note.Note) (int, error) {
 	return strings.Count(fm, "\n"), nil
 }
 
-// saveWithIndexUpdate performs the shared post-modification flow.
-func saveWithIndexUpdate(n *note.Note, vlt *vault.Vault, oldGlobal, oldInline []string) error {
+// saveWithIndexUpdate performs the shared note-level post-modification flow:
+// refresh tags/dates/links, set timestamps, and save the file.
+// Callers should follow this with vlt.SaveNote() for index updates.
+func saveWithIndexUpdate(n *note.Note, vlt *vault.Vault) error {
 	n.RefreshTags()
 	n.Content = note.ResolveDateTokens(n.Content)
 	n.RefreshDates()
@@ -848,10 +839,6 @@ func saveWithIndexUpdate(n *note.Note, vlt *vault.Vault, oldGlobal, oldInline []
 	if err := n.Save(); err != nil {
 		return fmt.Errorf("failed to save: %w", err)
 	}
-
-	vlt.DecrementTagsIndex(oldGlobal, oldInline)
-	vlt.UpdateTagsIndex(n.Tags, n.InlineTags)
-	vlt.UpdateTitleEntry(n.UUID, n.Title, n.FilePath, n.Parent)
 
 	return nil
 }

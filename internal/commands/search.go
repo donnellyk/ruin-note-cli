@@ -1102,15 +1102,16 @@ func handleEditSingle(vlt *vault.Vault, result SearchResult, force bool, fmMode 
 			}
 		}
 
-		if err := os.Remove(result.Path); err != nil {
-			return fmt.Errorf("failed to delete %s: %w", result.Path, err)
+		if err := vlt.DeleteNote(result.note, fmt.Sprintf("ruin search --edit: Delete %q", result.Title)); err != nil {
+			return err
 		}
-		vlt.DecrementTagsIndex(result.note.Tags, result.note.InlineTags)
-		vlt.RemoveTitleEntry(result.note.UUID)
-		vlt.Commit(fmt.Sprintf("ruin search --edit: Delete %q", result.Title))
 		fmt.Fprintf(os.Stderr, "Modified: 0, Deleted: 1\n")
 		return nil
 	}
+
+	// Capture old tags before modification for index update
+	oldGlobalTags := result.note.Tags
+	oldInlineTags := result.note.InlineTags
 
 	// Apply changes
 	if strings.HasPrefix(strings.TrimLeft(modifiedContent, "\n\r"), "---") {
@@ -1157,9 +1158,7 @@ func handleEditSingle(vlt *vault.Vault, result SearchResult, force bool, fmMode 
 		return fmt.Errorf("failed to save: %w", err)
 	}
 
-	vlt.UpdateTagsIndex(result.note.Tags, result.note.InlineTags)
-	vlt.UpdateTitleEntry(result.note.UUID, result.note.Title, result.note.FilePath, result.note.Parent)
-	vlt.Commit(fmt.Sprintf("ruin search --edit: Update %q", result.Title))
+	vlt.SaveNote(result.note, oldGlobalTags, oldInlineTags, fmt.Sprintf("ruin search --edit: Update %q", result.Title))
 	fmt.Fprintf(os.Stderr, "Modified: 1, Deleted: 0\n")
 	return nil
 }
@@ -1306,6 +1305,10 @@ func applyBulkChanges(vlt *vault.Vault, original, modified string, results []Sea
 			continue
 		}
 
+		// Capture old tags before modification for index update
+		oldGlobalTags := result.note.Tags
+		oldInlineTags := result.note.InlineTags
+
 		modContent := modifiedMap[uuid]
 
 		// Check if modified content includes frontmatter
@@ -1367,10 +1370,7 @@ func applyBulkChanges(vlt *vault.Vault, original, modified string, results []Sea
 			continue
 		}
 
-		// Update tags index (global + inline)
-		vlt.UpdateTagsIndex(result.note.Tags, result.note.InlineTags)
-		// Update titles index
-		vlt.UpdateTitleEntry(result.note.UUID, result.note.Title, result.note.FilePath, result.note.Parent)
+		vlt.SaveNote(result.note, oldGlobalTags, oldInlineTags, fmt.Sprintf("ruin search --edit: Update %q", result.note.Title))
 		modifiedCount++
 	}
 
@@ -1383,20 +1383,12 @@ func applyBulkChanges(vlt *vault.Vault, original, modified string, results []Sea
 			continue
 		}
 
-		if err := os.Remove(result.Path); err != nil {
+		if err := vlt.DeleteNote(result.note, fmt.Sprintf("ruin search --edit: Delete %q", result.Title)); err != nil {
 			errors = append(errors, fmt.Sprintf("Failed to delete %s: %v", result.Path, err))
 			continue
 		}
 
-		// Decrement tags for deleted note (global + inline)
-		vlt.DecrementTagsIndex(result.note.Tags, result.note.InlineTags)
-		vlt.RemoveTitleEntry(result.note.UUID)
 		deletedCount++
-	}
-
-	// Commit to version history
-	if modifiedCount > 0 || deletedCount > 0 {
-		vlt.Commit(fmt.Sprintf("ruin search --edit: Update %d notes", modifiedCount+deletedCount))
 	}
 
 	// Report results

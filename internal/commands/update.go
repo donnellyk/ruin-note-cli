@@ -169,7 +169,7 @@ New UUIDs in the updated content are an error (use 'log' to create new notes).`,
 					continue
 				}
 
-				// Get old tags for decrementing (global + inline)
+				// Capture old tags before modification for index update
 				oldGlobalTags := n.Tags
 				oldInlineTags := n.InlineTags
 
@@ -194,12 +194,7 @@ New UUIDs in the updated content are an error (use 'log' to create new notes).`,
 						continue
 					}
 
-					// Update tags index: decrement old, increment new (global + inline)
-					vlt.DecrementTagsIndex(oldGlobalTags, oldInlineTags)
-					vlt.UpdateTagsIndex(n.Tags, n.InlineTags)
-
-					// Update titles index
-					vlt.UpdateTitleEntry(n.UUID, n.Title, n.FilePath, n.Parent)
+					vlt.SaveNote(n, oldGlobalTags, oldInlineTags, fmt.Sprintf("ruin update: Modify %q", n.Title))
 				}
 
 				output.Modified = append(output.Modified, path)
@@ -216,15 +211,16 @@ New UUIDs in the updated content are an error (use 'log' to create new notes).`,
 				n := uuidToNote[uuid]
 
 				if !dryRun {
-					if err := os.Remove(path); err != nil {
-						errors = append(errors, fmt.Sprintf("failed to delete %s: %v", path, err))
-						continue
-					}
-
-					// Decrement tags for deleted note (global + inline)
 					if n != nil {
-						vlt.DecrementTagsIndex(n.Tags, n.InlineTags)
-						vlt.RemoveTitleEntry(n.UUID)
+						if err := vlt.DeleteNote(n, fmt.Sprintf("ruin update: Delete %q", n.Title)); err != nil {
+							errors = append(errors, fmt.Sprintf("failed to delete %s: %v", path, err))
+							continue
+						}
+					} else {
+						if err := os.Remove(path); err != nil {
+							errors = append(errors, fmt.Sprintf("failed to delete %s: %v", path, err))
+							continue
+						}
 					}
 				}
 
@@ -232,12 +228,6 @@ New UUIDs in the updated content are an error (use 'log' to create new notes).`,
 			}
 
 			output.Errors = errors
-
-			// Commit to version history
-			if !dryRun && (len(output.Modified) > 0 || len(output.Deleted) > 0) {
-				msg := fmt.Sprintf("ruin update: Modify %d notes, delete %d notes", len(output.Modified), len(output.Deleted))
-				vlt.Commit(msg)
-			}
 
 			// Output results
 			if *jsonOutput {

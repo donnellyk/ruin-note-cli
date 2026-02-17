@@ -134,19 +134,7 @@ Details here..."
 				return fmt.Errorf("failed to save note: %w", err)
 			}
 
-			// Update tags index (global + inline)
-			if err := vlt.UpdateTagsIndex(n.Tags, n.InlineTags); err != nil {
-				// Non-fatal: log warning but don't fail
-				fmt.Fprintf(os.Stderr, "warning: failed to update tags index: %v\n", err)
-			}
-
-			// Update titles index
-			if err := vlt.UpdateTitleEntry(n.UUID, n.Title, n.FilePath, n.Parent); err != nil {
-				fmt.Fprintf(os.Stderr, "warning: failed to update titles index: %v\n", err)
-			}
-
-			// Commit to version history
-			vlt.Commit(fmt.Sprintf("ruin log: Create %q", filename))
+			vlt.CreateNote(n, fmt.Sprintf("ruin log: Create %q", filename))
 
 			// Output result
 			if *jsonOutput {
