@@ -180,9 +180,41 @@ ruin note merge target source --dry-run
 }
 ```
 
+## note delete
+
+Delete a note from the vault.
+
+```
+ruin note delete <note> [flags]
+```
+
+### Flags
+
+| Flag | Type | Description |
+|------|------|-------------|
+| `--force` / `-f` | bool | Skip confirmation |
+
+### Examples
+
+```bash
+ruin note delete "My Note"
+ruin note delete <uuid> --force
+ruin note delete <uuid> --force --json
+```
+
+### JSON Output
+
+```json
+{
+  "path": "path/to/note.md",
+  "uuid": "...",
+  "title": "..."
+}
+```
+
 ## Post-Modification Pipeline
 
-All three commands follow the same save pipeline:
+All write commands follow the same save pipeline:
 
 1. `RefreshTags()` - re-extract tags from content
 2. `ResolveDateTokens()` - resolve `@date` tokens

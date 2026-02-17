@@ -389,6 +389,18 @@ ruin note append <note> [text] [flags]
 
 Without `--line`: appends at end. With `--line N`: inserts before line N. With `--line N --suffix`: appends to end of line N. With `--raw-line`: line numbers include frontmatter lines.
 
+#### note delete
+
+```
+ruin note delete <note>
+```
+
+| Flag | Short | Description |
+|------|-------|-------------|
+| `--force` | `-f` | Skip confirmation |
+
+Delete a note from the vault. Resolves the note by UUID, title, or path substring.
+
 #### note merge
 
 ```
