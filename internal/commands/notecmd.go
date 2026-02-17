@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"regexp"
 	"strings"
 
+	"kvnd/ruin-note-cli/internal/dateparse"
 	"kvnd/ruin-note-cli/internal/note"
 	"kvnd/ruin-note-cli/internal/vault"
 
@@ -45,25 +47,37 @@ type noteSetOutput struct {
 
 func newNoteSetCmd(getVault func() *vault.Vault, jsonOutput *bool) *cobra.Command {
 	var (
-		addTags    []string
-		removeTags []string
-		order      int
-		noOrder    bool
-		fields     []string
-		parent     string
-		noParent   bool
-		force      bool
+		addTags     []string
+		removeTags  []string
+		order       int
+		noOrder     bool
+		fields      []string
+		parent      string
+		noParent    bool
+		force       bool
+		line        int
+		addDates    []string
+		removeDates []string
+		removeAllDt bool
 	)
 
 	cmd := &cobra.Command{
 		Use:   "set <note> [flags]",
 		Short: "Set metadata and tags on a note",
-		Long: `Modify a note's tags, order, parent, or extra frontmatter fields.
+		Long: `Modify a note's tags, dates, order, parent, or extra frontmatter fields.
 
 At least one mutation flag is required. Multiple flags can be combined
-to batch changes in a single operation.`,
+to batch changes in a single operation.
+
+Use --line N to target a specific content line (1-indexed, after frontmatter).
+Without --line, tags are added globally and removed from all lines.`,
 		Example: `  ruin note set "My Note" --add-tag "#urgent"
   ruin note set <uuid> --remove-tag "#wip" --add-tag "#done"
+  ruin note set <uuid> --add-tag "#inline" --line 3
+  ruin note set <uuid> --add-date today
+  ruin note set <uuid> --add-date tomorrow --line 3
+  ruin note set <uuid> --remove-date @2026-03-15
+  ruin note set <uuid> --remove-dates
   ruin note set <uuid> --order 1
   ruin note set <uuid> --no-order
   ruin note set <uuid> --field "status=active"
@@ -80,12 +94,20 @@ to batch changes in a single operation.`,
 				return fmt.Errorf("--parent and --no-parent are mutually exclusive")
 			}
 
+			// --line requires a tag or date flag
+			hasLineTarget := cmd.Flags().Changed("line")
+			if hasLineTarget && len(addTags) == 0 && len(removeTags) == 0 &&
+				len(addDates) == 0 && len(removeDates) == 0 && !removeAllDt {
+				return fmt.Errorf("--line requires --add-tag, --remove-tag, --add-date, --remove-date, or --remove-dates")
+			}
+
 			// At least one mutation required
 			hasMutation := len(addTags) > 0 || len(removeTags) > 0 ||
 				cmd.Flags().Changed("order") || noOrder ||
-				len(fields) > 0 || parent != "" || noParent
+				len(fields) > 0 || parent != "" || noParent ||
+				len(addDates) > 0 || len(removeDates) > 0 || removeAllDt
 			if !hasMutation {
-				return fmt.Errorf("at least one mutation flag is required (--add-tag, --remove-tag, --order, --no-order, --field, --parent, --no-parent)")
+				return fmt.Errorf("at least one mutation flag is required (--add-tag, --remove-tag, --add-date, --remove-date, --remove-dates, --order, --no-order, --field, --parent, --no-parent)")
 			}
 
 			vlt := getVault()
@@ -98,6 +120,17 @@ to batch changes in a single operation.`,
 				return err
 			}
 
+			// Validate --line range
+			if hasLineTarget {
+				if line < 1 {
+					return fmt.Errorf("--line must be positive (got %d)", line)
+				}
+				contentLines := strings.Split(n.Content, "\n")
+				if line > len(contentLines) {
+					return fmt.Errorf("--line %d out of range (note has %d content lines)", line, len(contentLines))
+				}
+			}
+
 			// Capture old tags for index update
 			oldGlobal := n.Tags
 			oldInline := n.InlineTags
@@ -107,21 +140,80 @@ to batch changes in a single operation.`,
 			// --- add tags ---
 			for _, raw := range addTags {
 				tag := ensureHashPrefix(raw)
-				if noteHasTag(n, tag) {
-					continue // no-op
+				if !hasLineTarget {
+					// Global add (current behavior)
+					if noteHasTag(n, tag) {
+						continue
+					}
+					n.Content = insertGlobalTag(n.Content, tag)
+				} else {
+					// Inline add to specific line
+					var err error
+					n.Content, err = insertInlineTag(n.Content, tag, line)
+					if err != nil {
+						return err
+					}
 				}
-				n.Content = insertGlobalTag(n.Content, tag)
 				changes = append(changes, noteSetChange{Field: "tag", Action: "added", Value: tag})
 			}
 
 			// --- remove tags ---
 			for _, raw := range removeTags {
 				tag := ensureHashPrefix(raw)
-				if !noteHasTag(n, tag) {
-					continue // no-op
+				if !hasLineTarget {
+					// Remove from all lines (current behavior)
+					if !noteHasTag(n, tag) {
+						continue
+					}
+					n.Content = removeTagClean(n.Content, tag)
+				} else {
+					// Remove from specific line only
+					var err error
+					n.Content, err = removeTagFromLineNum(n.Content, tag, line)
+					if err != nil {
+						return err
+					}
 				}
-				n.Content = removeTagClean(n.Content, tag)
 				changes = append(changes, noteSetChange{Field: "tag", Action: "removed", Value: tag})
+			}
+
+			// --- add dates ---
+			for _, raw := range addDates {
+				dateStr, err := resolveDateArg(raw)
+				if err != nil {
+					return err
+				}
+				var targetLine int
+				if hasLineTarget {
+					targetLine = line
+				}
+				n.Content, err = insertDateInContent(n.Content, dateStr, targetLine)
+				if err != nil {
+					return err
+				}
+				changes = append(changes, noteSetChange{Field: "date", Action: "added", Value: dateStr})
+			}
+
+			// --- remove dates ---
+			if removeAllDt {
+				var targetLine int
+				if hasLineTarget {
+					targetLine = line
+				}
+				n.Content = removeDateFromContent(n.Content, "", targetLine)
+				changes = append(changes, noteSetChange{Field: "date", Action: "removed-all", Value: nil})
+			}
+			for _, raw := range removeDates {
+				dateStr, err := resolveDateArg(raw)
+				if err != nil {
+					return err
+				}
+				var targetLine int
+				if hasLineTarget {
+					targetLine = line
+				}
+				n.Content = removeDateFromContent(n.Content, dateStr, targetLine)
+				changes = append(changes, noteSetChange{Field: "date", Action: "removed", Value: dateStr})
 			}
 
 			// --- order ---
@@ -219,8 +311,12 @@ to batch changes in a single operation.`,
 		},
 	}
 
-	cmd.Flags().StringArrayVar(&addTags, "add-tag", nil, "add a global tag (repeatable)")
-	cmd.Flags().StringArrayVar(&removeTags, "remove-tag", nil, "remove a tag (repeatable)")
+	cmd.Flags().StringArrayVar(&addTags, "add-tag", nil, "add a tag (global by default, inline with --line)")
+	cmd.Flags().StringArrayVar(&removeTags, "remove-tag", nil, "remove a tag (all lines by default, specific line with --line)")
+	cmd.Flags().IntVar(&line, "line", 0, "target content line (1-indexed, after frontmatter)")
+	cmd.Flags().StringArrayVar(&addDates, "add-date", nil, "add a @YYYY-MM-DD date reference (repeatable, accepts today/tomorrow/etc)")
+	cmd.Flags().StringArrayVar(&removeDates, "remove-date", nil, "remove a specific @YYYY-MM-DD date (repeatable)")
+	cmd.Flags().BoolVar(&removeAllDt, "remove-dates", false, "remove all @YYYY-MM-DD dates")
 	cmd.Flags().IntVar(&order, "order", 0, "set order frontmatter field")
 	cmd.Flags().BoolVar(&noOrder, "no-order", false, "unset order field")
 	cmd.Flags().StringArrayVar(&fields, "field", nil, "set extra frontmatter field (key=value, empty value deletes)")
@@ -766,4 +862,113 @@ func cleanSeparators(line string) string {
 	line = strings.TrimRight(line, ", ")
 	// If trimming removed meaningful whitespace, keep at least the trimmed form
 	return line
+}
+
+// --- Line-targeted tag helpers ---
+
+// insertInlineTag appends a tag to the end of a specific content line.
+func insertInlineTag(content, tag string, lineNum int) (string, error) {
+	lines := strings.Split(content, "\n")
+	if lineNum < 1 || lineNum > len(lines) {
+		return "", fmt.Errorf("--line %d out of range (note has %d content lines)", lineNum, len(lines))
+	}
+	idx := lineNum - 1
+	lines[idx] = strings.TrimRight(lines[idx], " \t") + " " + tag
+	return strings.Join(lines, "\n"), nil
+}
+
+// removeTagFromLineNum removes a tag from a specific content line only.
+func removeTagFromLineNum(content, tag string, lineNum int) (string, error) {
+	lines := strings.Split(content, "\n")
+	if lineNum < 1 || lineNum > len(lines) {
+		return "", fmt.Errorf("--line %d out of range (note has %d content lines)", lineNum, len(lines))
+	}
+	idx := lineNum - 1
+	normalized := note.NormalizeTag(tag)
+	newLine := removeTagFromLine(lines[idx], normalized)
+	// If a tag-only line becomes empty, remove it
+	trimmed := strings.TrimSpace(newLine)
+	if trimmed == "" && note.IsTagOnlyLine(strings.TrimSpace(lines[idx])) {
+		lines = append(lines[:idx], lines[idx+1:]...)
+	} else {
+		lines[idx] = newLine
+	}
+	return strings.Join(lines, "\n"), nil
+}
+
+// --- Date helpers ---
+
+// resolveDateArg takes a user-provided date argument (with or without @),
+// resolves natural language tokens, and returns "@YYYY-MM-DD".
+func resolveDateArg(raw string) (string, error) {
+	token := strings.TrimPrefix(raw, "@")
+	resolved, ok := dateparse.ResolveDate(token)
+	if !ok {
+		return "", fmt.Errorf("unrecognized date: %q", raw)
+	}
+	return "@" + resolved.Format("2006-01-02"), nil
+}
+
+// resolvedDateRe matches @YYYY-MM-DD patterns for removal.
+var resolvedDateRe = regexp.MustCompile(`\s*@\d{4}-\d{2}-\d{2}`)
+
+// specificDateRe returns a regex matching a specific @YYYY-MM-DD date.
+func specificDateRe(date string) *regexp.Regexp {
+	// date is already "@YYYY-MM-DD"
+	return regexp.MustCompile(`\s*` + regexp.QuoteMeta(date))
+}
+
+// insertDateInContent inserts a date reference into content.
+// If lineNum==0: insert on tag-only line (like insertGlobalTag).
+// Otherwise: append to end of specified line.
+func insertDateInContent(content, date string, lineNum int) (string, error) {
+	if lineNum == 0 {
+		// Insert like a global tag — on the first tag-only line or after title
+		return insertGlobalTag(content, date), nil
+	}
+	lines := strings.Split(content, "\n")
+	if lineNum < 1 || lineNum > len(lines) {
+		return "", fmt.Errorf("--line %d out of range (note has %d content lines)", lineNum, len(lines))
+	}
+	idx := lineNum - 1
+	lines[idx] = strings.TrimRight(lines[idx], " \t") + " " + date
+	return strings.Join(lines, "\n"), nil
+}
+
+// removeDateFromContent removes date references from content.
+// If date is empty, removes ALL @YYYY-MM-DD patterns.
+// If date is set (e.g. "@2026-03-15"), removes only that specific date.
+// If lineNum==0: operates on all lines. Otherwise on specific line only.
+func removeDateFromContent(content, date string, lineNum int) string {
+	lines := strings.Split(content, "\n")
+
+	var re *regexp.Regexp
+	if date == "" {
+		re = resolvedDateRe
+	} else {
+		re = specificDateRe(date)
+	}
+
+	start, end := 0, len(lines)
+	if lineNum > 0 && lineNum <= len(lines) {
+		start = lineNum - 1
+		end = lineNum
+	}
+
+	var result []string
+	for i, l := range lines {
+		if i >= start && i < end {
+			newLine := re.ReplaceAllString(l, "")
+			newLine = strings.TrimRight(newLine, " \t")
+			// If a tag-only line becomes empty after date removal, skip it
+			if strings.TrimSpace(newLine) == "" && note.IsTagOnlyLine(strings.TrimSpace(l)) {
+				continue
+			}
+			result = append(result, newLine)
+		} else {
+			result = append(result, l)
+		}
+	}
+
+	return strings.Join(result, "\n")
 }

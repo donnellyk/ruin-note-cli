@@ -433,6 +433,290 @@ func TestNoteSet_CombinedFlags(t *testing.T) {
 	}
 }
 
+// --- note set --line tests ---
+
+func TestNoteSet_AddTag_InlineWithLine(t *testing.T) {
+	vlt := setupNoteTestVault(t)
+	jsonOut := false
+	cmd := NewNoteCmd(func() *vault.Vault { return vlt }, &jsonOut)
+
+	// tagged.md content lines:
+	// 1: # Tagged Note
+	// 2: #daily, #work
+	// 3: (empty)
+	// 4: Some content here.
+	cmd.SetArgs([]string{"set", "uuid-tagged", "--add-tag", "#inlinetest", "--line", "4"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("error = %v", err)
+	}
+
+	n, _ := ResolveNote(vlt, "uuid-tagged")
+	lines := strings.Split(n.Content, "\n")
+	if !strings.Contains(lines[3], "#inlinetest") {
+		t.Errorf("line 4 = %q, expected #inlinetest appended", lines[3])
+	}
+	if !strings.HasPrefix(lines[3], "Some content here.") {
+		t.Errorf("line 4 = %q, original content should be preserved", lines[3])
+	}
+}
+
+func TestNoteSet_RemoveTag_FromSpecificLine(t *testing.T) {
+	vlt := setupNoteTestVault(t)
+	jsonOut := false
+
+	// First add an inline tag to line 4
+	cmd := NewNoteCmd(func() *vault.Vault { return vlt }, &jsonOut)
+	cmd.SetArgs([]string{"set", "uuid-tagged", "--add-tag", "#inlinetest", "--line", "4"})
+	cmd.Execute()
+
+	// Now remove it from line 4 only
+	cmd2 := NewNoteCmd(func() *vault.Vault { return vlt }, &jsonOut)
+	cmd2.SetArgs([]string{"set", "uuid-tagged", "--remove-tag", "#inlinetest", "--line", "4"})
+	if err := cmd2.Execute(); err != nil {
+		t.Fatalf("error = %v", err)
+	}
+
+	n, _ := ResolveNote(vlt, "uuid-tagged")
+	lines := strings.Split(n.Content, "\n")
+	if strings.Contains(lines[3], "#inlinetest") {
+		t.Errorf("line 4 = %q, #inlinetest should have been removed", lines[3])
+	}
+}
+
+func TestNoteSet_RemoveTag_LineDoesNotAffectOtherLines(t *testing.T) {
+	vlt := setupNoteTestVault(t)
+	jsonOut := false
+
+	// tagged.md has #daily on line 2 (the tag-only line).
+	// Removing #daily with --line 4 should NOT remove it from line 2.
+	cmd := NewNoteCmd(func() *vault.Vault { return vlt }, &jsonOut)
+	cmd.SetArgs([]string{"set", "uuid-tagged", "--remove-tag", "#daily", "--line", "4"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("error = %v", err)
+	}
+
+	n, _ := ResolveNote(vlt, "uuid-tagged")
+	// #daily should still exist on the tag-only line
+	found := false
+	for _, tag := range n.Tags {
+		if note.NormalizeTag(tag) == "#daily" {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("#daily should still exist on the tag-only line (not targeted by --line 4)")
+	}
+}
+
+func TestNoteSet_AddDate_Global(t *testing.T) {
+	vlt := setupNoteTestVault(t)
+	jsonOut := true
+	cmd := NewNoteCmd(func() *vault.Vault { return vlt }, &jsonOut)
+
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	cmd.SetArgs([]string{"set", "uuid-tagged", "--add-date", "today"})
+	err := cmd.Execute()
+
+	w.Close()
+	os.Stdout = oldStdout
+
+	if err != nil {
+		t.Fatalf("error = %v", err)
+	}
+
+	var buf bytes.Buffer
+	buf.ReadFrom(r)
+
+	var result noteSetOutput
+	json.Unmarshal(buf.Bytes(), &result)
+
+	if len(result.Changes) != 1 {
+		t.Fatalf("got %d changes, want 1", len(result.Changes))
+	}
+	if result.Changes[0].Field != "date" || result.Changes[0].Action != "added" {
+		t.Errorf("change = %+v, want date/added", result.Changes[0])
+	}
+
+	// Verify date was added to content
+	n, _ := ResolveNote(vlt, "uuid-tagged")
+	if !strings.Contains(n.Content, "@") {
+		t.Error("expected @YYYY-MM-DD date in content")
+	}
+}
+
+func TestNoteSet_AddDate_WithLine(t *testing.T) {
+	vlt := setupNoteTestVault(t)
+	jsonOut := false
+	cmd := NewNoteCmd(func() *vault.Vault { return vlt }, &jsonOut)
+
+	cmd.SetArgs([]string{"set", "uuid-tagged", "--add-date", "2026-03-15", "--line", "4"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("error = %v", err)
+	}
+
+	n, _ := ResolveNote(vlt, "uuid-tagged")
+	lines := strings.Split(n.Content, "\n")
+	if !strings.Contains(lines[3], "@2026-03-15") {
+		t.Errorf("line 4 = %q, expected @2026-03-15", lines[3])
+	}
+}
+
+func TestNoteSet_RemoveDate_AllLines(t *testing.T) {
+	vlt := setupNoteTestVault(t)
+	jsonOut := false
+
+	// Add a date first
+	cmd := NewNoteCmd(func() *vault.Vault { return vlt }, &jsonOut)
+	cmd.SetArgs([]string{"set", "uuid-tagged", "--add-date", "2026-03-15", "--line", "4"})
+	cmd.Execute()
+
+	// Remove that specific date from all lines
+	cmd2 := NewNoteCmd(func() *vault.Vault { return vlt }, &jsonOut)
+	cmd2.SetArgs([]string{"set", "uuid-tagged", "--remove-date", "@2026-03-15"})
+	if err := cmd2.Execute(); err != nil {
+		t.Fatalf("error = %v", err)
+	}
+
+	n, _ := ResolveNote(vlt, "uuid-tagged")
+	if strings.Contains(n.Content, "@2026-03-15") {
+		t.Errorf("@2026-03-15 should have been removed, content:\n%s", n.Content)
+	}
+}
+
+func TestNoteSet_RemoveDate_SpecificLine(t *testing.T) {
+	vlt := setupNoteTestVault(t)
+	jsonOut := false
+
+	// Add dates on two lines
+	cmd := NewNoteCmd(func() *vault.Vault { return vlt }, &jsonOut)
+	cmd.SetArgs([]string{"set", "uuid-tagged", "--add-date", "2026-03-15", "--line", "2"})
+	cmd.Execute()
+
+	cmd2 := NewNoteCmd(func() *vault.Vault { return vlt }, &jsonOut)
+	cmd2.SetArgs([]string{"set", "uuid-tagged", "--add-date", "2026-03-15", "--line", "4"})
+	cmd2.Execute()
+
+	// Remove from line 4 only
+	cmd3 := NewNoteCmd(func() *vault.Vault { return vlt }, &jsonOut)
+	cmd3.SetArgs([]string{"set", "uuid-tagged", "--remove-date", "@2026-03-15", "--line", "4"})
+	if err := cmd3.Execute(); err != nil {
+		t.Fatalf("error = %v", err)
+	}
+
+	n, _ := ResolveNote(vlt, "uuid-tagged")
+	lines := strings.Split(n.Content, "\n")
+	if strings.Contains(lines[3], "@2026-03-15") {
+		t.Errorf("line 4 should not have @2026-03-15")
+	}
+	if !strings.Contains(lines[1], "@2026-03-15") {
+		t.Errorf("line 2 should still have @2026-03-15")
+	}
+}
+
+func TestNoteSet_RemoveDates_All(t *testing.T) {
+	vlt := setupNoteTestVault(t)
+	jsonOut := false
+
+	// Add dates to two lines
+	cmd := NewNoteCmd(func() *vault.Vault { return vlt }, &jsonOut)
+	cmd.SetArgs([]string{"set", "uuid-tagged", "--add-date", "2026-03-15", "--line", "2"})
+	cmd.Execute()
+
+	cmd2 := NewNoteCmd(func() *vault.Vault { return vlt }, &jsonOut)
+	cmd2.SetArgs([]string{"set", "uuid-tagged", "--add-date", "2026-04-01", "--line", "4"})
+	cmd2.Execute()
+
+	// Remove all dates
+	cmd3 := NewNoteCmd(func() *vault.Vault { return vlt }, &jsonOut)
+	cmd3.SetArgs([]string{"set", "uuid-tagged", "--remove-dates"})
+	if err := cmd3.Execute(); err != nil {
+		t.Fatalf("error = %v", err)
+	}
+
+	n, _ := ResolveNote(vlt, "uuid-tagged")
+	if strings.Contains(n.Content, "@2026-03-15") || strings.Contains(n.Content, "@2026-04-01") {
+		t.Errorf("all dates should have been removed, content:\n%s", n.Content)
+	}
+}
+
+func TestNoteSet_RemoveDates_SpecificLine(t *testing.T) {
+	vlt := setupNoteTestVault(t)
+	jsonOut := false
+
+	// Add dates to two lines
+	cmd := NewNoteCmd(func() *vault.Vault { return vlt }, &jsonOut)
+	cmd.SetArgs([]string{"set", "uuid-tagged", "--add-date", "2026-03-15", "--line", "2"})
+	cmd.Execute()
+
+	cmd2 := NewNoteCmd(func() *vault.Vault { return vlt }, &jsonOut)
+	cmd2.SetArgs([]string{"set", "uuid-tagged", "--add-date", "2026-04-01", "--line", "4"})
+	cmd2.Execute()
+
+	// Remove all dates from line 4 only
+	cmd3 := NewNoteCmd(func() *vault.Vault { return vlt }, &jsonOut)
+	cmd3.SetArgs([]string{"set", "uuid-tagged", "--remove-dates", "--line", "4"})
+	if err := cmd3.Execute(); err != nil {
+		t.Fatalf("error = %v", err)
+	}
+
+	n, _ := ResolveNote(vlt, "uuid-tagged")
+	lines := strings.Split(n.Content, "\n")
+	if strings.Contains(lines[3], "@2026-04-01") {
+		t.Errorf("line 4 should not have @2026-04-01")
+	}
+	if !strings.Contains(lines[1], "@2026-03-15") {
+		t.Errorf("line 2 should still have @2026-03-15")
+	}
+}
+
+func TestNoteSet_LineValidation_OutOfRange(t *testing.T) {
+	vlt := setupNoteTestVault(t)
+	jsonOut := false
+	cmd := NewNoteCmd(func() *vault.Vault { return vlt }, &jsonOut)
+
+	cmd.SetArgs([]string{"set", "uuid-tagged", "--add-tag", "#test", "--line", "999"})
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatal("expected out-of-range error")
+	}
+	if !containsSubstr(err.Error(), "out of range") {
+		t.Errorf("error = %q, want out of range", err.Error())
+	}
+}
+
+func TestNoteSet_LineValidation_WithoutMutationFlag(t *testing.T) {
+	vlt := setupNoteTestVault(t)
+	jsonOut := false
+	cmd := NewNoteCmd(func() *vault.Vault { return vlt }, &jsonOut)
+
+	cmd.SetArgs([]string{"set", "uuid-tagged", "--line", "1"})
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatal("expected error for --line without mutation flag")
+	}
+	if !containsSubstr(err.Error(), "--line requires") {
+		t.Errorf("error = %q", err.Error())
+	}
+}
+
+func TestNoteSet_AddDate_InvalidToken(t *testing.T) {
+	vlt := setupNoteTestVault(t)
+	jsonOut := false
+	cmd := NewNoteCmd(func() *vault.Vault { return vlt }, &jsonOut)
+
+	cmd.SetArgs([]string{"set", "uuid-tagged", "--add-date", "gibberish-not-a-date"})
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatal("expected error for invalid date token")
+	}
+	if !containsSubstr(err.Error(), "unrecognized date") {
+		t.Errorf("error = %q", err.Error())
+	}
+}
+
 // --- note append tests ---
 
 func TestNoteAppend_AtEnd(t *testing.T) {

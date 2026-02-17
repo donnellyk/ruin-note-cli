@@ -340,8 +340,12 @@ ruin note set <note> [flags]
 
 | Flag | Short | Description |
 |------|-------|-------------|
-| `--add-tag` | | Add a global tag (repeatable, `#` auto-added if missing) |
-| `--remove-tag` | | Remove a tag from all occurrences (repeatable) |
+| `--add-tag` | | Add a tag (global by default, inline with `--line`; repeatable, `#` auto-added) |
+| `--remove-tag` | | Remove a tag (all lines by default, specific line with `--line`; repeatable) |
+| `--line` | | Target content line (1-indexed, after frontmatter) |
+| `--add-date` | | Add a `@YYYY-MM-DD` date reference (repeatable, accepts `today`/`tomorrow`/etc) |
+| `--remove-date` | | Remove a specific `@YYYY-MM-DD` date (repeatable) |
+| `--remove-dates` | | Remove all `@YYYY-MM-DD` dates |
 | `--order` | | Set `order` frontmatter field |
 | `--no-order` | | Unset `order` field |
 | `--field` | | Set extra frontmatter field (`key=value`, empty value deletes) |
@@ -349,7 +353,7 @@ ruin note set <note> [flags]
 | `--no-parent` | | Remove parent |
 | `--force` | `-f` | Skip confirmation |
 
-At least one mutation flag required. Replaces `parent set` and `parent remove`.
+At least one mutation flag required. Use `--line N` to target a specific content line for tag and date operations.
 
 #### note append
 
