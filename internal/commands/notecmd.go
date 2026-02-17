@@ -351,6 +351,9 @@ Without --line, tags are added globally and removed from all lines.`,
 				return err
 			}
 
+			// Commit to version history
+			vlt.Commit(fmt.Sprintf("ruin note set: Update %q", n.Title))
+
 			if *jsonOutput {
 				out := noteSetOutput{Path: n.FilePath, UUID: n.UUID, Title: n.Title, Changes: changes}
 				enc := json.NewEncoder(os.Stdout)
@@ -512,6 +515,9 @@ Text comes from a positional argument or --stdin (mutually exclusive).`,
 			if err := saveWithIndexUpdate(n, vlt, oldGlobal, oldInline); err != nil {
 				return err
 			}
+
+			// Commit to version history
+			vlt.Commit(fmt.Sprintf("ruin note append: Update %q", n.Title))
 
 			if *jsonOutput {
 				out := noteAppendOutput{Path: n.FilePath, UUID: n.UUID, Line: resultLine, Action: action}
@@ -705,6 +711,9 @@ Source's children are reparented to target.`,
 				vlt.RemoveTitleEntry(source.UUID)
 				sourceDeleted = true
 			}
+
+			// Commit to version history
+			vlt.Commit(fmt.Sprintf("ruin note merge: Merge %q into %q", source.Title, target.Title))
 
 			out := noteMergeOutput{
 				TargetPath:    target.FilePath,

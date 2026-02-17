@@ -245,6 +245,11 @@ See also:
 				errors = append(errors, fmt.Sprintf("Failed to rebuild tags index: %v", err))
 			}
 
+			// Commit to version history
+			if updated > 0 {
+				vlt.Commit(fmt.Sprintf("ruin tags rename: %s -> %s (%d notes)", oldTag, newTag, updated))
+			}
+
 			fmt.Fprintf(os.Stderr, "Renamed %s to %s in %d note(s)\n", oldTag, newTag, updated)
 			if len(errors) > 0 {
 				fmt.Fprintln(os.Stderr, "Errors:")
@@ -386,6 +391,11 @@ See also:
 			// Update tags index
 			if err := rebuildTagsIndex(vlt); err != nil {
 				errors = append(errors, fmt.Sprintf("Failed to rebuild tags index: %v", err))
+			}
+
+			// Commit to version history
+			if updated > 0 {
+				vlt.Commit(fmt.Sprintf("ruin tags delete: %s (%d notes)", tag, updated))
 			}
 
 			fmt.Fprintf(os.Stderr, "Removed %s from %d note(s)\n", tag, updated)

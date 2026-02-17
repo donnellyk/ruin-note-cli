@@ -145,6 +145,9 @@ Details here..."
 				fmt.Fprintf(os.Stderr, "warning: failed to update titles index: %v\n", err)
 			}
 
+			// Commit to version history
+			vlt.Commit(fmt.Sprintf("ruin log: Create %q", filename))
+
 			// Output result
 			if *jsonOutput {
 				output := LogOutput{

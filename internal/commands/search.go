@@ -1107,6 +1107,7 @@ func handleEditSingle(vlt *vault.Vault, result SearchResult, force bool, fmMode 
 		}
 		vlt.DecrementTagsIndex(result.note.Tags, result.note.InlineTags)
 		vlt.RemoveTitleEntry(result.note.UUID)
+		vlt.Commit(fmt.Sprintf("ruin search --edit: Delete %q", result.Title))
 		fmt.Fprintf(os.Stderr, "Modified: 0, Deleted: 1\n")
 		return nil
 	}
@@ -1158,6 +1159,7 @@ func handleEditSingle(vlt *vault.Vault, result SearchResult, force bool, fmMode 
 
 	vlt.UpdateTagsIndex(result.note.Tags, result.note.InlineTags)
 	vlt.UpdateTitleEntry(result.note.UUID, result.note.Title, result.note.FilePath, result.note.Parent)
+	vlt.Commit(fmt.Sprintf("ruin search --edit: Update %q", result.Title))
 	fmt.Fprintf(os.Stderr, "Modified: 1, Deleted: 0\n")
 	return nil
 }
@@ -1390,6 +1392,11 @@ func applyBulkChanges(vlt *vault.Vault, original, modified string, results []Sea
 		vlt.DecrementTagsIndex(result.note.Tags, result.note.InlineTags)
 		vlt.RemoveTitleEntry(result.note.UUID)
 		deletedCount++
+	}
+
+	// Commit to version history
+	if modifiedCount > 0 || deletedCount > 0 {
+		vlt.Commit(fmt.Sprintf("ruin search --edit: Update %d notes", modifiedCount+deletedCount))
 	}
 
 	// Report results

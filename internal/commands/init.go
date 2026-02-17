@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 	"kvnd/ruin-note-cli/internal/config"
 	"kvnd/ruin-note-cli/internal/vault"
+	"kvnd/ruin-note-cli/internal/versioning"
 )
 
 // InitOutput represents the JSON output for the init command.
@@ -16,11 +17,13 @@ type InitOutput struct {
 	Vault   string   `json:"vault"`
 	Created []string `json:"created,omitempty"`
 	Existed []string `json:"existed,omitempty"`
+	Git     bool     `json:"git"`
 }
 
 // NewInitCmd creates the init command.
 func NewInitCmd(jsonOutput *bool) *cobra.Command {
 	var force bool
+	var noGit bool
 
 	cmd := &cobra.Command{
 		Use:   "init [path]",
@@ -93,12 +96,28 @@ If a path is provided, also updates the config file to set this as the default v
 				}
 			}
 
+			// Set up git versioning
+			gitInitialized := false
+			if !noGit && versioning.IsAvailable() {
+				g := versioning.New(vaultPath)
+				created, err := g.Init()
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "warning: git init failed: %v\n", err)
+				} else {
+					gitInitialized = true
+					if created {
+						fmt.Fprintf(os.Stderr, "Initialized git repository\n")
+					}
+				}
+			}
+
 			// Output
 			if *jsonOutput {
 				output := InitOutput{
 					Vault:   vaultPath,
 					Created: result.Created,
 					Existed: result.Existed,
+					Git:     gitInitialized,
 				}
 				enc := json.NewEncoder(os.Stdout)
 				enc.SetIndent("", "  ")
@@ -118,6 +137,7 @@ If a path is provided, also updates the config file to set this as the default v
 	}
 
 	cmd.Flags().BoolVarP(&force, "force", "f", false, "overwrite existing metadata files")
+	cmd.Flags().BoolVar(&noGit, "no-git", false, "skip git repository initialization")
 
 	return cmd
 }

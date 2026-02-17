@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"gopkg.in/yaml.v3"
+	"kvnd/ruin-note-cli/internal/versioning"
 )
 
 const (
@@ -20,12 +21,29 @@ const (
 
 // Vault represents a notes vault directory.
 type Vault struct {
-	Path string
+	Path       string
+	versioning *versioning.GitVersioning
 }
 
 // New creates a new Vault instance for the given path.
 func New(path string) *Vault {
 	return &Vault{Path: path}
+}
+
+// SetVersioning configures git versioning for the vault.
+func (v *Vault) SetVersioning(g *versioning.GitVersioning) {
+	v.versioning = g
+}
+
+// Commit creates a git commit with the given message if versioning is enabled.
+// This is a no-op if versioning is nil. Errors are logged to stderr as warnings.
+func (v *Vault) Commit(msg string) {
+	if v.versioning == nil {
+		return
+	}
+	if err := v.versioning.Commit(msg); err != nil {
+		fmt.Fprintf(os.Stderr, "warning: git commit failed: %v\n", err)
+	}
 }
 
 // RuinDir returns the path to the .ruin metadata directory.

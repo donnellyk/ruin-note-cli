@@ -211,6 +211,14 @@ func doctorFiles(vlt *vault.Vault, paths []string, dryRun bool, jsonOutput bool)
 		}
 	}
 
+	// Commit to version history
+	if !dryRun {
+		repaired := len(output.UUIDGenerated) + len(output.TagsReindexed) + len(output.LinkedCardsReindexed)
+		if repaired > 0 {
+			vlt.Commit(fmt.Sprintf("ruin doctor: Repair %d notes", repaired))
+		}
+	}
+
 	return doctorPrintOutput(&output, prefix, jsonOutput)
 }
 
@@ -392,6 +400,14 @@ func doctorFullScan(vlt *vault.Vault, dryRun bool, jsonOutput bool) error {
 				output.OrphanedBookmarks = append(output.OrphanedBookmarks,
 					fmt.Sprintf("%s (uuid %s not found)", p.Name, p.UUID))
 			}
+		}
+	}
+
+	// Commit to version history
+	if !dryRun {
+		repaired := len(output.UUIDGenerated) + len(output.TagsReindexed) + len(output.LinkedCardsReindexed)
+		if repaired > 0 {
+			vlt.Commit(fmt.Sprintf("ruin doctor: Repair %d notes", repaired))
 		}
 	}
 

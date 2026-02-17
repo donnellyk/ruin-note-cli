@@ -11,6 +11,15 @@
 | `--json` | | | Output JSON (where supported) |
 | `--no-color` | | `NO_COLOR` | Disable colored output |
 
+## Environment Variables
+
+| Var | Description |
+|-----|-------------|
+| `RUIN_VAULT` | Override vault path |
+| `RUIN_CONFIG` | Override config file path |
+| `RUIN_VERSIONING` | Set to `false` to disable git auto-versioning |
+| `NO_COLOR` | Disable colored output |
+
 ## Exit Codes
 
 | Code | Meaning |
@@ -33,8 +42,9 @@ ruin init [path]
 | Flag | Short | Description |
 |------|-------|-------------|
 | `--force` | `-f` | Overwrite existing metadata files |
+| `--no-git` | | Skip git repository initialization |
 
-Creates `.ruin/` directory with `tags.yml` and `queries.yml`. If path provided, updates config.
+Creates `.ruin/` directory with `tags.yml` and `queries.yml`. Initializes a git repository for automatic version history (unless `--no-git`). If path provided, updates config.
 
 ### log
 
@@ -549,6 +559,8 @@ Content of second note...
 
 ```
 <vault>/
+├── .git/             # Auto-versioning (created by ruin init)
+├── .gitignore        # Ignores .ruin/
 ├── .ruin/
 │   ├── tags.yml      # Tag index (name, count, scope: global/inline/both)
 │   ├── queries.yml   # Saved queries
@@ -556,4 +568,21 @@ Content of second note...
 │   └── titles.json   # Titles index (UUID to title/path/parent)
 ├── Note Title.md
 └── 2025-01-28T10-30-00.md
+```
+
+## Versioning
+
+Ruin automatically commits note changes to git after each write operation. This provides version history for your notes with no manual effort.
+
+- **Enabled by default** when vault has a `.git/` directory
+- **`ruin init`** creates the git repo automatically (opt out with `--no-git`)
+- **`.ruin/`** is gitignored (indexes are derived data, rebuilt by `ruin doctor`)
+- **One commit per command** (e.g., `ruin update` modifying 10 notes = 1 commit)
+- **Failures are warnings** - a git error never blocks a note operation
+- **Disable**: set `versioning: false` in config or `RUIN_VERSIONING=false` env var
+
+Config (`~/.config/ruin`):
+```yaml
+vault_path: ~/notes
+versioning: true   # default if omitted
 ```

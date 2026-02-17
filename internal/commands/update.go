@@ -233,6 +233,12 @@ New UUIDs in the updated content are an error (use 'log' to create new notes).`,
 
 			output.Errors = errors
 
+			// Commit to version history
+			if !dryRun && (len(output.Modified) > 0 || len(output.Deleted) > 0) {
+				msg := fmt.Sprintf("ruin update: Modify %d notes, delete %d notes", len(output.Modified), len(output.Deleted))
+				vlt.Commit(msg)
+			}
+
 			// Output results
 			if *jsonOutput {
 				enc := json.NewEncoder(os.Stdout)

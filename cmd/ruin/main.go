@@ -8,6 +8,7 @@ import (
 	"kvnd/ruin-note-cli/internal/commands"
 	"kvnd/ruin-note-cli/internal/config"
 	"kvnd/ruin-note-cli/internal/vault"
+	"kvnd/ruin-note-cli/internal/versioning"
 )
 
 var (
@@ -80,6 +81,14 @@ tags, and powerful search capabilities.`,
 			return err
 		}
 		vlt = vault.New(expandedPath)
+
+		// Set up versioning if enabled and vault is a git repo
+		if cfg.VersioningEnabled() && versioning.IsAvailable() {
+			g := versioning.New(expandedPath)
+			if g.IsRepo() {
+				vlt.SetVersioning(g)
+			}
+		}
 
 		return nil
 	},

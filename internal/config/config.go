@@ -11,7 +11,20 @@ import (
 
 // Config holds the application configuration.
 type Config struct {
-	VaultPath string `yaml:"vault_path"`
+	VaultPath  string `yaml:"vault_path"`
+	Versioning *bool  `yaml:"versioning,omitempty"`
+}
+
+// VersioningEnabled returns whether versioning is enabled.
+// Defaults to true if not explicitly set. Respects RUIN_VERSIONING env var.
+func (c *Config) VersioningEnabled() bool {
+	if env := os.Getenv("RUIN_VERSIONING"); env != "" {
+		return env != "false" && env != "0"
+	}
+	if c.Versioning != nil {
+		return *c.Versioning
+	}
+	return true
 }
 
 // DefaultConfigPath returns the default config file path (~/.config/ruin).
