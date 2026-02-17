@@ -45,7 +45,7 @@ ruin-note-cli/
 │       └── main.go           # CLI entry point
 ├── internal/
 │   ├── config/
-│   │   └── config.go         # Config file handling (~/.config/ruin)
+│   │   └── config.go         # Config file handling (~/.config/ruin/config.yml)
 │   ├── vault/
 │   │   ├── vault.go          # Vault operations + tags/queries index
 │   │   └── titles.go         # Titles index (JSON, UUID->title/path/parent)
@@ -86,7 +86,7 @@ ruin-note-cli/
 ## Architecture Notes
 
 ### Config File Location
-- `~/.config/ruin` - YAML file containing:
+- `~/.config/ruin/config.yml` - YAML file containing (legacy: `~/.config/ruin` as a file is also supported):
   - `vault_path`: path to notes directory
   - Other user preferences
 

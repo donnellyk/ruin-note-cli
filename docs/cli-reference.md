@@ -593,7 +593,7 @@ Ruin automatically commits note changes to git after each write operation. This 
 - **Failures are warnings** - a git error never blocks a note operation
 - **Disable**: set `versioning: false` in config or `RUIN_VERSIONING=false` env var
 
-Config (`~/.config/ruin`):
+Config (`~/.config/ruin/config.yml`):
 ```yaml
 vault_path: ~/notes
 versioning: true   # default if omitted
