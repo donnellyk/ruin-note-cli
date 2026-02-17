@@ -48,12 +48,13 @@ func NewPickCmd(getVault func() *vault.Vault, jsonOutput *bool) *cobra.Command {
 		anyMode    bool
 		allMode    bool
 		doneMode   bool
+		todoMode   bool
 		filterFlag string
 	)
 
 	cmd := &cobra.Command{
-		Use:   "pick <inline-tags...> [@date...]",
-		Short: "Pick lines annotated with inline tags",
+		Use:   "pick [inline-tags...] [@date...] [flags]",
+		Short: "Pick lines annotated with inline tags or checkboxes",
 		Long: `Extract lines annotated with specific inline tags from across the vault.
 
 Inline tags are tags that appear on lines with other content (not tag-only
@@ -66,6 +67,10 @@ Use --any for OR mode (lines with any of the given tags).
 Lines containing #done are excluded by default, since #done marks a line as
 resolved/completed. Use --all to include both open and done lines, or --done
 to show only completed lines.
+
+Use --todo to also match markdown checkbox lines (- [ ] / - [x]). When --todo
+is set, tags become optional. The done filter applies uniformly: checked
+checkboxes ([x]) and #done lines are both treated as "done".
 
 The command pre-filters notes using the inline-tags frontmatter field for
 fast lookups, then extracts matching lines from the content body.`,
@@ -84,6 +89,15 @@ fast lookups, then extracts matching lines from the content body.`,
   # Show only completed lines
   ruin pick "#followup" --done
 
+  # All open markdown checkboxes
+  ruin pick --todo
+
+  # Only completed checkboxes
+  ruin pick --todo --done
+
+  # Checkboxes that also have a specific tag
+  ruin pick --todo "#daily"
+
   # Filter lines by inline date (range-based matching)
   ruin pick "#followup" @today
   ruin pick "#followup" @this-week
@@ -98,7 +112,7 @@ fast lookups, then extracts matching lines from the content body.`,
 
   # JSON output grouped by note
   ruin pick "#followup" --json`,
-		Args: cobra.MinimumNArgs(1),
+		Args: cobra.MinimumNArgs(0),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			vlt := getVault()
 			if vlt == nil {
@@ -127,8 +141,8 @@ fast lookups, then extracts matching lines from the content body.`,
 					return fmt.Errorf("invalid argument %q: must start with # or @", arg)
 				}
 			}
-			if len(tagArgs) == 0 {
-				return fmt.Errorf("at least one inline tag required")
+			if len(tagArgs) == 0 && !todoMode {
+				return fmt.Errorf("at least one inline tag required (or use --todo)")
 			}
 
 			// Parse --filter into a QueryMatcher
@@ -171,7 +185,8 @@ fast lookups, then extracts matching lines from the content body.`,
 				}
 
 				// Pre-filter: note must have at least one queried tag as inline
-				if !noteHasInlineTag(fast, queryTags) {
+				// Skip when --todo without tags (match all notes with checkboxes)
+				if len(queryTags) > 0 && !noteHasInlineTag(fast, queryTags) {
 					continue
 				}
 
@@ -187,7 +202,7 @@ fast lookups, then extracts matching lines from the content body.`,
 				}
 
 				// Extract matching lines from inline zone
-				matches := pickLinesFromNote(n, queryTags, dateRanges, anyMode, df)
+				matches := pickLinesFromNote(n, queryTags, dateRanges, anyMode, df, todoMode)
 				if len(matches) == 0 {
 					continue
 				}
@@ -218,6 +233,7 @@ fast lookups, then extracts matching lines from the content body.`,
 	cmd.Flags().BoolVar(&anyMode, "any", false, "match lines with any of the given tags (OR mode)")
 	cmd.Flags().BoolVar(&allMode, "all", false, "include lines marked #done (default: exclude)")
 	cmd.Flags().BoolVar(&doneMode, "done", false, "show only lines marked #done")
+	cmd.Flags().BoolVar(&todoMode, "todo", false, "also match markdown checkbox lines (- [ ] / - [x])")
 	cmd.Flags().StringVar(&filterFlag, "filter", "", "filter notes using search query syntax (e.g., \"created:today\", \"@tomorrow\", \"before:2025-06\")")
 
 	return cmd
@@ -237,11 +253,13 @@ func noteHasInlineTag(n *note.Note, queryTags []string) bool {
 	return false
 }
 
+
 // pickLinesFromNote extracts content lines that match the queried inline tags.
 // Tag-only lines and the title line are skipped (those contain global tags).
 // If dateRanges is non-empty, lines must contain at least one @YYYY-MM-DD date
 // that falls within every specified date range.
-func pickLinesFromNote(n *note.Note, queryTags []string, dateRanges []dateparse.DateRange, anyMode bool, df doneFilter) []PickMatch {
+// When todoMode is true, checkbox lines (- [ ] / - [x]) are also matched.
+func pickLinesFromNote(n *note.Note, queryTags []string, dateRanges []dateparse.DateRange, anyMode bool, df doneFilter, todoMode bool) []PickMatch {
 	lines := strings.Split(n.Content, "\n")
 
 	var matches []PickMatch
@@ -264,9 +282,6 @@ func pickLinesFromNote(n *note.Note, queryTags []string, dateRanges []dateparse.
 
 		// Extract tags from this line
 		lineTags := note.ExtractTags(line)
-		if len(lineTags) == 0 {
-			continue
-		}
 
 		// Normalize line tags for comparison
 		lineTagsNorm := make(map[string]bool)
@@ -274,31 +289,28 @@ func pickLinesFromNote(n *note.Note, queryTags []string, dateRanges []dateparse.
 			lineTagsNorm[note.NormalizeTag(lt)] = true
 		}
 
-		// Check match based on AND/OR mode
-		if anyMode {
-			// OR: line must contain at least one queried tag
-			matched := false
-			for _, qt := range queryTags {
-				if lineTagsNorm[qt] {
-					matched = true
-					break
-				}
+		isCheckbox := note.IsCheckboxLine(trimmed)
+
+		// Determine if this line matches
+		lineMatched := false
+
+		if todoMode && isCheckbox {
+			if len(queryTags) == 0 {
+				// --todo without tags: match all checkbox lines
+				lineMatched = true
+			} else {
+				// --todo with tags: checkbox must also have the tags
+				lineMatched = matchesTags(lineTagsNorm, queryTags, anyMode)
 			}
-			if !matched {
-				continue
-			}
-		} else {
-			// AND: line must contain all queried tags
-			allFound := true
-			for _, qt := range queryTags {
-				if !lineTagsNorm[qt] {
-					allFound = false
-					break
-				}
-			}
-			if !allFound {
-				continue
-			}
+		}
+
+		// Also check tag-based matching (non-todo or todo+tags)
+		if !lineMatched && len(lineTags) > 0 && len(queryTags) > 0 {
+			lineMatched = matchesTags(lineTagsNorm, queryTags, anyMode)
+		}
+
+		if !lineMatched {
+			continue
 		}
 
 		// Check inline date filter: for each date range, the line must
@@ -338,9 +350,9 @@ func pickLinesFromNote(n *note.Note, queryTags []string, dateRanges []dateparse.
 			}
 		}
 
-		// Check #done status and apply filter
+		// Check done status: #done tag OR checked checkbox [x]
 		doneTagNorm := note.NormalizeTag(doneTag)
-		isDone := lineTagsNorm[doneTagNorm]
+		isDone := lineTagsNorm[doneTagNorm] || (todoMode && note.IsCheckedLine(trimmed))
 
 		switch df {
 		case doneExclude:
@@ -362,6 +374,24 @@ func pickLinesFromNote(n *note.Note, queryTags []string, dateRanges []dateparse.
 	}
 
 	return matches
+}
+
+// matchesTags checks if a line's tags match the query tags in AND or OR mode.
+func matchesTags(lineTagsNorm map[string]bool, queryTags []string, anyMode bool) bool {
+	if anyMode {
+		for _, qt := range queryTags {
+			if lineTagsNorm[qt] {
+				return true
+			}
+		}
+		return false
+	}
+	for _, qt := range queryTags {
+		if !lineTagsNorm[qt] {
+			return false
+		}
+	}
+	return true
 }
 
 func outputPickJSON(results []PickResult) error {

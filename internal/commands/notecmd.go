@@ -59,6 +59,8 @@ func newNoteSetCmd(getVault func() *vault.Vault, jsonOutput *bool) *cobra.Comman
 		addDates    []string
 		removeDates []string
 		removeAllDt bool
+		toggleTodo  bool
+		sink        bool
 	)
 
 	cmd := &cobra.Command{
@@ -83,7 +85,9 @@ Without --line, tags are added globally and removed from all lines.`,
   ruin note set <uuid> --field "status=active"
   ruin note set <uuid> --field "status="  # deletes the field
   ruin note set <uuid> --parent "Hub Note"
-  ruin note set <uuid> --no-parent`,
+  ruin note set <uuid> --no-parent
+  ruin note set <uuid> --toggle-todo --line 5
+  ruin note set <uuid> --toggle-todo --line 5 --sink`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// Validate mutually exclusive flags
@@ -94,20 +98,30 @@ Without --line, tags are added globally and removed from all lines.`,
 				return fmt.Errorf("--parent and --no-parent are mutually exclusive")
 			}
 
-			// --line requires a tag or date flag
+			// --toggle-todo requires --line
+			if toggleTodo && !cmd.Flags().Changed("line") {
+				return fmt.Errorf("--toggle-todo requires --line")
+			}
+			// --sink requires --toggle-todo
+			if sink && !toggleTodo {
+				return fmt.Errorf("--sink requires --toggle-todo")
+			}
+
+			// --line requires a tag, date, or toggle-todo flag
 			hasLineTarget := cmd.Flags().Changed("line")
 			if hasLineTarget && len(addTags) == 0 && len(removeTags) == 0 &&
-				len(addDates) == 0 && len(removeDates) == 0 && !removeAllDt {
-				return fmt.Errorf("--line requires --add-tag, --remove-tag, --add-date, --remove-date, or --remove-dates")
+				len(addDates) == 0 && len(removeDates) == 0 && !removeAllDt && !toggleTodo {
+				return fmt.Errorf("--line requires --add-tag, --remove-tag, --add-date, --remove-date, --remove-dates, or --toggle-todo")
 			}
 
 			// At least one mutation required
 			hasMutation := len(addTags) > 0 || len(removeTags) > 0 ||
 				cmd.Flags().Changed("order") || noOrder ||
 				len(fields) > 0 || parent != "" || noParent ||
-				len(addDates) > 0 || len(removeDates) > 0 || removeAllDt
+				len(addDates) > 0 || len(removeDates) > 0 || removeAllDt ||
+				toggleTodo
 			if !hasMutation {
-				return fmt.Errorf("at least one mutation flag is required (--add-tag, --remove-tag, --add-date, --remove-date, --remove-dates, --order, --no-order, --field, --parent, --no-parent)")
+				return fmt.Errorf("at least one mutation flag is required (--add-tag, --remove-tag, --add-date, --remove-date, --remove-dates, --order, --no-order, --field, --parent, --no-parent, --toggle-todo)")
 			}
 
 			vlt := getVault()
@@ -216,6 +230,44 @@ Without --line, tags are added globally and removed from all lines.`,
 				changes = append(changes, noteSetChange{Field: "date", Action: "removed", Value: dateStr})
 			}
 
+			// --- toggle-todo ---
+			if toggleTodo {
+				contentLines := strings.Split(n.Content, "\n")
+				idx := line - 1
+				if !note.IsCheckboxLine(contentLines[idx]) {
+					return fmt.Errorf("line %d is not a checkbox", line)
+				}
+				wasChecked := note.IsCheckedLine(contentLines[idx])
+				contentLines[idx] = note.ToggleCheckbox(contentLines[idx])
+				toggledContent := strings.TrimSpace(contentLines[idx])
+				nowChecked := !wasChecked
+
+				// --sink: move checked item to bottom of contiguous checkbox block
+				if sink && nowChecked {
+					// Find end of contiguous checkbox block from this line
+					blockEnd := idx
+					for j := idx + 1; j < len(contentLines); j++ {
+						if note.IsCheckboxLine(contentLines[j]) {
+							blockEnd = j
+						} else {
+							break
+						}
+					}
+					if blockEnd > idx {
+						toggled := contentLines[idx]
+						copy(contentLines[idx:blockEnd], contentLines[idx+1:blockEnd+1])
+						contentLines[blockEnd] = toggled
+					}
+				}
+
+				n.Content = strings.Join(contentLines, "\n")
+				action := "checked"
+				if wasChecked {
+					action = "unchecked"
+				}
+				changes = append(changes, noteSetChange{Field: "todo", Action: action, Value: toggledContent})
+			}
+
 			// --- order ---
 			if cmd.Flags().Changed("order") {
 				n.Order = &order
@@ -322,6 +374,8 @@ Without --line, tags are added globally and removed from all lines.`,
 	cmd.Flags().StringArrayVar(&fields, "field", nil, "set extra frontmatter field (key=value, empty value deletes)")
 	cmd.Flags().StringVar(&parent, "parent", "", "set parent (UUID, title, path, or bookmark)")
 	cmd.Flags().BoolVar(&noParent, "no-parent", false, "remove parent")
+	cmd.Flags().BoolVar(&toggleTodo, "toggle-todo", false, "flip checkbox state (requires --line)")
+	cmd.Flags().BoolVar(&sink, "sink", false, "move checked item to bottom of checkbox block (requires --toggle-todo)")
 	cmd.Flags().BoolVarP(&force, "force", "f", false, "skip confirmation")
 
 	return cmd

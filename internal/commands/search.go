@@ -85,6 +85,11 @@ Other filters:
   - parent:UUID      Notes with specific parent
   - parent:none      Notes with no parent
 
+Todo filters:
+  - todo:open        Notes with unchecked checkboxes (- [ ])
+  - todo:done        Notes with checked checkboxes (- [x])
+  - todo:any         Notes with any checkboxes
+
 Tag scope:
   By default, tag searches check both global and inline tags.
   - --global-tags    Only match global tags (categorization)
@@ -450,6 +455,17 @@ func parseTermMatcher(term string, tagScope TagScope) (QueryMatcher, MatcherInfo
 			return pathMatcher(value), fmOnly, nil
 		case "parent":
 			return parentMatcher(value), fmOnly, nil
+		case "todo":
+			switch strings.ToLower(value) {
+			case "open":
+				return func(n *note.Note) bool { return note.HasUncheckedTodos(n.Content) }, needsBody, nil
+			case "done":
+				return func(n *note.Note) bool { return note.HasCheckedTodos(n.Content) }, needsBody, nil
+			case "any":
+				return func(n *note.Note) bool { return note.HasAnyTodos(n.Content) }, needsBody, nil
+			default:
+				return nil, MatcherInfo{}, fmt.Errorf("unknown todo filter %q (use open, done, or any)", value)
+			}
 		}
 		// If not a recognized filter, fall through to text search
 	}

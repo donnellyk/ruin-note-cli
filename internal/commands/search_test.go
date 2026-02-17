@@ -989,3 +989,166 @@ func TestIsDateTerm(t *testing.T) {
 		})
 	}
 }
+
+func TestSearch_TodoFilter(t *testing.T) {
+	tmpDir := t.TempDir()
+	vlt := vault.New(tmpDir)
+	if _, err := vlt.Initialize(false); err != nil {
+		t.Fatalf("failed to initialize vault: %v", err)
+	}
+
+	// Note with open and done checkboxes
+	withTodos := `---
+uuid: uuid-todos
+created: "2025-01-01T10:00:00-05:00"
+updated: "2025-01-01T10:00:00-05:00"
+tags:
+  - "#work"
+---
+# Todo Note
+#work
+
+- [ ] Open task
+- [x] Done task
+`
+	// Note with no checkboxes
+	withoutTodos := `---
+uuid: uuid-notodos
+created: "2025-01-02T10:00:00-05:00"
+updated: "2025-01-02T10:00:00-05:00"
+tags:
+  - "#work"
+---
+# Plain Note
+#work
+
+Regular content only.
+`
+	// Note with only done checkboxes
+	allDone := `---
+uuid: uuid-alldone
+created: "2025-01-03T10:00:00-05:00"
+updated: "2025-01-03T10:00:00-05:00"
+tags:
+  - "#work"
+---
+# All Done
+#work
+
+- [x] First done
+- [x] Second done
+`
+
+	for name, content := range map[string]string{
+		"todos.md":    withTodos,
+		"notodos.md":  withoutTodos,
+		"alldone.md":  allDone,
+	} {
+		path := filepath.Join(tmpDir, name)
+		if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+			t.Fatalf("failed to write test note: %v", err)
+		}
+	}
+
+	t.Run("todo:open", func(t *testing.T) {
+		jsonOut := true
+		cmd := NewSearchCmd(func() *vault.Vault { return vlt }, &jsonOut)
+
+		oldStdout := os.Stdout
+		r, w, _ := os.Pipe()
+		os.Stdout = w
+
+		cmd.SetArgs([]string{"todo:open"})
+		err := cmd.Execute()
+
+		w.Close()
+		os.Stdout = oldStdout
+
+		if err != nil {
+			t.Fatalf("Execute() error = %v", err)
+		}
+
+		var buf bytes.Buffer
+		buf.ReadFrom(r)
+
+		var results []json.RawMessage
+		json.Unmarshal(buf.Bytes(), &results)
+
+		// Only uuid-todos has unchecked checkboxes
+		if len(results) != 1 {
+			t.Errorf("got %d results, want 1 (only note with open todos)\noutput: %s", len(results), buf.String())
+		}
+	})
+
+	t.Run("todo:done", func(t *testing.T) {
+		jsonOut := true
+		cmd := NewSearchCmd(func() *vault.Vault { return vlt }, &jsonOut)
+
+		oldStdout := os.Stdout
+		r, w, _ := os.Pipe()
+		os.Stdout = w
+
+		cmd.SetArgs([]string{"todo:done"})
+		err := cmd.Execute()
+
+		w.Close()
+		os.Stdout = oldStdout
+
+		if err != nil {
+			t.Fatalf("Execute() error = %v", err)
+		}
+
+		var buf bytes.Buffer
+		buf.ReadFrom(r)
+
+		var results []json.RawMessage
+		json.Unmarshal(buf.Bytes(), &results)
+
+		// Both uuid-todos and uuid-alldone have checked checkboxes
+		if len(results) != 2 {
+			t.Errorf("got %d results, want 2\noutput: %s", len(results), buf.String())
+		}
+	})
+
+	t.Run("todo:any", func(t *testing.T) {
+		jsonOut := true
+		cmd := NewSearchCmd(func() *vault.Vault { return vlt }, &jsonOut)
+
+		oldStdout := os.Stdout
+		r, w, _ := os.Pipe()
+		os.Stdout = w
+
+		cmd.SetArgs([]string{"todo:any"})
+		err := cmd.Execute()
+
+		w.Close()
+		os.Stdout = oldStdout
+
+		if err != nil {
+			t.Fatalf("Execute() error = %v", err)
+		}
+
+		var buf bytes.Buffer
+		buf.ReadFrom(r)
+
+		var results []json.RawMessage
+		json.Unmarshal(buf.Bytes(), &results)
+
+		// uuid-todos and uuid-alldone have checkboxes; uuid-notodos does not
+		if len(results) != 2 {
+			t.Errorf("got %d results, want 2\noutput: %s", len(results), buf.String())
+		}
+	})
+
+	t.Run("todo:invalid", func(t *testing.T) {
+		jsonOut := false
+		cmd := NewSearchCmd(func() *vault.Vault { return vlt }, &jsonOut)
+
+		cmd.SetArgs([]string{"todo:garbage"})
+		err := cmd.Execute()
+
+		if err == nil || !strings.Contains(err.Error(), "unknown todo filter") {
+			t.Errorf("expected error for invalid todo filter, got %v", err)
+		}
+	})
+}

@@ -1135,3 +1135,162 @@ func TestDetectSeparator(t *testing.T) {
 		}
 	}
 }
+
+// --- note set --toggle-todo tests ---
+
+func setupTodoTestVault(t *testing.T) *vault.Vault {
+	t.Helper()
+
+	tmpDir := t.TempDir()
+	vlt := vault.New(tmpDir)
+	if _, err := vlt.Initialize(false); err != nil {
+		t.Fatalf("failed to initialize vault: %v", err)
+	}
+
+	content := `---
+uuid: uuid-todo
+created: "2025-01-01T10:00:00-05:00"
+updated: "2025-01-01T10:00:00-05:00"
+tags:
+  - "#work"
+---
+# Todo Note
+#work
+
+- [ ] Buy groceries
+- [ ] Send email
+- [ ] Write report
+- [x] Old done task
+
+Regular content.`
+
+	path := filepath.Join(tmpDir, "todo.md")
+	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+		t.Fatalf("failed to write test note: %v", err)
+	}
+	vlt.UpdateTitleEntry("uuid-todo", "Todo Note", path, "")
+
+	return vlt
+}
+
+func TestNoteSet_ToggleTodo_Check(t *testing.T) {
+	vlt := setupTodoTestVault(t)
+	jsonOut := true
+	cmd := NewNoteCmd(func() *vault.Vault { return vlt }, &jsonOut)
+
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	// Line 4 is "- [ ] Buy groceries" (content lines: 1=title, 2=tags, 3=blank, 4=checkbox...)
+	cmd.SetArgs([]string{"set", "uuid-todo", "--toggle-todo", "--line", "4"})
+	err := cmd.Execute()
+
+	w.Close()
+	os.Stdout = oldStdout
+
+	if err != nil {
+		t.Fatalf("error = %v", err)
+	}
+
+	var buf bytes.Buffer
+	buf.ReadFrom(r)
+
+	var result noteSetOutput
+	if err := json.Unmarshal(buf.Bytes(), &result); err != nil {
+		t.Fatalf("failed to parse JSON: %v\noutput: %s", err, buf.String())
+	}
+
+	if len(result.Changes) != 1 {
+		t.Fatalf("got %d changes, want 1", len(result.Changes))
+	}
+	if result.Changes[0].Field != "todo" || result.Changes[0].Action != "checked" {
+		t.Errorf("change = %+v, want todo/checked", result.Changes[0])
+	}
+
+	// Verify the checkbox was toggled
+	n, _ := ResolveNote(vlt, "uuid-todo")
+	lines := strings.Split(n.Content, "\n")
+	if !strings.Contains(lines[3], "[x]") {
+		t.Errorf("line 4 = %q, expected [x]", lines[3])
+	}
+}
+
+func TestNoteSet_ToggleTodo_Uncheck(t *testing.T) {
+	vlt := setupTodoTestVault(t)
+	jsonOut := false
+	cmd := NewNoteCmd(func() *vault.Vault { return vlt }, &jsonOut)
+
+	// Line 7 is "- [x] Old done task"
+	cmd.SetArgs([]string{"set", "uuid-todo", "--toggle-todo", "--line", "7"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("error = %v", err)
+	}
+
+	n, _ := ResolveNote(vlt, "uuid-todo")
+	lines := strings.Split(n.Content, "\n")
+	if !strings.Contains(lines[6], "[ ]") {
+		t.Errorf("line 7 = %q, expected [ ]", lines[6])
+	}
+}
+
+func TestNoteSet_ToggleTodo_NotCheckbox(t *testing.T) {
+	vlt := setupTodoTestVault(t)
+	jsonOut := false
+	cmd := NewNoteCmd(func() *vault.Vault { return vlt }, &jsonOut)
+
+	// Line 9 is "Regular content." — not a checkbox
+	cmd.SetArgs([]string{"set", "uuid-todo", "--toggle-todo", "--line", "9"})
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatal("expected error for non-checkbox line")
+	}
+	if !containsSubstr(err.Error(), "not a checkbox") {
+		t.Errorf("error = %q", err.Error())
+	}
+}
+
+func TestNoteSet_ToggleTodo_WithoutLine(t *testing.T) {
+	vlt := setupTodoTestVault(t)
+	jsonOut := false
+	cmd := NewNoteCmd(func() *vault.Vault { return vlt }, &jsonOut)
+
+	cmd.SetArgs([]string{"set", "uuid-todo", "--toggle-todo"})
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatal("expected error for --toggle-todo without --line")
+	}
+	if !containsSubstr(err.Error(), "--toggle-todo requires --line") {
+		t.Errorf("error = %q", err.Error())
+	}
+}
+
+func TestNoteSet_ToggleTodo_Sink(t *testing.T) {
+	vlt := setupTodoTestVault(t)
+	jsonOut := false
+	cmd := NewNoteCmd(func() *vault.Vault { return vlt }, &jsonOut)
+
+	// Toggle line 4 "- [ ] Buy groceries" → [x], and sink to bottom of block
+	// Block: lines 4-7 are all checkboxes
+	cmd.SetArgs([]string{"set", "uuid-todo", "--toggle-todo", "--sink", "--line", "4"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("error = %v", err)
+	}
+
+	n, _ := ResolveNote(vlt, "uuid-todo")
+	lines := strings.Split(n.Content, "\n")
+
+	// After sink: the checked item should be at the bottom of the checkbox block (line 7)
+	// Lines 4-6 should now be: Send email, Write report, Old done task... wait.
+	// Original: 4=Buy, 5=Send, 6=Write, 7=Old done
+	// After toggle+sink: 4=Send, 5=Write, 6=Old done, 7=Buy(checked)
+	if !strings.Contains(lines[3], "Send email") {
+		t.Errorf("line 4 = %q, want Send email", lines[3])
+	}
+	if !strings.Contains(lines[6], "Buy groceries") {
+		t.Errorf("line 7 = %q, want Buy groceries", lines[6])
+	}
+	if !strings.Contains(lines[6], "[x]") {
+		t.Errorf("line 7 = %q, expected [x]", lines[6])
+	}
+}

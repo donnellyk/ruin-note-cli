@@ -90,6 +90,9 @@ Date tokens in queries are resolved dynamically. In note content, they are resol
 - `title:TEXT`, `path:TEXT`
 - `parent:UUID` — notes with specific parent
 - `parent:none` — notes with no parent
+- `todo:open` — notes with unchecked checkboxes (`- [ ]`)
+- `todo:done` — notes with checked checkboxes (`- [x]`)
+- `todo:any` — notes with any checkboxes
 
 | Flag | Short | Description |
 |------|-------|-------------|
@@ -111,20 +114,23 @@ By default, tag searches check both global and inline tags. Use `--global-tags` 
 
 ### pick
 
-Extract lines annotated with inline tags.
+Extract lines annotated with inline tags or markdown checkboxes.
 
 ```
-ruin pick <inline-tags...> [@date...]
+ruin pick [inline-tags...] [@date...] [flags]
 ```
 
 | Flag | Short | Description |
 |------|-------|-------------|
 | `--any` | | Match lines with any of the given tags (OR mode) |
-| `--all` | | Include lines marked `#done` (default: excluded) |
-| `--done` | | Show only lines marked `#done` |
+| `--all` | | Include lines marked `#done` or `[x]` (default: excluded) |
+| `--done` | | Show only lines marked `#done` or `[x]` |
+| `--todo` | | Also match markdown checkbox lines (`- [ ]` / `- [x]`) |
 | `--filter` | | Filter notes using search query syntax (e.g., `created:today`, `@tomorrow`, `before:2025-06`) |
 
 By default, multiple tags are combined with AND (lines must contain all tags).
+
+Use `--todo` to also match markdown checkbox lines. When `--todo` is set, tags become optional. If tags are also provided, checkbox lines must contain those tags. The done filter applies uniformly: checked checkboxes (`[x]`) and `#done` lines are both treated as "done".
 
 `@date` arguments filter at the line level — lines must contain an `@YYYY-MM-DD` date that falls within the resolved date range (e.g., `@2026-03` matches any date in March 2026, `@this-week` matches dates in the current week). `--filter "@date"` filters at the note level — only notes whose `dates` frontmatter includes the date are searched.
 
@@ -351,9 +357,11 @@ ruin note set <note> [flags]
 | `--field` | | Set extra frontmatter field (`key=value`, empty value deletes) |
 | `--parent` | | Set parent (UUID, title, path, or bookmark) |
 | `--no-parent` | | Remove parent |
+| `--toggle-todo` | | Flip checkbox state `[ ]` ↔ `[x]` (requires `--line`) |
+| `--sink` | | Move checked item to bottom of contiguous checkbox block (requires `--toggle-todo`) |
 | `--force` | `-f` | Skip confirmation |
 
-At least one mutation flag required. Use `--line N` to target a specific content line for tag and date operations.
+At least one mutation flag required. Use `--line N` to target a specific content line for tag, date, and todo operations.
 
 #### note append
 
