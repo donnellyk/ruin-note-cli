@@ -100,6 +100,7 @@ Date tokens in queries are resolved dynamically. In note content, they are resol
 | `--content` | | Include note content in JSON output (requires `--json`) |
 | `--strip-global-tags` | | Remove global tags from content (requires `--content`) |
 | `--strip-title` | | Remove title header from content (requires `--content`) |
+| `--everything` | | Return all notes (no query required) |
 | `--global-tags` | | Only match global tags (categorization) |
 | `--inline-tags` | | Only match inline tags (contextual annotations) |
 

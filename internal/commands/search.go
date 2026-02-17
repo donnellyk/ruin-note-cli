@@ -49,7 +49,7 @@ type SortField struct {
 func NewSearchCmd(getVault func() *vault.Vault, jsonOutput *bool) *cobra.Command {
 	var flags SearchFlags
 
-	var globalTagsOnly, inlineTagsOnly bool
+	var globalTagsOnly, inlineTagsOnly, everything bool
 
 	cmd := &cobra.Command{
 		Use:   "search <query>",
@@ -126,8 +126,17 @@ See also:
 
   # Title and path filters
   ruin search "title:meeting"
-  ruin search "path:projects/"`,
-		Args: cobra.MinimumNArgs(1),
+  ruin search "path:projects/"
+
+  # All notes (no query required)
+  ruin search --everything
+  ruin search --everything -s title:asc -l 20`,
+		Args: func(cmd *cobra.Command, args []string) error {
+			if everything {
+				return nil
+			}
+			return cobra.MinimumNArgs(1)(cmd, args)
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			vlt := getVault()
 			if vlt == nil {
@@ -152,15 +161,23 @@ See also:
 			}
 
 			// Parse query
-			query := strings.Join(args, " ")
-			matcher, info, err := parseQuery(query, tagScope)
-			if err != nil {
-				return fmt.Errorf("invalid query: %w", err)
+			var matcher QueryMatcher
+			var info MatcherInfo
+			if everything && len(args) == 0 {
+				matcher = func(n *note.Note) bool { return true }
+			} else {
+				query := strings.Join(args, " ")
+				var err2 error
+				matcher, info, err2 = parseQuery(query, tagScope)
+				if err2 != nil {
+					return fmt.Errorf("invalid query: %w", err2)
+				}
 			}
 
 			// Parse sort fields
 			var sortFields []SortField
 			if flags.Sort != "" {
+				var err error
 				sortFields, err = parseSort(flags.Sort)
 				if err != nil {
 					return fmt.Errorf("invalid sort: %w", err)
@@ -233,6 +250,7 @@ See also:
 	}
 
 	AddSearchFlags(cmd, &flags, "created:desc")
+	cmd.Flags().BoolVar(&everything, "everything", false, "return all notes (no query required)")
 	cmd.Flags().BoolVar(&globalTagsOnly, "global-tags", false, "only match global tags (categorization)")
 	cmd.Flags().BoolVar(&inlineTagsOnly, "inline-tags", false, "only match inline tags (contextual annotations)")
 

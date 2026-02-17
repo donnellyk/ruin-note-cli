@@ -398,6 +398,37 @@ func TestSearchCmd_Limit(t *testing.T) {
 	}
 }
 
+func TestSearchCmd_Everything(t *testing.T) {
+	vlt := setupTestVault(t)
+
+	jsonOut := false
+	cmd := NewSearchCmd(func() *vault.Vault { return vlt }, &jsonOut)
+
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	cmd.SetArgs([]string{"--everything"})
+	err := cmd.Execute()
+
+	w.Close()
+	os.Stdout = oldStdout
+
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+
+	var buf bytes.Buffer
+	buf.ReadFrom(r)
+	output := buf.String()
+
+	// Should find all 5 test notes
+	lines := strings.Split(strings.TrimSpace(output), "\n")
+	if len(lines) != 5 {
+		t.Errorf("found %d notes, want 5", len(lines))
+	}
+}
+
 func TestSearchCmd_ParentFilter(t *testing.T) {
 	vlt := setupTestVault(t)
 
