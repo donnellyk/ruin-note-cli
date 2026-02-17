@@ -33,7 +33,7 @@ func TestResolveDateAt(t *testing.T) {
 
 		// Removed terms should not resolve
 		{"monday", time.Time{}, false},
-		{"next-week", time.Time{}, false},
+		{"next-week", time.Date(2025, 2, 3, 0, 0, 0, 0, time.Local), true},
 		{"2-days", time.Time{}, false},
 		{"7d", time.Time{}, false},
 	}

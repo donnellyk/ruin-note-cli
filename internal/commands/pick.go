@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
+	"kvnd/ruin-note-cli/internal/dateparse"
 	"kvnd/ruin-note-cli/internal/note"
 	"kvnd/ruin-note-cli/internal/vault"
 
@@ -43,13 +45,14 @@ type PickResult struct {
 // NewPickCmd creates the pick command.
 func NewPickCmd(getVault func() *vault.Vault, jsonOutput *bool) *cobra.Command {
 	var (
-		anyMode  bool
-		allMode  bool
-		doneMode bool
+		anyMode    bool
+		allMode    bool
+		doneMode   bool
+		filterFlag string
 	)
 
 	cmd := &cobra.Command{
-		Use:   "pick <inline-tags...>",
+		Use:   "pick <inline-tags...> [@date...]",
 		Short: "Pick lines annotated with inline tags",
 		Long: `Extract lines annotated with specific inline tags from across the vault.
 
@@ -81,6 +84,18 @@ fast lookups, then extracts matching lines from the content body.`,
   # Show only completed lines
   ruin pick "#followup" --done
 
+  # Filter lines by inline date (range-based matching)
+  ruin pick "#followup" @today
+  ruin pick "#followup" @this-week
+  ruin pick "#followup" @2026-03
+  ruin pick "#followup" @2026-03-01
+
+  # Filter notes by metadata (note-level, using search query syntax)
+  ruin pick "#followup" --filter "created:today"
+  ruin pick "#followup" --filter "@tomorrow"
+  ruin pick "#todo" --filter "before:2025-06 after:2025-01"
+  ruin pick "#followup" --filter "between:2025-01,2025-06"
+
   # JSON output grouped by note
   ruin pick "#followup" --json`,
 		Args: cobra.MinimumNArgs(1),
@@ -94,11 +109,36 @@ fast lookups, then extracts matching lines from the content body.`,
 				return fmt.Errorf("--all and --done are mutually exclusive")
 			}
 
-			// Validate all args are tags
+			// Separate args into tags and date tokens
+			var tagArgs []string
+			var dateRanges []dateparse.DateRange
 			for _, arg := range args {
-				if !strings.HasPrefix(arg, "#") {
-					return fmt.Errorf("invalid tag %q: must start with #", arg)
+				switch {
+				case strings.HasPrefix(arg, "#"):
+					tagArgs = append(tagArgs, arg)
+				case strings.HasPrefix(arg, "@"):
+					token := arg[1:] // strip @
+					dr, err := dateparse.ParseWithReference(token, time.Now())
+					if err != nil {
+						return fmt.Errorf("unrecognized date: %s", arg)
+					}
+					dateRanges = append(dateRanges, dr)
+				default:
+					return fmt.Errorf("invalid argument %q: must start with # or @", arg)
 				}
+			}
+			if len(tagArgs) == 0 {
+				return fmt.Errorf("at least one inline tag required")
+			}
+
+			// Parse --filter into a QueryMatcher
+			var filterMatcher QueryMatcher
+			if filterFlag != "" {
+				m, _, err := parseQuery(filterFlag, TagScopeAll)
+				if err != nil {
+					return fmt.Errorf("invalid filter: %w", err)
+				}
+				filterMatcher = m
 			}
 
 			// Determine done filter
@@ -110,8 +150,8 @@ fast lookups, then extracts matching lines from the content body.`,
 			}
 
 			// Normalize query tags
-			queryTags := make([]string, len(args))
-			for i, arg := range args {
+			queryTags := make([]string, len(tagArgs))
+			for i, arg := range tagArgs {
 				queryTags[i] = note.NormalizeTag(arg)
 			}
 
@@ -135,6 +175,11 @@ fast lookups, then extracts matching lines from the content body.`,
 					continue
 				}
 
+				// Pre-filter: apply --filter matcher against frontmatter-only note
+				if filterMatcher != nil && !filterMatcher(fast) {
+					continue
+				}
+
 				// Full load only for notes that pass pre-filter
 				n, err := note.Load(path)
 				if err != nil {
@@ -142,7 +187,7 @@ fast lookups, then extracts matching lines from the content body.`,
 				}
 
 				// Extract matching lines from inline zone
-				matches := pickLinesFromNote(n, queryTags, anyMode, df)
+				matches := pickLinesFromNote(n, queryTags, dateRanges, anyMode, df)
 				if len(matches) == 0 {
 					continue
 				}
@@ -173,6 +218,7 @@ fast lookups, then extracts matching lines from the content body.`,
 	cmd.Flags().BoolVar(&anyMode, "any", false, "match lines with any of the given tags (OR mode)")
 	cmd.Flags().BoolVar(&allMode, "all", false, "include lines marked #done (default: exclude)")
 	cmd.Flags().BoolVar(&doneMode, "done", false, "show only lines marked #done")
+	cmd.Flags().StringVar(&filterFlag, "filter", "", "filter notes using search query syntax (e.g., \"created:today\", \"@tomorrow\", \"before:2025-06\")")
 
 	return cmd
 }
@@ -193,7 +239,9 @@ func noteHasInlineTag(n *note.Note, queryTags []string) bool {
 
 // pickLinesFromNote extracts content lines that match the queried inline tags.
 // Tag-only lines and the title line are skipped (those contain global tags).
-func pickLinesFromNote(n *note.Note, queryTags []string, anyMode bool, df doneFilter) []PickMatch {
+// If dateRanges is non-empty, lines must contain at least one @YYYY-MM-DD date
+// that falls within every specified date range.
+func pickLinesFromNote(n *note.Note, queryTags []string, dateRanges []dateparse.DateRange, anyMode bool, df doneFilter) []PickMatch {
 	lines := strings.Split(n.Content, "\n")
 
 	var matches []PickMatch
@@ -249,6 +297,43 @@ func pickLinesFromNote(n *note.Note, queryTags []string, anyMode bool, df doneFi
 				}
 			}
 			if !allFound {
+				continue
+			}
+		}
+
+		// Check inline date filter: for each date range, the line must
+		// contain at least one @YYYY-MM-DD date that falls within the range.
+		if len(dateRanges) > 0 {
+			lineDates := note.ExtractDates(trimmed)
+			if len(lineDates) == 0 {
+				continue
+			}
+			// Parse line dates into time.Time values
+			var parsedDates []time.Time
+			for _, ds := range lineDates {
+				if t, err := time.ParseInLocation("2006-01-02", ds, time.Local); err == nil {
+					parsedDates = append(parsedDates, t)
+				}
+			}
+			if len(parsedDates) == 0 {
+				continue
+			}
+			// Every date range must be satisfied by at least one line date
+			allRanges := true
+			for _, dr := range dateRanges {
+				found := false
+				for _, pd := range parsedDates {
+					if dr.Contains(pd) {
+						found = true
+						break
+					}
+				}
+				if !found {
+					allRanges = false
+					break
+				}
+			}
+			if !allRanges {
 				continue
 			}
 		}

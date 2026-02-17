@@ -7,8 +7,6 @@
 The date parser has been simplified to only support ISO formats and simple helpers. The following date syntax has been removed:
 
 ### Removed from date filters (`created:`, `updated:`, `before:`, `after:`)
-- `this-week`, `last-week`, `next-week`
-- `this-month`, `last-month`, `next-month`
 - `this-year`, `last-year`, `next-year`
 - Day names: `monday` through `sunday`
 - Duration shorthand: `7d`, `2w`, `3m`, `2y`
@@ -16,21 +14,23 @@ The date parser has been simplified to only support ISO formats and simple helpe
 
 ### Removed from date tokens (`@` syntax)
 - `@monday` through `@sunday`
-- `@next-week`, `@next-month`, `@next-year`
+- `@next-year`
 - `@2-days`, `@3-weeks`, `@2-months`, `@2-years`
+
+### Restored
+- `this-week`, `last-week`, `next-week` (week starts Monday, ISO standard)
+- `this-month`, `last-month`, `next-month`
 
 ### What remains
 - **ISO formats**: `2025-01-28`, `2025-01`, `2025`
 - **Simple helpers**: `today`, `yesterday`, `tomorrow`
+- **Period helpers**: `this-week`, `last-week`, `next-week`, `this-month`, `last-month`, `next-month`
 
 ### Migration
 
 | Before | After |
 |--------|-------|
-| `created:this-week` | `created:2025-01-27` (use explicit start date) |
 | `created:7d` | `created:2025-01-22` (use explicit start date) |
-| `created:last-month` | `created:2024-12` |
-| `@next-week` | `@2025-02-03` (use explicit date) |
 | `@monday` | `@2025-02-03` (use explicit date) |
 | `@2-days` | `@2025-01-30` (use explicit date) |
 
@@ -63,3 +63,30 @@ The `parent` command retains all read-only and bookmark operations:
 ### Why
 
 The new `note` command group consolidates all single-note mutations (`note set`, `note append`, `note merge`). This avoids confusion between vault-wide tag operations (`tags delete` removes a tag from all notes) and note-scoped operations (`note set --remove-tag` removes a tag from one note).
+
+---
+
+## Pick date flags consolidated into `--filter`
+
+**Version**: Current
+
+The `pick` command's 7 separate date flags have been replaced by a single `--filter` flag that accepts the same query syntax as `search`.
+
+### Removed flags
+`--date`, `--created`, `--updated`, `--before`, `--after`, `--on`, `--between`
+
+### Migration
+
+| Before | After |
+|--------|-------|
+| `ruin pick "#tag" --date @today` | `ruin pick "#tag" --filter "@today"` |
+| `ruin pick "#tag" --created today` | `ruin pick "#tag" --filter "created:today"` |
+| `ruin pick "#tag" --updated 2025-01` | `ruin pick "#tag" --filter "updated:2025-01"` |
+| `ruin pick "#tag" --before 2025-06` | `ruin pick "#tag" --filter "before:2025-06"` |
+| `ruin pick "#tag" --after 2025-01` | `ruin pick "#tag" --filter "after:2025-01"` |
+| `ruin pick "#tag" --on 2025-01-15` | `ruin pick "#tag" --filter "on:2025-01-15"` |
+| `ruin pick "#tag" --between 2025-01,2025-06` | `ruin pick "#tag" --filter "between:2025-01,2025-06"` |
+
+### Why
+
+The 7 date flags duplicated search's query syntax. The `--filter` flag reuses `parseQuery` directly, making pick consistent with search and supporting all the same filter terms (including combinations like `created:today @tomorrow`).

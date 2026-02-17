@@ -30,6 +30,36 @@ func TestParseNaturalLanguage(t *testing.T) {
 			wantStart: time.Date(2025, 1, 30, 0, 0, 0, 0, time.Local),
 			wantEnd:   time.Date(2025, 1, 31, 0, 0, 0, 0, time.Local),
 		},
+		{
+			input:     "this-week",
+			wantStart: time.Date(2025, 1, 27, 0, 0, 0, 0, time.Local), // Monday
+			wantEnd:   time.Date(2025, 2, 3, 0, 0, 0, 0, time.Local),  // Next Monday
+		},
+		{
+			input:     "last-week",
+			wantStart: time.Date(2025, 1, 20, 0, 0, 0, 0, time.Local),
+			wantEnd:   time.Date(2025, 1, 27, 0, 0, 0, 0, time.Local),
+		},
+		{
+			input:     "next-week",
+			wantStart: time.Date(2025, 2, 3, 0, 0, 0, 0, time.Local),
+			wantEnd:   time.Date(2025, 2, 10, 0, 0, 0, 0, time.Local),
+		},
+		{
+			input:     "this-month",
+			wantStart: time.Date(2025, 1, 1, 0, 0, 0, 0, time.Local),
+			wantEnd:   time.Date(2025, 2, 1, 0, 0, 0, 0, time.Local),
+		},
+		{
+			input:     "last-month",
+			wantStart: time.Date(2024, 12, 1, 0, 0, 0, 0, time.Local),
+			wantEnd:   time.Date(2025, 1, 1, 0, 0, 0, 0, time.Local),
+		},
+		{
+			input:     "next-month",
+			wantStart: time.Date(2025, 2, 1, 0, 0, 0, 0, time.Local),
+			wantEnd:   time.Date(2025, 3, 1, 0, 0, 0, 0, time.Local),
+		},
 	}
 
 	for _, tt := range tests {
@@ -55,8 +85,6 @@ func TestParseRemovedTermsError(t *testing.T) {
 	ref := time.Date(2025, 1, 29, 14, 30, 0, 0, time.Local)
 
 	removed := []string{
-		"this-week", "last-week", "next-week",
-		"this-month", "last-month", "next-month",
 		"this-year", "last-year", "next-year",
 		"monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday",
 		"7d", "7-days", "2w", "2-weeks", "3m", "3-months",

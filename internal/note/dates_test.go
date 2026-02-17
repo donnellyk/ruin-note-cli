@@ -60,9 +60,10 @@ func TestResolveDateTokens(t *testing.T) {
 			contain: "@monday",
 		},
 		{
-			name:    "leave @next-week alone (removed)",
+			name:    "resolve @next-week",
 			input:   "review @next-week",
-			contain: "@next-week",
+			contain: "@20", // resolves to @YYYY-MM-DD
+			absent:  "@next-week",
 		},
 		{
 			name:    "leave @2-days alone (removed)",

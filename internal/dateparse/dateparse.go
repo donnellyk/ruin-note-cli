@@ -83,6 +83,42 @@ func parseNaturalLanguage(s string, now time.Time) (DateRange, bool) {
 			Start: tomorrow,
 			End:   tomorrow.AddDate(0, 0, 1),
 		}, true
+
+	case "this-week":
+		weekday := int(now.Weekday())
+		if weekday == 0 {
+			weekday = 7
+		}
+		monday := today.AddDate(0, 0, -(weekday - 1))
+		return DateRange{Start: monday, End: monday.AddDate(0, 0, 7)}, true
+
+	case "last-week":
+		weekday := int(now.Weekday())
+		if weekday == 0 {
+			weekday = 7
+		}
+		monday := today.AddDate(0, 0, -(weekday-1) - 7)
+		return DateRange{Start: monday, End: monday.AddDate(0, 0, 7)}, true
+
+	case "next-week":
+		weekday := int(now.Weekday())
+		if weekday == 0 {
+			weekday = 7
+		}
+		monday := today.AddDate(0, 0, -(weekday-1) + 7)
+		return DateRange{Start: monday, End: monday.AddDate(0, 0, 7)}, true
+
+	case "this-month":
+		first := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location())
+		return DateRange{Start: first, End: first.AddDate(0, 1, 0)}, true
+
+	case "last-month":
+		first := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location()).AddDate(0, -1, 0)
+		return DateRange{Start: first, End: first.AddDate(0, 1, 0)}, true
+
+	case "next-month":
+		first := time.Date(now.Year(), now.Month(), 1, 0, 0, 0, 0, now.Location()).AddDate(0, 1, 0)
+		return DateRange{Start: first, End: first.AddDate(0, 1, 0)}, true
 	}
 
 	return DateRange{}, false

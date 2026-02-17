@@ -70,6 +70,8 @@ ruin search <query>
 
 **Date tokens (`@` syntax):**
 - `@today`, `@tomorrow`, `@yesterday`
+- `@this-week`, `@last-week`, `@next-week`
+- `@this-month`, `@last-month`, `@next-month`
 - `@2026-02-13` (exact date)
 
 Date tokens in queries are resolved dynamically. In note content, they are resolved to `@YYYY-MM-DD` for consistency. See [Date Tokens](date-tokens.md) for details.
@@ -82,6 +84,7 @@ Date tokens in queries are resolved dynamically. In note content, they are resol
 **Date formats** (for filters):
 - Exact: `2025-01-28`, `2025-01`, `2025`
 - Natural: `today`, `yesterday`, `tomorrow`
+- Periods: `this-week`, `last-week`, `next-week`, `this-month`, `last-month`, `next-month`
 
 **Other filters:**
 - `title:TEXT`, `path:TEXT`
@@ -111,7 +114,7 @@ By default, tag searches check both global and inline tags. Use `--global-tags` 
 Extract lines annotated with inline tags.
 
 ```
-ruin pick <inline-tags...>
+ruin pick <inline-tags...> [@date...]
 ```
 
 | Flag | Short | Description |
@@ -119,8 +122,11 @@ ruin pick <inline-tags...>
 | `--any` | | Match lines with any of the given tags (OR mode) |
 | `--all` | | Include lines marked `#done` (default: excluded) |
 | `--done` | | Show only lines marked `#done` |
+| `--filter` | | Filter notes using search query syntax (e.g., `created:today`, `@tomorrow`, `before:2025-06`) |
 
 By default, multiple tags are combined with AND (lines must contain all tags).
+
+`@date` arguments filter at the line level — lines must contain an `@YYYY-MM-DD` date that falls within the resolved date range (e.g., `@2026-03` matches any date in March 2026, `@this-week` matches dates in the current week). `--filter "@date"` filters at the note level — only notes whose `dates` frontmatter includes the date are searched.
 
 Lines containing `#done` are excluded by default, `#done` is reserved to mark a line as resolved/completed. Use `--all` to include both open and done lines, or `--done` to show only completed lines.
 

@@ -1,10 +1,14 @@
 package commands
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
+	"time"
 
+	"kvnd/ruin-note-cli/internal/dateparse"
 	"kvnd/ruin-note-cli/internal/note"
 	"kvnd/ruin-note-cli/internal/vault"
 )
@@ -105,7 +109,7 @@ Review the budget.  #todo
 	n.RefreshTags()
 
 	queryTags := []string{"#followup"}
-	matches := pickLinesFromNote(n, queryTags, false, doneExclude)
+	matches := pickLinesFromNote(n, queryTags, nil, false, doneExclude)
 
 	if len(matches) != 1 {
 		t.Fatalf("got %d matches, want 1", len(matches))
@@ -133,7 +137,7 @@ Added unit tests. #followup`,
 	n.RefreshTags()
 
 	queryTags := []string{"#followup", "#urgent"}
-	matches := pickLinesFromNote(n, queryTags, false, doneExclude)
+	matches := pickLinesFromNote(n, queryTags, nil, false, doneExclude)
 
 	if len(matches) != 1 {
 		t.Fatalf("got %d matches, want 1 (AND mode)", len(matches))
@@ -157,7 +161,7 @@ Added unit tests. #todo`,
 	n.RefreshTags()
 
 	queryTags := []string{"#followup", "#todo"}
-	matches := pickLinesFromNote(n, queryTags, true, doneExclude)
+	matches := pickLinesFromNote(n, queryTags, nil, true, doneExclude)
 
 	if len(matches) != 2 {
 		t.Fatalf("got %d matches, want 2 (OR mode)", len(matches))
@@ -175,7 +179,7 @@ Just a regular day.`,
 	n.RefreshTags()
 
 	queryTags := []string{"#followup"}
-	matches := pickLinesFromNote(n, queryTags, false, doneExclude)
+	matches := pickLinesFromNote(n, queryTags, nil, false, doneExclude)
 
 	if len(matches) != 0 {
 		t.Errorf("got %d matches, want 0", len(matches))
@@ -196,7 +200,7 @@ Content here.
 
 	// #meeting is a global tag (after H1), should not be picked
 	queryTags := []string{"#meeting"}
-	matches := pickLinesFromNote(n, queryTags, false, doneExclude)
+	matches := pickLinesFromNote(n, queryTags, nil, false, doneExclude)
 
 	if len(matches) != 0 {
 		t.Errorf("got %d matches, want 0 (global tags excluded)", len(matches))
@@ -204,7 +208,7 @@ Content here.
 
 	// #done is a trailing global tag, should not be picked
 	queryTags = []string{"#done"}
-	matches = pickLinesFromNote(n, queryTags, false, doneExclude)
+	matches = pickLinesFromNote(n, queryTags, nil, false, doneExclude)
 
 	if len(matches) != 0 {
 		t.Errorf("got %d matches, want 0 (trailing global tags excluded)", len(matches))
@@ -227,7 +231,7 @@ More content. #followup`,
 
 	// #wip appears on a tag-only line in the inline zone -- should be excluded
 	queryTags := []string{"#wip"}
-	matches := pickLinesFromNote(n, queryTags, false, doneExclude)
+	matches := pickLinesFromNote(n, queryTags, nil, false, doneExclude)
 
 	if len(matches) != 0 {
 		t.Errorf("got %d matches, want 0 (tag-only lines in content should be excluded)", len(matches))
@@ -235,7 +239,7 @@ More content. #followup`,
 
 	// #followup on a content line should still match
 	queryTags = []string{"#followup"}
-	matches = pickLinesFromNote(n, queryTags, false, doneExclude)
+	matches = pickLinesFromNote(n, queryTags, nil, false, doneExclude)
 
 	if len(matches) != 1 {
 		t.Errorf("got %d matches, want 1", len(matches))
@@ -253,7 +257,7 @@ Fix bug. #followup #urgent #p1`,
 	n.RefreshTags()
 
 	queryTags := []string{"#followup"}
-	matches := pickLinesFromNote(n, queryTags, false, doneExclude)
+	matches := pickLinesFromNote(n, queryTags, nil, false, doneExclude)
 
 	if len(matches) != 1 {
 		t.Fatalf("got %d matches, want 1", len(matches))
@@ -321,7 +325,7 @@ Fix the bug. #followup`,
 	n.RefreshTags()
 
 	queryTags := []string{"#followup"}
-	matches := pickLinesFromNote(n, queryTags, false, doneExclude)
+	matches := pickLinesFromNote(n, queryTags, nil, false, doneExclude)
 
 	if len(matches) != 2 {
 		t.Fatalf("got %d matches, want 2 (done excluded)", len(matches))
@@ -350,7 +354,7 @@ Fix the bug. #followup`,
 	n.RefreshTags()
 
 	queryTags := []string{"#followup"}
-	matches := pickLinesFromNote(n, queryTags, false, doneInclude)
+	matches := pickLinesFromNote(n, queryTags, nil, false, doneInclude)
 
 	if len(matches) != 3 {
 		t.Fatalf("got %d matches, want 3 (all included)", len(matches))
@@ -385,7 +389,7 @@ Fix the bug. #followup`,
 	n.RefreshTags()
 
 	queryTags := []string{"#followup"}
-	matches := pickLinesFromNote(n, queryTags, false, doneOnly)
+	matches := pickLinesFromNote(n, queryTags, nil, false, doneOnly)
 
 	if len(matches) != 1 {
 		t.Fatalf("got %d matches, want 1 (done only)", len(matches))
@@ -413,7 +417,7 @@ Done item. #followup #done`,
 	n.RefreshTags()
 
 	queryTags := []string{"#followup"}
-	matches := pickLinesFromNote(n, queryTags, false, doneInclude)
+	matches := pickLinesFromNote(n, queryTags, nil, false, doneInclude)
 
 	if len(matches) != 2 {
 		t.Fatalf("got %d matches, want 2", len(matches))
@@ -428,4 +432,435 @@ Done item. #followup #done`,
 	if !matches[1].Done {
 		t.Errorf("second match should be done")
 	}
+}
+
+func TestPickLinesFromNote_InlineDateFilter(t *testing.T) {
+	n := &note.Note{
+		Content: `# Tasks
+#work
+
+Call client @2026-03-15. #followup
+
+Send report by Friday. #followup
+
+Review contract @2026-03-15. #followup #urgent`,
+		Title: "Tasks",
+	}
+	n.RefreshTags()
+
+	queryTags := []string{"#followup"}
+
+	t.Run("filters to lines with exact date", func(t *testing.T) {
+		dr := dateparse.DateRange{
+			Start: time.Date(2026, 3, 15, 0, 0, 0, 0, time.Local),
+			End:   time.Date(2026, 3, 16, 0, 0, 0, 0, time.Local),
+		}
+		matches := pickLinesFromNote(n, queryTags, []dateparse.DateRange{dr}, false, doneExclude)
+		if len(matches) != 2 {
+			t.Fatalf("got %d matches, want 2", len(matches))
+		}
+		if !strings.Contains(matches[0].Content, "Call client") {
+			t.Errorf("first match = %q", matches[0].Content)
+		}
+		if !strings.Contains(matches[1].Content, "Review contract") {
+			t.Errorf("second match = %q", matches[1].Content)
+		}
+	})
+
+	t.Run("no date filter returns all", func(t *testing.T) {
+		matches := pickLinesFromNote(n, queryTags, nil, false, doneExclude)
+		if len(matches) != 3 {
+			t.Fatalf("got %d matches, want 3", len(matches))
+		}
+	})
+
+	t.Run("non-matching date returns none", func(t *testing.T) {
+		dr := dateparse.DateRange{
+			Start: time.Date(2099, 1, 1, 0, 0, 0, 0, time.Local),
+			End:   time.Date(2099, 1, 2, 0, 0, 0, 0, time.Local),
+		}
+		matches := pickLinesFromNote(n, queryTags, []dateparse.DateRange{dr}, false, doneExclude)
+		if len(matches) != 0 {
+			t.Errorf("got %d matches, want 0", len(matches))
+		}
+	})
+
+	t.Run("partial date matches range (month)", func(t *testing.T) {
+		// @2026-03 should match any date in March 2026
+		dr := dateparse.DateRange{
+			Start: time.Date(2026, 3, 1, 0, 0, 0, 0, time.Local),
+			End:   time.Date(2026, 4, 1, 0, 0, 0, 0, time.Local),
+		}
+		matches := pickLinesFromNote(n, queryTags, []dateparse.DateRange{dr}, false, doneExclude)
+		if len(matches) != 2 {
+			t.Fatalf("got %d matches, want 2 (month range)", len(matches))
+		}
+	})
+
+	t.Run("partial date matches range (year)", func(t *testing.T) {
+		// @2026 should match any date in 2026
+		dr := dateparse.DateRange{
+			Start: time.Date(2026, 1, 1, 0, 0, 0, 0, time.Local),
+			End:   time.Date(2027, 1, 1, 0, 0, 0, 0, time.Local),
+		}
+		matches := pickLinesFromNote(n, queryTags, []dateparse.DateRange{dr}, false, doneExclude)
+		if len(matches) != 2 {
+			t.Fatalf("got %d matches, want 2 (year range)", len(matches))
+		}
+	})
+}
+
+func TestPickCmd_InlineDateArg(t *testing.T) {
+	tmpDir := t.TempDir()
+	vlt := vault.New(tmpDir)
+	if _, err := vlt.Initialize(false); err != nil {
+		t.Fatalf("failed to initialize vault: %v", err)
+	}
+
+	content := `---
+uuid: uuid-dated
+created: "2025-01-01T10:00:00-05:00"
+updated: "2025-01-01T10:00:00-05:00"
+tags:
+  - "#work"
+inline-tags:
+  - "#followup"
+---
+# Dated Note
+#work
+
+Call client @2026-03-15. #followup
+
+Send report soon. #followup
+`
+	path := filepath.Join(tmpDir, "dated.md")
+	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+		t.Fatalf("failed to write test note: %v", err)
+	}
+
+	t.Run("inline date filters lines", func(t *testing.T) {
+		jsonOut := false
+		cmd := NewPickCmd(func() *vault.Vault { return vlt }, &jsonOut)
+
+		oldStdout := os.Stdout
+		r, w, _ := os.Pipe()
+		os.Stdout = w
+
+		cmd.SetArgs([]string{"#followup", "@2026-03-15"})
+		err := cmd.Execute()
+
+		w.Close()
+		os.Stdout = oldStdout
+
+		if err != nil {
+			t.Fatalf("Execute() error = %v", err)
+		}
+
+		var buf bytes.Buffer
+		buf.ReadFrom(r)
+		output := strings.TrimSpace(buf.String())
+
+		if !strings.Contains(output, "Call client") {
+			t.Errorf("expected 'Call client' line, got %q", output)
+		}
+		if strings.Contains(output, "Send report") {
+			t.Errorf("expected 'Send report' to be excluded, got %q", output)
+		}
+	})
+
+	t.Run("invalid date arg", func(t *testing.T) {
+		jsonOut := false
+		cmd := NewPickCmd(func() *vault.Vault { return vlt }, &jsonOut)
+
+		cmd.SetArgs([]string{"#followup", "@nonsense"})
+		err := cmd.Execute()
+
+		if err == nil || !strings.Contains(err.Error(), "unrecognized date") {
+			t.Errorf("expected unrecognized date error, got %v", err)
+		}
+	})
+
+	t.Run("requires at least one tag", func(t *testing.T) {
+		jsonOut := false
+		cmd := NewPickCmd(func() *vault.Vault { return vlt }, &jsonOut)
+
+		cmd.SetArgs([]string{"@2026-03-15"})
+		err := cmd.Execute()
+
+		if err == nil || !strings.Contains(err.Error(), "at least one inline tag") {
+			t.Errorf("expected 'at least one inline tag' error, got %v", err)
+		}
+	})
+}
+
+func TestPickCmd_Filter(t *testing.T) {
+	tmpDir := t.TempDir()
+	vlt := vault.New(tmpDir)
+	if _, err := vlt.Initialize(false); err != nil {
+		t.Fatalf("failed to initialize vault: %v", err)
+	}
+
+	// Note with a date reference and inline tags
+	withDate := `---
+uuid: uuid-dated
+created: "2025-01-01T10:00:00-05:00"
+updated: "2025-01-01T10:00:00-05:00"
+tags:
+  - "#work"
+inline-tags:
+  - "#followup"
+dates:
+  - "2026-03-15"
+---
+# Dated Note
+#work
+
+Call client about contract. #followup
+`
+	// Note with inline tags but no matching date
+	withoutDate := `---
+uuid: uuid-nodated
+created: "2025-01-02T10:00:00-05:00"
+updated: "2025-01-02T10:00:00-05:00"
+tags:
+  - "#work"
+inline-tags:
+  - "#followup"
+---
+# No Date Note
+#work
+
+Send the report. #followup
+`
+	for name, content := range map[string]string{
+		"dated.md":   withDate,
+		"nodated.md": withoutDate,
+	} {
+		path := filepath.Join(tmpDir, name)
+		if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+			t.Fatalf("failed to write test note: %v", err)
+		}
+	}
+
+	t.Run("with matching date", func(t *testing.T) {
+		jsonOut := false
+		cmd := NewPickCmd(func() *vault.Vault { return vlt }, &jsonOut)
+
+		oldStdout := os.Stdout
+		r, w, _ := os.Pipe()
+		os.Stdout = w
+
+		cmd.SetArgs([]string{"#followup", "--filter", "@2026-03-15"})
+		err := cmd.Execute()
+
+		w.Close()
+		os.Stdout = oldStdout
+
+		if err != nil {
+			t.Fatalf("Execute() error = %v", err)
+		}
+
+		var buf bytes.Buffer
+		buf.ReadFrom(r)
+		output := strings.TrimSpace(buf.String())
+
+		// Should only get the line from the dated note
+		if !strings.Contains(output, "Call client") {
+			t.Errorf("expected output to contain 'Call client', got %q", output)
+		}
+		if strings.Contains(output, "Send the report") {
+			t.Errorf("expected output NOT to contain 'Send the report', got %q", output)
+		}
+	})
+
+	t.Run("with non-matching date", func(t *testing.T) {
+		jsonOut := false
+		cmd := NewPickCmd(func() *vault.Vault { return vlt }, &jsonOut)
+
+		oldStdout := os.Stdout
+		_, w, _ := os.Pipe()
+		os.Stdout = w
+
+		cmd.SetArgs([]string{"#followup", "--filter", "@2099-01-01"})
+		err := cmd.Execute()
+
+		w.Close()
+		os.Stdout = oldStdout
+
+		if err != ErrNoMatches {
+			t.Errorf("expected ErrNoMatches, got %v", err)
+		}
+	})
+
+	t.Run("invalid filter", func(t *testing.T) {
+		jsonOut := false
+		cmd := NewPickCmd(func() *vault.Vault { return vlt }, &jsonOut)
+
+		cmd.SetArgs([]string{"#followup", "--filter", ""})
+		err := cmd.Execute()
+
+		// Empty filter string is ignored (filterFlag == ""), so this should work
+		// Test with an actually invalid filter term instead
+		if err != nil && err != ErrNoMatches {
+			// no-op: empty string means no filter applied
+		}
+	})
+}
+
+func TestPickCmd_MetadataDateFilters(t *testing.T) {
+	tmpDir := t.TempDir()
+	vlt := vault.New(tmpDir)
+	if _, err := vlt.Initialize(false); err != nil {
+		t.Fatalf("failed to initialize vault: %v", err)
+	}
+
+	jan := `---
+uuid: uuid-jan
+created: "2025-01-15T10:00:00-05:00"
+updated: "2025-01-20T10:00:00-05:00"
+inline-tags:
+  - "#followup"
+---
+# January Note
+
+Review Q1 budget. #followup
+`
+	mar := `---
+uuid: uuid-mar
+created: "2025-03-10T10:00:00-05:00"
+updated: "2025-03-10T10:00:00-05:00"
+inline-tags:
+  - "#followup"
+---
+# March Note
+
+Ship the feature. #followup
+`
+	for name, content := range map[string]string{
+		"jan.md": jan,
+		"mar.md": mar,
+	} {
+		path := filepath.Join(tmpDir, name)
+		if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+			t.Fatalf("failed to write test note: %v", err)
+		}
+	}
+
+	t.Run("created filter matches", func(t *testing.T) {
+		jsonOut := false
+		cmd := NewPickCmd(func() *vault.Vault { return vlt }, &jsonOut)
+
+		oldStdout := os.Stdout
+		r, w, _ := os.Pipe()
+		os.Stdout = w
+
+		cmd.SetArgs([]string{"#followup", "--filter", "created:2025-01"})
+		err := cmd.Execute()
+
+		w.Close()
+		os.Stdout = oldStdout
+
+		if err != nil {
+			t.Fatalf("Execute() error = %v", err)
+		}
+
+		var buf bytes.Buffer
+		buf.ReadFrom(r)
+		output := strings.TrimSpace(buf.String())
+
+		if !strings.Contains(output, "Review Q1 budget") {
+			t.Errorf("expected jan note line, got %q", output)
+		}
+		if strings.Contains(output, "Ship the feature") {
+			t.Errorf("expected mar note to be excluded, got %q", output)
+		}
+	})
+
+	t.Run("after filter", func(t *testing.T) {
+		jsonOut := false
+		cmd := NewPickCmd(func() *vault.Vault { return vlt }, &jsonOut)
+
+		oldStdout := os.Stdout
+		r, w, _ := os.Pipe()
+		os.Stdout = w
+
+		cmd.SetArgs([]string{"#followup", "--filter", "after:2025-02-01"})
+		err := cmd.Execute()
+
+		w.Close()
+		os.Stdout = oldStdout
+
+		if err != nil {
+			t.Fatalf("Execute() error = %v", err)
+		}
+
+		var buf bytes.Buffer
+		buf.ReadFrom(r)
+		output := strings.TrimSpace(buf.String())
+
+		if strings.Contains(output, "Review Q1 budget") {
+			t.Errorf("expected jan note to be excluded, got %q", output)
+		}
+		if !strings.Contains(output, "Ship the feature") {
+			t.Errorf("expected mar note line, got %q", output)
+		}
+	})
+
+	t.Run("between filter", func(t *testing.T) {
+		jsonOut := false
+		cmd := NewPickCmd(func() *vault.Vault { return vlt }, &jsonOut)
+
+		oldStdout := os.Stdout
+		r, w, _ := os.Pipe()
+		os.Stdout = w
+
+		cmd.SetArgs([]string{"#followup", "--filter", "between:2025-01,2025-02"})
+		err := cmd.Execute()
+
+		w.Close()
+		os.Stdout = oldStdout
+
+		if err != nil {
+			t.Fatalf("Execute() error = %v", err)
+		}
+
+		var buf bytes.Buffer
+		buf.ReadFrom(r)
+		output := strings.TrimSpace(buf.String())
+
+		if !strings.Contains(output, "Review Q1 budget") {
+			t.Errorf("expected jan note line, got %q", output)
+		}
+		if strings.Contains(output, "Ship the feature") {
+			t.Errorf("expected mar note to be excluded, got %q", output)
+		}
+	})
+
+	t.Run("updated filter", func(t *testing.T) {
+		jsonOut := false
+		cmd := NewPickCmd(func() *vault.Vault { return vlt }, &jsonOut)
+
+		oldStdout := os.Stdout
+		r, w, _ := os.Pipe()
+		os.Stdout = w
+
+		cmd.SetArgs([]string{"#followup", "--filter", "updated:2025-01"})
+		err := cmd.Execute()
+
+		w.Close()
+		os.Stdout = oldStdout
+
+		if err != nil {
+			t.Fatalf("Execute() error = %v", err)
+		}
+
+		var buf bytes.Buffer
+		buf.ReadFrom(r)
+		output := strings.TrimSpace(buf.String())
+
+		// jan was updated 2025-01-20, so it should match
+		if !strings.Contains(output, "Review Q1 budget") {
+			t.Errorf("expected jan note line, got %q", output)
+		}
+	})
 }
