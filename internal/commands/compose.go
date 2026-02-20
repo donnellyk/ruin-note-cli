@@ -18,13 +18,14 @@ var headingPattern = regexp.MustCompile(`(?m)^(#{1,6})\s`)
 // NewComposeCmd creates the compose command.
 func NewComposeCmd(getVault func() *vault.Vault, jsonOutput *bool) *cobra.Command {
 	var (
-		maxDepth       int
-		stripTitle     bool
-		stripGlobalTag bool
-		sortBy         string
-		edit           bool
-		force          bool
-		content        bool
+		maxDepth         int
+		stripTitle       bool
+		stripGlobalTag   bool
+		sortBy           string
+		edit             bool
+		force            bool
+		content          bool
+		normalizeHeaders bool
 	)
 
 	cmd := &cobra.Command{
@@ -39,7 +40,8 @@ Children are sorted by title by default.`,
 		Example: `  ruin compose <uuid>
   ruin compose "Project Plan" --depth 2
   ruin compose <uuid> --strip-title --strip-global-tags
-  ruin compose <uuid> --sort created
+  ruin compose <uuid> --normalize-headers
+  ruin compose <uuid> --sort created:desc
   ruin compose <uuid> --json
   ruin compose <uuid> --edit`,
 		Args: cobra.ExactArgs(1),
@@ -55,6 +57,11 @@ Children are sorted by title by default.`,
 
 			if content && !*jsonOutput {
 				return fmt.Errorf("--content requires --json")
+			}
+
+			sortField, err := parseComposeSort(sortBy)
+			if err != nil {
+				return err
 			}
 
 			root, err := ResolveNote(vlt, args[0])
@@ -78,7 +85,7 @@ Children are sorted by title by default.`,
 			// Sort children
 			for parent := range childrenMap {
 				uuids := childrenMap[parent]
-				sortChildUUIDs(vlt, index, uuids, sortBy)
+				sortChildUUIDs(vlt, index, uuids, sortField)
 			}
 
 			if edit {
@@ -90,12 +97,10 @@ Children are sorted by title by default.`,
 			}
 
 			if *jsonOutput {
-				tree := composeJSON(vlt, index, childrenMap, root.UUID, make(map[string]bool), maxDepth, 0, stripTitle, stripGlobalTag)
-				if content {
-					var b strings.Builder
-					composeText(vlt, index, childrenMap, root.UUID, make(map[string]bool), &b, maxDepth, 0, stripTitle, stripGlobalTag)
-					tree.Content = b.String()
-				}
+				tree := composeJSON(vlt, index, childrenMap, root.UUID, make(map[string]bool), maxDepth, 0, stripTitle, stripGlobalTag, normalizeHeaders, content)
+				composedText, sourceMap := composeTextWithSourceMap(vlt, index, childrenMap, root.UUID, make(map[string]bool), maxDepth, 0, stripTitle, stripGlobalTag, normalizeHeaders)
+				tree.ComposedContent = composedText
+				tree.SourceMap = sourceMap
 				enc := json.NewEncoder(os.Stdout)
 				enc.SetIndent("", "  ")
 				return enc.Encode(tree)
@@ -103,7 +108,7 @@ Children are sorted by title by default.`,
 
 			// Text output
 			var b strings.Builder
-			composeText(vlt, index, childrenMap, root.UUID, make(map[string]bool), &b, maxDepth, 0, stripTitle, stripGlobalTag)
+			composeText(vlt, index, childrenMap, root.UUID, make(map[string]bool), &b, maxDepth, 0, stripTitle, stripGlobalTag, normalizeHeaders)
 			fmt.Print(b.String())
 			return nil
 		},
@@ -112,17 +117,48 @@ Children are sorted by title by default.`,
 	cmd.Flags().IntVar(&maxDepth, "depth", 0, "max recursion depth (0 = unlimited)")
 	cmd.Flags().BoolVar(&stripTitle, "strip-title", false, "remove H1 title from root note")
 	cmd.Flags().BoolVar(&stripGlobalTag, "strip-global-tags", false, "remove global tag lines")
-	cmd.Flags().StringVar(&sortBy, "sort", "title", "child ordering: title, created, or order")
+	cmd.Flags().StringVarP(&sortBy, "sort", "s", "title", "child ordering: field[:dir] (e.g., created:desc)")
 	cmd.Flags().BoolVarP(&edit, "edit", "e", false, "open tree notes in $EDITOR")
 	cmd.Flags().BoolVarP(&force, "force", "f", false, "skip confirmation for deletions in edit mode")
-	cmd.Flags().BoolVar(&content, "content", false, "include full composed document in JSON content field")
+	cmd.Flags().BoolVar(&content, "content", false, "include per-node content in JSON output")
+	cmd.Flags().BoolVar(&normalizeHeaders, "normalize-headers", false, "normalize child headings so siblings share the same top-level")
 	return cmd
 }
 
-func sortChildUUIDs(_ *vault.Vault, index *vault.TitlesIndex, uuids []string, sortBy string) {
-	switch sortBy {
+// parseComposeSort parses a sort string for the compose command.
+// Format: field[:direction] where direction is asc or desc.
+func parseComposeSort(s string) (SortField, error) {
+	field := SortField{Ascending: true}
+
+	if idx := strings.Index(s, ":"); idx > 0 {
+		field.Field = strings.ToLower(s[:idx])
+		dir := strings.ToLower(s[idx+1:])
+		switch dir {
+		case "asc":
+			field.Ascending = true
+		case "desc":
+			field.Ascending = false
+		default:
+			return field, fmt.Errorf("invalid sort direction: %s (use asc or desc)", dir)
+		}
+	} else {
+		field.Field = strings.ToLower(s)
+	}
+
+	switch field.Field {
+	case "created", "title", "order":
+		// valid
+	default:
+		return field, fmt.Errorf("invalid sort field: %s (use created, title, or order)", field.Field)
+	}
+
+	return field, nil
+}
+
+func sortChildUUIDs(_ *vault.Vault, index *vault.TitlesIndex, uuids []string, sf SortField) {
+	ascending := sf.Ascending
+	switch sf.Field {
 	case "created":
-		// Need to load notes to get created time
 		type uuidTime struct {
 			uuid    string
 			created string
@@ -138,7 +174,10 @@ func sortChildUUIDs(_ *vault.Vault, index *vault.TitlesIndex, uuids []string, so
 			items = append(items, uuidTime{uuid: uuid, created: n.Created.Format(note.TimeFormat)})
 		}
 		sort.Slice(items, func(i, j int) bool {
-			return items[i].created < items[j].created
+			if ascending {
+				return items[i].created < items[j].created
+			}
+			return items[i].created > items[j].created
 		})
 		for i, item := range items {
 			uuids[i] = item.uuid
@@ -154,16 +193,25 @@ func sortChildUUIDs(_ *vault.Vault, index *vault.TitlesIndex, uuids []string, so
 			}
 			iSet, jSet := ni.Order != nil, nj.Order != nil
 			if iSet != jSet {
-				return iSet // set before unset
+				if ascending {
+					return iSet
+				}
+				return jSet
 			}
 			if iSet && *ni.Order != *nj.Order {
-				return *ni.Order < *nj.Order
+				if ascending {
+					return *ni.Order < *nj.Order
+				}
+				return *ni.Order > *nj.Order
 			}
 			return ei.Title < ej.Title
 		})
 	default: // "title"
 		sort.Slice(uuids, func(i, j int) bool {
-			return index.Titles[uuids[i]].Title < index.Titles[uuids[j]].Title
+			if ascending {
+				return index.Titles[uuids[i]].Title < index.Titles[uuids[j]].Title
+			}
+			return index.Titles[uuids[i]].Title > index.Titles[uuids[j]].Title
 		})
 	}
 }
@@ -207,53 +255,88 @@ func collectTreeNotes(vlt *vault.Vault, index *vault.TitlesIndex, childrenMap ma
 	return results
 }
 
-func composeText(vlt *vault.Vault, index *vault.TitlesIndex, childrenMap map[string][]string, uuid string, visited map[string]bool, b *strings.Builder, maxDepth, depth int, stripTitle, stripGlobalTags bool) {
-	if visited[uuid] {
-		return
-	}
-	visited[uuid] = true
+func composeText(vlt *vault.Vault, index *vault.TitlesIndex, childrenMap map[string][]string, uuid string, visited map[string]bool, b *strings.Builder, maxDepth, depth int, stripTitle, stripGlobalTags, normalizeHeaders bool) {
+	text, _ := composeTextWithSourceMap(vlt, index, childrenMap, uuid, visited, maxDepth, depth, stripTitle, stripGlobalTags, normalizeHeaders)
+	b.WriteString(text)
+}
 
-	entry, ok := index.Titles[uuid]
-	if !ok {
-		return
+func composeTextWithSourceMap(vlt *vault.Vault, index *vault.TitlesIndex, childrenMap map[string][]string, uuid string, visited map[string]bool, maxDepth, depth int, stripTitle, stripGlobalTags, normalizeHeaders bool) (string, []sourceEntry) {
+	var b strings.Builder
+	var sourceMap []sourceEntry
+	nextLine := 1
+
+	var walk func(uuid string, depth int)
+	walk = func(uuid string, depth int) {
+		if visited[uuid] {
+			return
+		}
+		visited[uuid] = true
+
+		entry, ok := index.Titles[uuid]
+		if !ok {
+			return
+		}
+
+		n, err := note.Load(entry.Path)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "warning: failed to load %s: %v\n", entry.Path, err)
+			return
+		}
+
+		content := n.Content
+
+		// Strip title from root only
+		if depth == 0 && stripTitle {
+			content = note.StripTitle(content)
+		}
+
+		// Strip global tags
+		if stripGlobalTags {
+			content = note.StripGlobalTags(content, n.InlineTags)
+		}
+
+		// Adjust headings for children
+		if depth > 0 {
+			if normalizeHeaders {
+				content = normalizeHeadings(content, depth)
+			} else {
+				content = adjustHeadings(content, depth)
+			}
+		}
+
+		// Add separator between notes (\n\n = line terminator + blank line = 1 gap line)
+		if b.Len() > 0 {
+			b.WriteString("\n\n")
+			nextLine++
+		}
+
+		startLine := nextLine
+		lineCount := strings.Count(content, "\n") + 1
+		endLine := startLine + lineCount - 1
+
+		sourceMap = append(sourceMap, sourceEntry{
+			UUID:      uuid,
+			Path:      entry.Path,
+			Title:     entry.Title,
+			StartLine: startLine,
+			EndLine:   endLine,
+		})
+
+		b.WriteString(content)
+		nextLine = endLine + 1
+
+		// Recurse into children
+		if maxDepth > 0 && depth >= maxDepth {
+			return
+		}
+
+		for _, childUUID := range childrenMap[uuid] {
+			walk(childUUID, depth+1)
+		}
 	}
 
-	n, err := note.Load(entry.Path)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "warning: failed to load %s: %v\n", entry.Path, err)
-		return
-	}
-
-	content := n.Content
-
-	// Strip title from root only
-	if depth == 0 && stripTitle {
-		content = note.StripTitle(content)
-	}
-
-	// Strip global tags
-	if stripGlobalTags {
-		content = note.StripGlobalTags(content, n.InlineTags)
-	}
-
-	// Adjust headings for children
-	if depth > 0 {
-		content = adjustHeadings(content, depth)
-	}
-
-	if b.Len() > 0 {
-		b.WriteString("\n\n")
-	}
-	b.WriteString(content)
-
-	// Recurse into children
-	if maxDepth > 0 && depth >= maxDepth {
-		return
-	}
-
-	for _, childUUID := range childrenMap[uuid] {
-		composeText(vlt, index, childrenMap, childUUID, visited, b, maxDepth, depth+1, stripTitle, stripGlobalTags)
-	}
+	walk(uuid, depth)
+	return b.String(), sourceMap
 }
 
 // adjustHeadings adds `depth` additional # to each heading, capping at H6.
@@ -278,15 +361,79 @@ func adjustHeadings(content string, depth int) string {
 	})
 }
 
-type composeNode struct {
-	UUID     string        `json:"uuid"`
-	Title    string        `json:"title"`
-	Path     string        `json:"path"`
-	Content  string        `json:"content"`
-	Children []composeNode `json:"children,omitempty"`
+// normalizeHeadings rebases headings so the minimum heading level in the
+// content maps to depth+1. Sibling notes at the same depth will share the
+// same top-level heading regardless of their original heading levels.
+func normalizeHeadings(content string, depth int) string {
+	targetLevel := depth + 1
+
+	// Find the minimum heading level in the content
+	minLevel := 7
+	for _, match := range headingPattern.FindAllString(content, -1) {
+		hashes := 0
+		for _, c := range match {
+			if c == '#' {
+				hashes++
+			} else {
+				break
+			}
+		}
+		if hashes < minLevel {
+			minLevel = hashes
+		}
+	}
+
+	if minLevel == 7 {
+		return content // no headings
+	}
+
+	delta := targetLevel - minLevel
+
+	if delta == 0 {
+		return content
+	}
+
+	return headingPattern.ReplaceAllStringFunc(content, func(match string) string {
+		hashes := 0
+		for _, c := range match {
+			if c == '#' {
+				hashes++
+			} else {
+				break
+			}
+		}
+
+		newLevel := hashes + delta
+		if newLevel < 1 {
+			newLevel = 1
+		}
+		if newLevel > 6 {
+			newLevel = 6
+		}
+
+		return strings.Repeat("#", newLevel) + match[hashes:]
+	})
 }
 
-func composeJSON(vlt *vault.Vault, index *vault.TitlesIndex, childrenMap map[string][]string, uuid string, visited map[string]bool, maxDepth, depth int, stripTitle, stripGlobalTags bool) composeNode {
+type sourceEntry struct {
+	UUID      string `json:"uuid"`
+	Path      string `json:"path"`
+	Title     string `json:"title"`
+	StartLine int    `json:"start_line"`
+	EndLine   int    `json:"end_line"`
+}
+
+type composeNode struct {
+	UUID            string        `json:"uuid"`
+	Title           string        `json:"title"`
+	Path            string        `json:"path"`
+	Content         string        `json:"content,omitempty"`
+	Children        []composeNode `json:"children,omitempty"`
+	ComposedContent string        `json:"composed_content,omitempty"`
+	SourceMap       []sourceEntry `json:"source_map,omitempty"`
+}
+
+func composeJSON(vlt *vault.Vault, index *vault.TitlesIndex, childrenMap map[string][]string, uuid string, visited map[string]bool, maxDepth, depth int, stripTitle, stripGlobalTags, normalizeHeaders, includeContent bool) composeNode {
 	entry := index.Titles[uuid]
 	node := composeNode{
 		UUID:  uuid,
@@ -299,29 +446,33 @@ func composeJSON(vlt *vault.Vault, index *vault.TitlesIndex, childrenMap map[str
 	}
 	visited[uuid] = true
 
-	n, err := note.Load(entry.Path)
-	if err != nil {
-		return node
+	if includeContent {
+		n, err := note.Load(entry.Path)
+		if err == nil {
+			content := n.Content
+			if depth == 0 && stripTitle {
+				content = note.StripTitle(content)
+			}
+			if stripGlobalTags {
+				content = note.StripGlobalTags(content, n.InlineTags)
+			}
+			if depth > 0 {
+				if normalizeHeaders {
+					content = normalizeHeadings(content, depth)
+				} else {
+					content = adjustHeadings(content, depth)
+				}
+			}
+			node.Content = content
+		}
 	}
-
-	content := n.Content
-	if depth == 0 && stripTitle {
-		content = note.StripTitle(content)
-	}
-	if stripGlobalTags {
-		content = note.StripGlobalTags(content, n.InlineTags)
-	}
-	if depth > 0 {
-		content = adjustHeadings(content, depth)
-	}
-	node.Content = content
 
 	if maxDepth > 0 && depth >= maxDepth {
 		return node
 	}
 
 	for _, childUUID := range childrenMap[uuid] {
-		child := composeJSON(vlt, index, childrenMap, childUUID, visited, maxDepth, depth+1, stripTitle, stripGlobalTags)
+		child := composeJSON(vlt, index, childrenMap, childUUID, visited, maxDepth, depth+1, stripTitle, stripGlobalTags, normalizeHeaders, includeContent)
 		node.Children = append(node.Children, child)
 	}
 

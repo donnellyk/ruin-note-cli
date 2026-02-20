@@ -710,13 +710,13 @@ func benchmarkCompose(b *testing.B, vlt *vault.Vault, rootUUID string, maxDepth 
 		}
 	}
 	for parent := range childrenMap {
-		sortChildUUIDs(vlt, index, childrenMap[parent], "title")
+		sortChildUUIDs(vlt, index, childrenMap[parent], SortField{Field: "title", Ascending: true})
 	}
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		var sb strings.Builder
-		composeText(vlt, index, childrenMap, rootUUID, make(map[string]bool), &sb, maxDepth, 0, false, false)
+		composeText(vlt, index, childrenMap, rootUUID, make(map[string]bool), &sb, maxDepth, 0, false, false, false)
 	}
 }
 
@@ -733,7 +733,7 @@ func benchmarkCollectTree(b *testing.B, vlt *vault.Vault, rootUUID string, maxDe
 		}
 	}
 	for parent := range childrenMap {
-		sortChildUUIDs(vlt, index, childrenMap[parent], "title")
+		sortChildUUIDs(vlt, index, childrenMap[parent], SortField{Field: "title", Ascending: true})
 	}
 
 	b.ResetTimer()

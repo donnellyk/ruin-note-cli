@@ -507,12 +507,29 @@ ruin compose <note>
 | `--depth` | | Max recursion depth (0 = unlimited) |
 | `--strip-title` | | Remove title header from root note |
 | `--strip-global-tags` | | Remove global tag lines |
-| `--sort` | | Child ordering: `title` (default), `created`, or `order` |
+| `--sort` | `-s` | Child ordering: `field[:dir]` e.g. `created:desc`. Fields: `title` (default), `created`, `order` |
 | `--edit` | `-e` | Open tree notes in `$EDITOR` |
 | `--force` | `-f` | Skip confirmation for deletions in edit mode |
-| `--content` | | Include full composed document in JSON `content` field (requires `--json`) |
+| `--content` | | Include per-node `content` fields in JSON output (requires `--json`) |
+| `--normalize-headers` | | Normalize child headings so siblings share the same top-level |
 
 Recursively assembles a document from a note and its children. Headings in children are adjusted by depth level (capped at H6).
+
+With `--normalize-headers`, each child's headings are rebased so its minimum heading level maps to its tree depth + 1. This ensures sibling notes at the same depth share the same top-level heading regardless of their original heading levels.
+
+**JSON output** (`--json`): Always includes `composed_content` (flat composed text) and `source_map` (line-level mapping from composed output to source notes). The `--content` flag controls whether per-node `content` fields are populated (omitted by default).
+
+**Source map**: Each entry maps a range of composed output lines to a source note:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `uuid` | string | Source note UUID |
+| `path` | string | Source note file path |
+| `title` | string | Source note title |
+| `start_line` | int | First line in composed output (1-indexed) |
+| `end_line` | int | Last line in composed output (1-indexed) |
+
+Separator lines between notes fall in gaps not covered by any entry. To map a composed line back to the original note content: `original_line = (composed_line - start_line) + 1`.
 
 ## Note Format
 
