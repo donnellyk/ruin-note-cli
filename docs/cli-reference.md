@@ -43,8 +43,9 @@ ruin init [path]
 |------|-------|-------------|
 | `--force` | `-f` | Overwrite existing metadata files |
 | `--no-git` | | Skip git repository initialization |
+| `--config` | | Create `~/.config/ruin/` directory and `config.yml` with vault path |
 
-Creates `.ruin/` directory with `tags.yml` and `queries.yml`. Initializes a git repository for automatic version history (unless `--no-git`). If path provided, updates config.
+Creates `.ruin/` directory with `tags.yml` and `queries.yml`. Initializes a git repository for automatic version history (unless `--no-git`). If path provided, updates config. Use `--config` to also create the config directory and file when initializing in the current directory (no path argument).
 
 ### log
 

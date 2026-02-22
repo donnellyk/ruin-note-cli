@@ -18,12 +18,14 @@ type InitOutput struct {
 	Created []string `json:"created,omitempty"`
 	Existed []string `json:"existed,omitempty"`
 	Git     bool     `json:"git"`
+	Config  string   `json:"config,omitempty"`
 }
 
 // NewInitCmd creates the init command.
 func NewInitCmd(jsonOutput *bool) *cobra.Command {
 	var force bool
 	var noGit bool
+	var setupConfig bool
 
 	cmd := &cobra.Command{
 		Use:   "init [path]",
@@ -33,12 +35,16 @@ func NewInitCmd(jsonOutput *bool) *cobra.Command {
 Creates the .ruin/ directory with metadata files (tags.yml, queries.yml).
 If no path is provided, initializes in the current directory.
 
-If a path is provided, also updates the config file to set this as the default vault.`,
+If a path is provided, also updates the config file to set this as the default vault.
+Use --config to create the ~/.config/ruin/ directory and config.yml even when no path is given.`,
 		Example: `  # Initialize in current directory
   ruin init
 
   # Initialize at specific path
   ruin init ~/notes
+
+  # Initialize and set up config directory
+  ruin init --config
 
   # Re-initialize (overwrite existing metadata)
   ruin init --force`,
@@ -83,8 +89,9 @@ If a path is provided, also updates the config file to set this as the default v
 				return fmt.Errorf("failed to initialize vault: %w", err)
 			}
 
-			// If path was explicitly provided, update config
-			if len(args) > 0 {
+			// Update config if path was explicitly provided or --config flag set
+			var configPath string
+			if len(args) > 0 || setupConfig {
 				cfg, err := config.Load()
 				if err != nil {
 					// Config might not exist yet, create new one
@@ -93,6 +100,10 @@ If a path is provided, also updates the config file to set this as the default v
 				cfg.VaultPath = vaultPath
 				if err := config.Save(cfg); err != nil {
 					fmt.Fprintf(os.Stderr, "warning: failed to update config: %v\n", err)
+				} else if envCfg := os.Getenv("RUIN_CONFIG"); envCfg != "" {
+					configPath = envCfg
+				} else {
+					configPath, _ = config.DefaultConfigPath()
 				}
 			}
 
@@ -118,6 +129,7 @@ If a path is provided, also updates the config file to set this as the default v
 					Created: result.Created,
 					Existed: result.Existed,
 					Git:     gitInitialized,
+					Config:  configPath,
 				}
 				enc := json.NewEncoder(os.Stdout)
 				enc.SetIndent("", "  ")
@@ -131,6 +143,9 @@ If a path is provided, also updates the config file to set this as the default v
 			if len(result.Existed) > 0 {
 				fmt.Printf("  Existed: %v\n", result.Existed)
 			}
+			if configPath != "" {
+				fmt.Printf("  Config: %s\n", configPath)
+			}
 
 			return nil
 		},
@@ -138,6 +153,7 @@ If a path is provided, also updates the config file to set this as the default v
 
 	cmd.Flags().BoolVarP(&force, "force", "f", false, "overwrite existing metadata files")
 	cmd.Flags().BoolVar(&noGit, "no-git", false, "skip git repository initialization")
+	cmd.Flags().BoolVar(&setupConfig, "config", false, "create ~/.config/ruin/ directory and config.yml")
 
 	return cmd
 }

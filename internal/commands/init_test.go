@@ -204,6 +204,166 @@ func TestInitCmd_Force(t *testing.T) {
 	}
 }
 
+func TestInitCmd_ConfigFlag(t *testing.T) {
+	tmpDir := t.TempDir()
+	configFile := filepath.Join(tmpDir, "config.yml")
+
+	// Isolate config to temp file
+	t.Setenv("RUIN_CONFIG", configFile)
+
+	// Change to temp directory for the test
+	vaultDir := filepath.Join(tmpDir, "vault")
+	os.MkdirAll(vaultDir, 0755)
+	oldWd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get working directory: %v", err)
+	}
+	if err := os.Chdir(vaultDir); err != nil {
+		t.Fatalf("failed to change directory: %v", err)
+	}
+	defer os.Chdir(oldWd)
+
+	jsonOut := false
+	cmd := NewInitCmd(&jsonOut)
+
+	// Capture stdout
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	// No path arg, but --config flag
+	cmd.SetArgs([]string{"--config"})
+	err = cmd.Execute()
+
+	w.Close()
+	os.Stdout = oldStdout
+
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+
+	var buf bytes.Buffer
+	buf.ReadFrom(r)
+	output := strings.TrimSpace(buf.String())
+
+	// Should mention config path
+	if !strings.Contains(output, "Config:") {
+		t.Errorf("output should mention config, got: %q", output)
+	}
+
+	// Config file should be created with vault path
+	configData, err := os.ReadFile(configFile)
+	if err != nil {
+		t.Fatalf("config file should be created with --config flag: %v", err)
+	}
+	if !strings.Contains(string(configData), vaultDir) {
+		t.Errorf("config should contain vault path %q, got: %s", vaultDir, configData)
+	}
+}
+
+func TestInitCmd_ConfigFlagJSON(t *testing.T) {
+	tmpDir := t.TempDir()
+	configFile := filepath.Join(tmpDir, "config.yml")
+
+	// Isolate config to temp file
+	t.Setenv("RUIN_CONFIG", configFile)
+
+	vaultDir := filepath.Join(tmpDir, "vault")
+	os.MkdirAll(vaultDir, 0755)
+	oldWd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get working directory: %v", err)
+	}
+	if err := os.Chdir(vaultDir); err != nil {
+		t.Fatalf("failed to change directory: %v", err)
+	}
+	defer os.Chdir(oldWd)
+
+	jsonOut := true
+	cmd := NewInitCmd(&jsonOut)
+
+	// Capture stdout
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	cmd.SetArgs([]string{"--config"})
+	err = cmd.Execute()
+
+	w.Close()
+	os.Stdout = oldStdout
+
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+
+	var buf bytes.Buffer
+	buf.ReadFrom(r)
+
+	var output InitOutput
+	if err := json.Unmarshal(buf.Bytes(), &output); err != nil {
+		t.Fatalf("failed to parse JSON output: %v", err)
+	}
+
+	if output.Config != configFile {
+		t.Errorf("Config = %q, want %q", output.Config, configFile)
+	}
+}
+
+func TestInitCmd_NoConfigWithoutFlag(t *testing.T) {
+	tmpDir := t.TempDir()
+	configFile := filepath.Join(tmpDir, "config.yml")
+
+	t.Setenv("RUIN_CONFIG", configFile)
+
+	vaultDir := filepath.Join(tmpDir, "vault")
+	os.MkdirAll(vaultDir, 0755)
+	oldWd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get working directory: %v", err)
+	}
+	if err := os.Chdir(vaultDir); err != nil {
+		t.Fatalf("failed to change directory: %v", err)
+	}
+	defer os.Chdir(oldWd)
+
+	jsonOut := true
+	cmd := NewInitCmd(&jsonOut)
+
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	// No path arg, no --config flag
+	cmd.SetArgs([]string{})
+	err = cmd.Execute()
+
+	w.Close()
+	os.Stdout = oldStdout
+
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+
+	var buf bytes.Buffer
+	buf.ReadFrom(r)
+
+	var output InitOutput
+	if err := json.Unmarshal(buf.Bytes(), &output); err != nil {
+		t.Fatalf("failed to parse JSON output: %v", err)
+	}
+
+	// Config should be empty when neither path arg nor --config flag
+	if output.Config != "" {
+		t.Errorf("Config should be empty without --config flag, got %q", output.Config)
+	}
+
+	// Config file should not exist
+	if _, err := os.Stat(configFile); err == nil {
+		t.Error("config file should not be created without --config flag")
+	}
+}
+
 func TestInitCmd_Idempotent(t *testing.T) {
 	tmpDir := t.TempDir()
 	configFile := filepath.Join(tmpDir, "config")
