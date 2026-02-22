@@ -50,6 +50,8 @@ func NewPickCmd(getVault func() *vault.Vault, jsonOutput *bool) *cobra.Command {
 		doneMode   bool
 		todoMode   bool
 		filterFlag string
+		notesFlag  []string
+		parentFlag string
 	)
 
 	cmd := &cobra.Command{
@@ -110,6 +112,18 @@ fast lookups, then extracts matching lines from the content body.`,
   ruin pick "#todo" --filter "before:2025-06 after:2025-01"
   ruin pick "#followup" --filter "between:2025-01,2025-06"
 
+  # Pick from specific notes only
+  ruin pick "#followup" --notes uuid-1,uuid-2,uuid-3
+
+  # Pick from children of a parent note
+  ruin pick "#followup" --parent "Hub Note"
+
+  # Using a saved bookmark
+  ruin pick "#todo" --parent hub
+
+  # Combine with existing filters
+  ruin pick "#followup" --parent hub --filter "created:today"
+
   # JSON output grouped by note
   ruin pick "#followup" --json`,
 		Args: cobra.MinimumNArgs(0),
@@ -121,6 +135,55 @@ fast lookups, then extracts matching lines from the content body.`,
 
 			if allMode && doneMode {
 				return fmt.Errorf("--all and --done are mutually exclusive")
+			}
+
+			if len(notesFlag) > 0 && parentFlag != "" {
+				return fmt.Errorf("--notes and --parent are mutually exclusive")
+			}
+
+			// Build allowedPaths if --notes or --parent is set
+			var allowedPaths map[string]bool
+			if len(notesFlag) > 0 {
+				index, err := vlt.LoadTitles()
+				if err != nil {
+					return fmt.Errorf("failed to load titles index: %w", err)
+				}
+				allowedPaths = make(map[string]bool)
+				for _, uuid := range notesFlag {
+					entry, ok := index.Titles[uuid]
+					if !ok {
+						fmt.Fprintf(os.Stderr, "warning: UUID %s not found in index\n", uuid)
+						continue
+					}
+					allowedPaths[entry.Path] = true
+				}
+			} else if parentFlag != "" {
+				parentNote, err := ResolveNote(vlt, parentFlag)
+				if err != nil {
+					return fmt.Errorf("failed to resolve parent: %w", err)
+				}
+				index, err := vlt.LoadTitles()
+				if err != nil {
+					return fmt.Errorf("failed to load titles index: %w", err)
+				}
+				allowedPaths = make(map[string]bool)
+				// Build parent->children map for recursive descent
+				children := make(map[string][]string)
+				for uuid, entry := range index.Titles {
+					if entry.Parent != "" {
+						children[entry.Parent] = append(children[entry.Parent], uuid)
+					}
+				}
+				// BFS to collect all descendants
+				queue := children[parentNote.UUID]
+				for len(queue) > 0 {
+					uuid := queue[0]
+					queue = queue[1:]
+					if entry, ok := index.Titles[uuid]; ok {
+						allowedPaths[entry.Path] = true
+					}
+					queue = append(queue, children[uuid]...)
+				}
 			}
 
 			// Separate args into tags and date tokens
@@ -178,6 +241,10 @@ fast lookups, then extracts matching lines from the content body.`,
 			var results []PickResult
 
 			for _, path := range notePaths {
+				if allowedPaths != nil && !allowedPaths[path] {
+					continue
+				}
+
 				// Fast pre-filter: check inline tags from frontmatter only
 				fast, err := note.LoadFrontmatterOnly(path)
 				if err != nil {
@@ -235,6 +302,8 @@ fast lookups, then extracts matching lines from the content body.`,
 	cmd.Flags().BoolVar(&doneMode, "done", false, "show only lines marked #done")
 	cmd.Flags().BoolVar(&todoMode, "todo", false, "also match markdown checkbox lines (- [ ] / - [x])")
 	cmd.Flags().StringVar(&filterFlag, "filter", "", "filter notes using search query syntax (e.g., \"created:today\", \"@tomorrow\", \"before:2025-06\")")
+	cmd.Flags().StringSliceVar(&notesFlag, "notes", nil, "scope to specific notes by UUID (comma-separated or repeated)")
+	cmd.Flags().StringVar(&parentFlag, "parent", "", "scope to all descendants of a parent note (bookmark, UUID, or title)")
 
 	return cmd
 }

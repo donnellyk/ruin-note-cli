@@ -137,6 +137,8 @@ ruin pick [inline-tags...] [@date...] [flags]
 | `--done` | | Show only lines marked `#done` or `[x]` |
 | `--todo` | | Also match markdown checkbox lines (`- [ ]` / `- [x]`) |
 | `--filter` | | Filter notes using search query syntax (e.g., `created:today`, `@tomorrow`, `before:2025-06`) |
+| `--notes` | | Scope to specific notes by UUID (comma-separated or repeated) |
+| `--parent` | | Scope to all descendants of a parent note (bookmark, UUID, or title) |
 
 By default, multiple tags are combined with AND (lines must contain all tags).
 
@@ -145,6 +147,8 @@ Use `--todo` to also match markdown checkbox lines. When `--todo` is set, tags b
 `@date` arguments filter at the line level — lines must contain an `@YYYY-MM-DD` date that falls within the resolved date range (e.g., `@2026-03` matches any date in March 2026, `@this-week` matches dates in the current week). `--filter "@date"` filters at the note level — only notes whose `dates` frontmatter includes the date are searched.
 
 Lines containing `#done` are excluded by default, `#done` is reserved to mark a line as resolved/completed. Use `--all` to include both open and done lines, or `--done` to show only completed lines.
+
+Use `--notes` to scope pick to specific notes by UUID, or `--parent` to scope to all descendants of a given note (children, grandchildren, etc.). These flags are mutually exclusive and act as a pre-filter before tag matching and `--filter`. `--parent` resolves identifiers via bookmarks, UUIDs, title substrings, or path substrings. Unknown UUIDs in `--notes` produce a stderr warning (partial results are returned).
 
 Tag-only lines (lines containing only tags and separators like commas) are treated as global tags and excluded from pick results.
 

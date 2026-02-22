@@ -2,6 +2,7 @@ package commands
 
 import (
 	"bytes"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -1055,4 +1056,454 @@ tags:
 			t.Errorf("expected error, got %v", err)
 		}
 	})
+}
+
+// --- --notes and --parent flag tests ---
+
+// setupPickVaultWithTitles creates a vault with a titles index for testing
+// --notes and --parent flags.
+func setupPickVaultWithTitles(t *testing.T) *vault.Vault {
+	t.Helper()
+
+	tmpDir := t.TempDir()
+	vlt := vault.New(tmpDir)
+	if _, err := vlt.Initialize(false); err != nil {
+		t.Fatalf("failed to initialize vault: %v", err)
+	}
+
+	type testNote struct {
+		filename string
+		uuid     string
+		parent   string
+		content  string
+	}
+
+	notes := []testNote{
+		{
+			filename: "hub.md",
+			uuid:     "uuid-hub",
+			content: `---
+uuid: uuid-hub
+created: "2025-01-01T10:00:00-05:00"
+updated: "2025-01-01T10:00:00-05:00"
+tags:
+  - "#hub"
+inline-tags:
+  - "#followup"
+---
+# Hub Note
+#hub
+
+Organize the project. #followup
+`,
+		},
+		{
+			filename: "child1.md",
+			uuid:     "uuid-child1",
+			parent:   "uuid-hub",
+			content: `---
+uuid: uuid-child1
+created: "2025-01-02T10:00:00-05:00"
+updated: "2025-01-02T10:00:00-05:00"
+tags:
+  - "#work"
+inline-tags:
+  - "#followup"
+  - "#urgent"
+parent: uuid-hub
+---
+# Child One
+#work
+
+Call client about deadline. #followup #urgent
+`,
+		},
+		{
+			filename: "child2.md",
+			uuid:     "uuid-child2",
+			parent:   "uuid-hub",
+			content: `---
+uuid: uuid-child2
+created: "2025-01-03T10:00:00-05:00"
+updated: "2025-01-03T10:00:00-05:00"
+tags:
+  - "#work"
+inline-tags:
+  - "#followup"
+parent: uuid-hub
+---
+# Child Two
+#work
+
+Send the report by Friday. #followup
+`,
+		},
+		{
+			filename: "grandchild.md",
+			uuid:     "uuid-grandchild",
+			parent:   "uuid-child1",
+			content: `---
+uuid: uuid-grandchild
+created: "2025-01-05T10:00:00-05:00"
+updated: "2025-01-05T10:00:00-05:00"
+tags:
+  - "#work"
+inline-tags:
+  - "#followup"
+parent: uuid-child1
+---
+# Grandchild
+#work
+
+Prepare slides for presentation. #followup
+`,
+		},
+		{
+			filename: "unrelated.md",
+			uuid:     "uuid-unrelated",
+			content: `---
+uuid: uuid-unrelated
+created: "2025-01-04T10:00:00-05:00"
+updated: "2025-01-04T10:00:00-05:00"
+tags:
+  - "#personal"
+inline-tags:
+  - "#followup"
+---
+# Unrelated Note
+#personal
+
+Buy groceries tomorrow. #followup
+`,
+		},
+	}
+
+	index := &vault.TitlesIndex{Titles: make(map[string]vault.TitleEntry)}
+	for _, n := range notes {
+		path := filepath.Join(tmpDir, n.filename)
+		if err := os.WriteFile(path, []byte(n.content), 0644); err != nil {
+			t.Fatalf("failed to write %s: %v", n.filename, err)
+		}
+		index.Titles[n.uuid] = vault.TitleEntry{
+			Title:  strings.TrimSuffix(n.filename, ".md"),
+			Path:   path,
+			Parent: n.parent,
+		}
+	}
+
+	if err := vlt.SaveTitles(index); err != nil {
+		t.Fatalf("failed to save titles: %v", err)
+	}
+
+	return vlt
+}
+
+func TestPickCmd_NotesFlag(t *testing.T) {
+	vlt := setupPickVaultWithTitles(t)
+
+	t.Run("scopes to specific UUIDs", func(t *testing.T) {
+		jsonOut := true
+		cmd := NewPickCmd(func() *vault.Vault { return vlt }, &jsonOut)
+
+		oldStdout := os.Stdout
+		r, w, _ := os.Pipe()
+		os.Stdout = w
+
+		cmd.SetArgs([]string{"#followup", "--notes", "uuid-child1,uuid-child2"})
+		err := cmd.Execute()
+
+		w.Close()
+		os.Stdout = oldStdout
+
+		if err != nil {
+			t.Fatalf("Execute() error = %v", err)
+		}
+
+		var buf bytes.Buffer
+		buf.ReadFrom(r)
+
+		var results []PickResult
+		if err := json.Unmarshal(buf.Bytes(), &results); err != nil {
+			t.Fatalf("failed to parse JSON: %v", err)
+		}
+
+		// Should only include child1 and child2, not hub or unrelated
+		uuids := make(map[string]bool)
+		for _, r := range results {
+			uuids[r.UUID] = true
+		}
+		if uuids["uuid-hub"] {
+			t.Error("hub should not be in results")
+		}
+		if uuids["uuid-unrelated"] {
+			t.Error("unrelated should not be in results")
+		}
+		if !uuids["uuid-child1"] {
+			t.Error("child1 should be in results")
+		}
+		if !uuids["uuid-child2"] {
+			t.Error("child2 should be in results")
+		}
+	})
+
+	t.Run("warns on invalid UUIDs and returns partial results", func(t *testing.T) {
+		jsonOut := false
+		cmd := NewPickCmd(func() *vault.Vault { return vlt }, &jsonOut)
+
+		// Capture stderr
+		oldStderr := os.Stderr
+		stderrR, stderrW, _ := os.Pipe()
+		os.Stderr = stderrW
+
+		oldStdout := os.Stdout
+		stdoutR, stdoutW, _ := os.Pipe()
+		os.Stdout = stdoutW
+
+		cmd.SetArgs([]string{"#followup", "--notes", "uuid-child1,uuid-bogus"})
+		err := cmd.Execute()
+
+		stdoutW.Close()
+		stderrW.Close()
+		os.Stdout = oldStdout
+		os.Stderr = oldStderr
+
+		if err != nil {
+			t.Fatalf("Execute() error = %v", err)
+		}
+
+		var stderrBuf bytes.Buffer
+		stderrBuf.ReadFrom(stderrR)
+		stderr := stderrBuf.String()
+
+		if !strings.Contains(stderr, "uuid-bogus") {
+			t.Errorf("expected stderr warning about uuid-bogus, got %q", stderr)
+		}
+
+		var stdoutBuf bytes.Buffer
+		stdoutBuf.ReadFrom(stdoutR)
+		output := strings.TrimSpace(stdoutBuf.String())
+
+		if !strings.Contains(output, "Call client") {
+			t.Errorf("expected child1 content in output, got %q", output)
+		}
+	})
+
+	t.Run("composes with --filter and tag args", func(t *testing.T) {
+		jsonOut := true
+		cmd := NewPickCmd(func() *vault.Vault { return vlt }, &jsonOut)
+
+		oldStdout := os.Stdout
+		r, w, _ := os.Pipe()
+		os.Stdout = w
+
+		// Use --notes with --filter to further restrict by created date
+		cmd.SetArgs([]string{"#followup", "--notes", "uuid-child1,uuid-child2", "--filter", "created:2025-01-02"})
+		err := cmd.Execute()
+
+		w.Close()
+		os.Stdout = oldStdout
+
+		if err != nil {
+			t.Fatalf("Execute() error = %v", err)
+		}
+
+		var buf bytes.Buffer
+		buf.ReadFrom(r)
+
+		var results []PickResult
+		if err := json.Unmarshal(buf.Bytes(), &results); err != nil {
+			t.Fatalf("failed to parse JSON: %v", err)
+		}
+
+		// Only child1 was created on 2025-01-02
+		if len(results) != 1 {
+			t.Fatalf("got %d results, want 1", len(results))
+		}
+		if results[0].UUID != "uuid-child1" {
+			t.Errorf("expected uuid-child1, got %s", results[0].UUID)
+		}
+	})
+
+	t.Run("all UUIDs invalid returns ErrNoMatches", func(t *testing.T) {
+		jsonOut := false
+		cmd := NewPickCmd(func() *vault.Vault { return vlt }, &jsonOut)
+
+		// Suppress stderr
+		oldStderr := os.Stderr
+		_, stderrW, _ := os.Pipe()
+		os.Stderr = stderrW
+
+		cmd.SetArgs([]string{"#followup", "--notes", "uuid-bogus1,uuid-bogus2"})
+		err := cmd.Execute()
+
+		stderrW.Close()
+		os.Stderr = oldStderr
+
+		if err != ErrNoMatches {
+			t.Errorf("expected ErrNoMatches, got %v", err)
+		}
+	})
+}
+
+func TestPickCmd_ParentFlag(t *testing.T) {
+	vlt := setupPickVaultWithTitles(t)
+
+	t.Run("scopes to all descendants of parent", func(t *testing.T) {
+		jsonOut := true
+		cmd := NewPickCmd(func() *vault.Vault { return vlt }, &jsonOut)
+
+		oldStdout := os.Stdout
+		r, w, _ := os.Pipe()
+		os.Stdout = w
+
+		cmd.SetArgs([]string{"#followup", "--parent", "uuid-hub"})
+		err := cmd.Execute()
+
+		w.Close()
+		os.Stdout = oldStdout
+
+		if err != nil {
+			t.Fatalf("Execute() error = %v", err)
+		}
+
+		var buf bytes.Buffer
+		buf.ReadFrom(r)
+
+		var results []PickResult
+		if err := json.Unmarshal(buf.Bytes(), &results); err != nil {
+			t.Fatalf("failed to parse JSON: %v", err)
+		}
+
+		uuids := make(map[string]bool)
+		for _, r := range results {
+			uuids[r.UUID] = true
+		}
+
+		if uuids["uuid-hub"] {
+			t.Error("parent itself should not be in results")
+		}
+		if uuids["uuid-unrelated"] {
+			t.Error("unrelated should not be in results")
+		}
+		if !uuids["uuid-child1"] {
+			t.Error("child1 should be in results")
+		}
+		if !uuids["uuid-child2"] {
+			t.Error("child2 should be in results")
+		}
+		if !uuids["uuid-grandchild"] {
+			t.Error("grandchild should be in results (recursive)")
+		}
+	})
+
+	t.Run("resolves parent by title", func(t *testing.T) {
+		jsonOut := true
+		cmd := NewPickCmd(func() *vault.Vault { return vlt }, &jsonOut)
+
+		oldStdout := os.Stdout
+		r, w, _ := os.Pipe()
+		os.Stdout = w
+
+		cmd.SetArgs([]string{"#followup", "--parent", "hub"})
+		err := cmd.Execute()
+
+		w.Close()
+		os.Stdout = oldStdout
+
+		if err != nil {
+			t.Fatalf("Execute() error = %v", err)
+		}
+
+		var buf bytes.Buffer
+		buf.ReadFrom(r)
+
+		var results []PickResult
+		if err := json.Unmarshal(buf.Bytes(), &results); err != nil {
+			t.Fatalf("failed to parse JSON: %v", err)
+		}
+
+		// child1, child2, grandchild
+		if len(results) != 3 {
+			t.Fatalf("got %d results, want 3", len(results))
+		}
+	})
+
+	t.Run("no children returns ErrNoMatches", func(t *testing.T) {
+		jsonOut := false
+		cmd := NewPickCmd(func() *vault.Vault { return vlt }, &jsonOut)
+
+		cmd.SetArgs([]string{"#followup", "--parent", "uuid-unrelated"})
+		err := cmd.Execute()
+
+		if err != ErrNoMatches {
+			t.Errorf("expected ErrNoMatches, got %v", err)
+		}
+	})
+
+	t.Run("composes with --filter and tag args", func(t *testing.T) {
+		jsonOut := true
+		cmd := NewPickCmd(func() *vault.Vault { return vlt }, &jsonOut)
+
+		oldStdout := os.Stdout
+		r, w, _ := os.Pipe()
+		os.Stdout = w
+
+		cmd.SetArgs([]string{"#followup", "#urgent", "--parent", "uuid-hub"})
+		err := cmd.Execute()
+
+		w.Close()
+		os.Stdout = oldStdout
+
+		if err != nil {
+			t.Fatalf("Execute() error = %v", err)
+		}
+
+		var buf bytes.Buffer
+		buf.ReadFrom(r)
+
+		var results []PickResult
+		if err := json.Unmarshal(buf.Bytes(), &results); err != nil {
+			t.Fatalf("failed to parse JSON: %v", err)
+		}
+
+		// Only child1 has both #followup and #urgent
+		if len(results) != 1 {
+			t.Fatalf("got %d results, want 1", len(results))
+		}
+		if results[0].UUID != "uuid-child1" {
+			t.Errorf("expected uuid-child1, got %s", results[0].UUID)
+		}
+	})
+
+	t.Run("invalid parent errors", func(t *testing.T) {
+		jsonOut := false
+		cmd := NewPickCmd(func() *vault.Vault { return vlt }, &jsonOut)
+
+		cmd.SetArgs([]string{"#followup", "--parent", "nonexistent-note-xyz"})
+		err := cmd.Execute()
+
+		if err == nil {
+			t.Error("expected error for unresolvable parent")
+		}
+		if !strings.Contains(err.Error(), "failed to resolve parent") {
+			t.Errorf("expected resolve error, got %v", err)
+		}
+	})
+}
+
+func TestPickCmd_NotesPlusParentMutuallyExclusive(t *testing.T) {
+	vlt := setupPickVaultWithTitles(t)
+
+	jsonOut := false
+	cmd := NewPickCmd(func() *vault.Vault { return vlt }, &jsonOut)
+
+	cmd.SetArgs([]string{"#followup", "--notes", "uuid-child1", "--parent", "uuid-hub"})
+	err := cmd.Execute()
+
+	if err == nil {
+		t.Error("expected error for --notes + --parent")
+	}
+	if !strings.Contains(err.Error(), "mutually exclusive") {
+		t.Errorf("expected mutual exclusivity error, got %v", err)
+	}
 }
