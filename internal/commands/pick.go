@@ -70,9 +70,10 @@ Lines containing #done are excluded by default, since #done marks a line as
 resolved/completed. Use --all to include both open and done lines, or --done
 to show only completed lines.
 
-Use --todo to also match markdown checkbox lines (- [ ] / - [x]). When --todo
-is set, tags become optional. The done filter applies uniformly: checked
-checkboxes ([x]) and #done lines are both treated as "done".
+Use @date alone to find all lines with a matching date annotation — no tags
+required. Use --todo to also match markdown checkbox lines (- [ ] / - [x]).
+When --todo or @date is provided, tags become optional. The done filter applies
+uniformly: checked checkboxes ([x]) and #done lines are both treated as "done".
 
 The command pre-filters notes using the inline-tags frontmatter field for
 fast lookups, then extracts matching lines from the content body.`,
@@ -100,11 +101,18 @@ fast lookups, then extracts matching lines from the content body.`,
   # Checkboxes that also have a specific tag
   ruin pick --todo "#daily"
 
+  # Date-only: all lines with a matching date annotation
+  ruin pick @today
+  ruin pick @2026-03-15
+
   # Filter lines by inline date (range-based matching)
   ruin pick "#followup" @today
   ruin pick "#followup" @this-week
   ruin pick "#followup" @2026-03
   ruin pick "#followup" @2026-03-01
+
+  # Checkboxes with a date annotation
+  ruin pick --todo @today --all
 
   # Filter notes by metadata (note-level, using search query syntax)
   ruin pick "#followup" --filter "created:today"
@@ -204,8 +212,8 @@ fast lookups, then extracts matching lines from the content body.`,
 					return fmt.Errorf("invalid argument %q: must start with # or @", arg)
 				}
 			}
-			if len(tagArgs) == 0 && !todoMode {
-				return fmt.Errorf("at least one inline tag required (or use --todo)")
+			if len(tagArgs) == 0 && !todoMode && len(dateRanges) == 0 {
+				return fmt.Errorf("at least one inline tag, @date, or --todo required")
 			}
 
 			// Parse --filter into a QueryMatcher
@@ -376,6 +384,12 @@ func pickLinesFromNote(n *note.Note, queryTags []string, dateRanges []dateparse.
 		// Also check tag-based matching (non-todo or todo+tags)
 		if !lineMatched && len(lineTags) > 0 && len(queryTags) > 0 {
 			lineMatched = matchesTags(lineTagsNorm, queryTags, anyMode)
+		}
+
+		// Date-only mode: any content line can potentially match if it contains matching dates.
+		// The date filter below will do the actual date check.
+		if !lineMatched && len(queryTags) == 0 && !todoMode && len(dateRanges) > 0 {
+			lineMatched = true
 		}
 
 		if !lineMatched {

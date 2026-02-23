@@ -581,15 +581,35 @@ Send report soon. #followup
 		}
 	})
 
-	t.Run("requires at least one tag", func(t *testing.T) {
+	t.Run("date-only is allowed", func(t *testing.T) {
 		jsonOut := false
 		cmd := NewPickCmd(func() *vault.Vault { return vlt }, &jsonOut)
+
+		oldStdout := os.Stdout
+		_, w, _ := os.Pipe()
+		os.Stdout = w
 
 		cmd.SetArgs([]string{"@2026-03-15"})
 		err := cmd.Execute()
 
+		w.Close()
+		os.Stdout = oldStdout
+
+		// Should not error on validation — may return ErrNoMatches if no lines match
+		if err != nil && err != ErrNoMatches {
+			t.Errorf("expected no validation error, got %v", err)
+		}
+	})
+
+	t.Run("no args at all errors", func(t *testing.T) {
+		jsonOut := false
+		cmd := NewPickCmd(func() *vault.Vault { return vlt }, &jsonOut)
+
+		cmd.SetArgs([]string{})
+		err := cmd.Execute()
+
 		if err == nil || !strings.Contains(err.Error(), "at least one inline tag") {
-			t.Errorf("expected 'at least one inline tag' error, got %v", err)
+			t.Errorf("expected validation error, got %v", err)
 		}
 	})
 }
@@ -1045,7 +1065,7 @@ tags:
 		}
 	})
 
-	t.Run("no tags and no --todo errors", func(t *testing.T) {
+	t.Run("no tags no todo no date errors", func(t *testing.T) {
 		jsonOut := false
 		cmd := NewPickCmd(func() *vault.Vault { return vlt }, &jsonOut)
 
@@ -1506,4 +1526,198 @@ func TestPickCmd_NotesPlusParentMutuallyExclusive(t *testing.T) {
 	if !strings.Contains(err.Error(), "mutually exclusive") {
 		t.Errorf("expected mutual exclusivity error, got %v", err)
 	}
+}
+
+// --- date-only mode tests ---
+
+func TestPickLinesFromNote_DateOnly(t *testing.T) {
+	n := &note.Note{
+		Content: `# Tasks
+#work
+
+Call client @2026-03-15. #followup
+
+Send report by Friday.
+
+Review contract @2026-03-15.
+
+Deploy the fix @2026-04-01.`,
+		Title: "Tasks",
+	}
+	n.RefreshTags()
+
+	dr := dateparse.DateRange{
+		Start: time.Date(2026, 3, 15, 0, 0, 0, 0, time.Local),
+		End:   time.Date(2026, 3, 16, 0, 0, 0, 0, time.Local),
+	}
+
+	// No tags, no todo — just date ranges
+	matches := pickLinesFromNote(n, nil, []dateparse.DateRange{dr}, false, doneExclude, false)
+
+	if len(matches) != 2 {
+		t.Fatalf("got %d matches, want 2", len(matches))
+	}
+	if !strings.Contains(matches[0].Content, "Call client") {
+		t.Errorf("match 0 = %q", matches[0].Content)
+	}
+	if !strings.Contains(matches[1].Content, "Review contract") {
+		t.Errorf("match 1 = %q", matches[1].Content)
+	}
+}
+
+func TestPickCmd_DateOnly(t *testing.T) {
+	tmpDir := t.TempDir()
+	vlt := vault.New(tmpDir)
+	if _, err := vlt.Initialize(false); err != nil {
+		t.Fatalf("failed to initialize vault: %v", err)
+	}
+
+	content := `---
+uuid: uuid-dateonly
+created: "2025-01-01T10:00:00-05:00"
+updated: "2025-01-01T10:00:00-05:00"
+tags:
+  - "#work"
+---
+# Date Only Note
+#work
+
+Call client @2026-03-15.
+
+Send report by Friday.
+
+Review contract @2026-03-15. #followup
+`
+	path := filepath.Join(tmpDir, "dateonly.md")
+	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+		t.Fatalf("failed to write test note: %v", err)
+	}
+
+	t.Run("date-only returns matching lines", func(t *testing.T) {
+		jsonOut := true
+		cmd := NewPickCmd(func() *vault.Vault { return vlt }, &jsonOut)
+
+		oldStdout := os.Stdout
+		r, w, _ := os.Pipe()
+		os.Stdout = w
+
+		cmd.SetArgs([]string{"@2026-03-15"})
+		err := cmd.Execute()
+
+		w.Close()
+		os.Stdout = oldStdout
+
+		if err != nil {
+			t.Fatalf("Execute() error = %v", err)
+		}
+
+		var buf bytes.Buffer
+		buf.ReadFrom(r)
+
+		var results []PickResult
+		if err := json.Unmarshal(buf.Bytes(), &results); err != nil {
+			t.Fatalf("failed to parse JSON: %v", err)
+		}
+
+		if len(results) != 1 {
+			t.Fatalf("got %d results, want 1", len(results))
+		}
+		if len(results[0].Matches) != 2 {
+			t.Fatalf("got %d matches, want 2", len(results[0].Matches))
+		}
+		if !strings.Contains(results[0].Matches[0].Content, "Call client") {
+			t.Errorf("match 0 = %q", results[0].Matches[0].Content)
+		}
+		if !strings.Contains(results[0].Matches[1].Content, "Review contract") {
+			t.Errorf("match 1 = %q", results[0].Matches[1].Content)
+		}
+	})
+
+	t.Run("date-only no matches returns ErrNoMatches", func(t *testing.T) {
+		jsonOut := false
+		cmd := NewPickCmd(func() *vault.Vault { return vlt }, &jsonOut)
+
+		oldStdout := os.Stdout
+		_, w, _ := os.Pipe()
+		os.Stdout = w
+
+		cmd.SetArgs([]string{"@2099-01-01"})
+		err := cmd.Execute()
+
+		w.Close()
+		os.Stdout = oldStdout
+
+		if err != ErrNoMatches {
+			t.Errorf("expected ErrNoMatches, got %v", err)
+		}
+	})
+}
+
+func TestPickCmd_TodoWithDate(t *testing.T) {
+	tmpDir := t.TempDir()
+	vlt := vault.New(tmpDir)
+	if _, err := vlt.Initialize(false); err != nil {
+		t.Fatalf("failed to initialize vault: %v", err)
+	}
+
+	content := `---
+uuid: uuid-tododate
+created: "2025-01-01T10:00:00-05:00"
+updated: "2025-01-01T10:00:00-05:00"
+tags:
+  - "#work"
+---
+# Todo Date Note
+#work
+
+- [ ] Call client @2026-03-15
+- [x] Send report @2026-03-15
+- [ ] Review contract @2026-04-01
+Regular line @2026-03-15
+`
+	path := filepath.Join(tmpDir, "tododate.md")
+	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+		t.Fatalf("failed to write test note: %v", err)
+	}
+
+	t.Run("todo with date returns matching checkboxes", func(t *testing.T) {
+		jsonOut := true
+		cmd := NewPickCmd(func() *vault.Vault { return vlt }, &jsonOut)
+
+		oldStdout := os.Stdout
+		r, w, _ := os.Pipe()
+		os.Stdout = w
+
+		cmd.SetArgs([]string{"--todo", "@2026-03-15", "--all"})
+		err := cmd.Execute()
+
+		w.Close()
+		os.Stdout = oldStdout
+
+		if err != nil {
+			t.Fatalf("Execute() error = %v", err)
+		}
+
+		var buf bytes.Buffer
+		buf.ReadFrom(r)
+
+		var results []PickResult
+		if err := json.Unmarshal(buf.Bytes(), &results); err != nil {
+			t.Fatalf("failed to parse JSON: %v", err)
+		}
+
+		if len(results) != 1 {
+			t.Fatalf("got %d results, want 1", len(results))
+		}
+		// Should match only the 2 checkboxes with @2026-03-15, not the regular line or @2026-04-01
+		if len(results[0].Matches) != 2 {
+			t.Fatalf("got %d matches, want 2: %+v", len(results[0].Matches), results[0].Matches)
+		}
+		if !strings.Contains(results[0].Matches[0].Content, "Call client") {
+			t.Errorf("match 0 = %q", results[0].Matches[0].Content)
+		}
+		if !strings.Contains(results[0].Matches[1].Content, "Send report") {
+			t.Errorf("match 1 = %q", results[0].Matches[1].Content)
+		}
+	})
 }

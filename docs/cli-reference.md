@@ -143,9 +143,16 @@ ruin pick [inline-tags...] [@date...] [flags]
 
 By default, multiple tags are combined with AND (lines must contain all tags).
 
-Use `--todo` to also match markdown checkbox lines. When `--todo` is set, tags become optional. If tags are also provided, checkbox lines must contain those tags. The done filter applies uniformly: checked checkboxes (`[x]`) and `#done` lines are both treated as "done".
+Tags are optional when `@date` is provided — `ruin pick @today` returns all lines with today's date annotation. Use `--todo` to also match markdown checkbox lines. When `--todo` or `@date` is provided, tags become optional. If tags are also provided, checkbox lines must contain those tags. The done filter applies uniformly: checked checkboxes (`[x]`) and `#done` lines are both treated as "done".
 
-`@date` arguments filter at the line level — lines must contain an `@YYYY-MM-DD` date that falls within the resolved date range (e.g., `@2026-03` matches any date in March 2026, `@this-week` matches dates in the current week). `--filter "@date"` filters at the note level — only notes whose `dates` frontmatter includes the date are searched.
+`@date` arguments filter at the line level — lines must contain an `@YYYY-MM-DD` date that falls within the resolved date range (e.g., `@2026-03` matches any date in March 2026, `@this-week` matches dates in the current week). When `@date` is the only argument (no tags, no `--todo`), all content lines are candidates and the date filter selects matching ones. `--filter "@date"` filters at the note level — only notes whose `dates` frontmatter includes the date are searched.
+
+Examples:
+```
+ruin pick @today                    # All lines with today's date annotation
+ruin pick @2026-03-15               # All lines referencing March 15
+ruin pick --todo @today --all       # All checkboxes (open + done) with today's date
+```
 
 Lines containing `#done` are excluded by default, `#done` is reserved to mark a line as resolved/completed. Use `--all` to include both open and done lines, or `--done` to show only completed lines.
 
