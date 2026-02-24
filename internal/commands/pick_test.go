@@ -1653,6 +1653,238 @@ Review contract @2026-03-15. #followup
 	})
 }
 
+// --- sort tests ---
+
+func TestPickCmd_SortByCreated(t *testing.T) {
+	tmpDir := t.TempDir()
+	vlt := vault.New(tmpDir)
+	if _, err := vlt.Initialize(false); err != nil {
+		t.Fatalf("failed to initialize vault: %v", err)
+	}
+
+	// Note created earlier
+	older := `---
+uuid: uuid-older
+created: "2025-01-01T10:00:00-05:00"
+updated: "2025-01-01T10:00:00-05:00"
+inline-tags:
+  - "#followup"
+---
+# Older Note
+
+Review Q1 budget. #followup
+`
+	// Note created later
+	newer := `---
+uuid: uuid-newer
+created: "2025-03-01T10:00:00-05:00"
+updated: "2025-03-01T10:00:00-05:00"
+inline-tags:
+  - "#followup"
+---
+# Newer Note
+
+Ship the feature. #followup
+`
+	for name, content := range map[string]string{
+		"older.md": older,
+		"newer.md": newer,
+	} {
+		path := filepath.Join(tmpDir, name)
+		if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+			t.Fatalf("failed to write test note: %v", err)
+		}
+	}
+
+	t.Run("default sort is created:desc", func(t *testing.T) {
+		jsonOut := true
+		cmd := NewPickCmd(func() *vault.Vault { return vlt }, &jsonOut)
+
+		oldStdout := os.Stdout
+		r, w, _ := os.Pipe()
+		os.Stdout = w
+
+		cmd.SetArgs([]string{"#followup"})
+		err := cmd.Execute()
+
+		w.Close()
+		os.Stdout = oldStdout
+
+		if err != nil {
+			t.Fatalf("Execute() error = %v", err)
+		}
+
+		var buf bytes.Buffer
+		buf.ReadFrom(r)
+
+		var results []PickResult
+		if err := json.Unmarshal(buf.Bytes(), &results); err != nil {
+			t.Fatalf("failed to parse JSON: %v", err)
+		}
+
+		if len(results) != 2 {
+			t.Fatalf("got %d results, want 2", len(results))
+		}
+		if results[0].UUID != "uuid-newer" {
+			t.Errorf("first result = %s, want uuid-newer (newest first)", results[0].UUID)
+		}
+		if results[1].UUID != "uuid-older" {
+			t.Errorf("second result = %s, want uuid-older", results[1].UUID)
+		}
+	})
+
+	t.Run("created:asc sorts oldest first", func(t *testing.T) {
+		jsonOut := true
+		cmd := NewPickCmd(func() *vault.Vault { return vlt }, &jsonOut)
+
+		oldStdout := os.Stdout
+		r, w, _ := os.Pipe()
+		os.Stdout = w
+
+		cmd.SetArgs([]string{"#followup", "--sort", "created:asc"})
+		err := cmd.Execute()
+
+		w.Close()
+		os.Stdout = oldStdout
+
+		if err != nil {
+			t.Fatalf("Execute() error = %v", err)
+		}
+
+		var buf bytes.Buffer
+		buf.ReadFrom(r)
+
+		var results []PickResult
+		if err := json.Unmarshal(buf.Bytes(), &results); err != nil {
+			t.Fatalf("failed to parse JSON: %v", err)
+		}
+
+		if len(results) != 2 {
+			t.Fatalf("got %d results, want 2", len(results))
+		}
+		if results[0].UUID != "uuid-older" {
+			t.Errorf("first result = %s, want uuid-older (oldest first)", results[0].UUID)
+		}
+		if results[1].UUID != "uuid-newer" {
+			t.Errorf("second result = %s, want uuid-newer", results[1].UUID)
+		}
+	})
+}
+
+func TestPickCmd_SortByTitle(t *testing.T) {
+	tmpDir := t.TempDir()
+	vlt := vault.New(tmpDir)
+	if _, err := vlt.Initialize(false); err != nil {
+		t.Fatalf("failed to initialize vault: %v", err)
+	}
+
+	alpha := `---
+uuid: uuid-alpha
+created: "2025-01-01T10:00:00-05:00"
+updated: "2025-01-01T10:00:00-05:00"
+inline-tags:
+  - "#followup"
+---
+# Alpha Note
+
+Task from alpha. #followup
+`
+	zeta := `---
+uuid: uuid-zeta
+created: "2025-01-02T10:00:00-05:00"
+updated: "2025-01-02T10:00:00-05:00"
+inline-tags:
+  - "#followup"
+---
+# Zeta Note
+
+Task from zeta. #followup
+`
+	for name, content := range map[string]string{
+		"alpha.md": alpha,
+		"zeta.md":  zeta,
+	} {
+		path := filepath.Join(tmpDir, name)
+		if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+			t.Fatalf("failed to write test note: %v", err)
+		}
+	}
+
+	t.Run("title:asc sorts alphabetically", func(t *testing.T) {
+		jsonOut := true
+		cmd := NewPickCmd(func() *vault.Vault { return vlt }, &jsonOut)
+
+		oldStdout := os.Stdout
+		r, w, _ := os.Pipe()
+		os.Stdout = w
+
+		cmd.SetArgs([]string{"#followup", "--sort", "title:asc"})
+		err := cmd.Execute()
+
+		w.Close()
+		os.Stdout = oldStdout
+
+		if err != nil {
+			t.Fatalf("Execute() error = %v", err)
+		}
+
+		var buf bytes.Buffer
+		buf.ReadFrom(r)
+
+		var results []PickResult
+		if err := json.Unmarshal(buf.Bytes(), &results); err != nil {
+			t.Fatalf("failed to parse JSON: %v", err)
+		}
+
+		if len(results) != 2 {
+			t.Fatalf("got %d results, want 2", len(results))
+		}
+		if results[0].UUID != "uuid-alpha" {
+			t.Errorf("first result = %s, want uuid-alpha", results[0].UUID)
+		}
+		if results[1].UUID != "uuid-zeta" {
+			t.Errorf("second result = %s, want uuid-zeta", results[1].UUID)
+		}
+	})
+
+	t.Run("title:desc sorts reverse alphabetically", func(t *testing.T) {
+		jsonOut := true
+		cmd := NewPickCmd(func() *vault.Vault { return vlt }, &jsonOut)
+
+		oldStdout := os.Stdout
+		r, w, _ := os.Pipe()
+		os.Stdout = w
+
+		cmd.SetArgs([]string{"#followup", "--sort", "title:desc"})
+		err := cmd.Execute()
+
+		w.Close()
+		os.Stdout = oldStdout
+
+		if err != nil {
+			t.Fatalf("Execute() error = %v", err)
+		}
+
+		var buf bytes.Buffer
+		buf.ReadFrom(r)
+
+		var results []PickResult
+		if err := json.Unmarshal(buf.Bytes(), &results); err != nil {
+			t.Fatalf("failed to parse JSON: %v", err)
+		}
+
+		if len(results) != 2 {
+			t.Fatalf("got %d results, want 2", len(results))
+		}
+		if results[0].UUID != "uuid-zeta" {
+			t.Errorf("first result = %s, want uuid-zeta", results[0].UUID)
+		}
+		if results[1].UUID != "uuid-alpha" {
+			t.Errorf("second result = %s, want uuid-alpha", results[1].UUID)
+		}
+	})
+}
+
 func TestPickCmd_TodoWithDate(t *testing.T) {
 	tmpDir := t.TempDir()
 	vlt := vault.New(tmpDir)

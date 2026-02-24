@@ -140,6 +140,7 @@ ruin pick [inline-tags...] [@date...] [flags]
 | `--filter` | | Filter notes using search query syntax (e.g., `created:today`, `@tomorrow`, `before:2025-06`) |
 | `--notes` | | Scope to specific notes by UUID (comma-separated or repeated) |
 | `--parent` | | Scope to all descendants of a parent note (bookmark, UUID, or title) |
+| `--sort` | `-s` | Sort order for notes (default `created:desc`). Fields: `created`, `updated`, `title`, `order` |
 
 By default, multiple tags are combined with AND (lines must contain all tags).
 

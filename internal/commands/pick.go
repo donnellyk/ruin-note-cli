@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 	"time"
 
@@ -40,6 +41,10 @@ type PickResult struct {
 	Title   string      `json:"title,omitempty"`
 	File    string      `json:"file"`
 	Matches []PickMatch `json:"matches"`
+	// unexported, for sorting only
+	created time.Time
+	updated time.Time
+	order   *int
 }
 
 // NewPickCmd creates the pick command.
@@ -52,6 +57,7 @@ func NewPickCmd(getVault func() *vault.Vault, jsonOutput *bool) *cobra.Command {
 		filterFlag string
 		notesFlag  []string
 		parentFlag string
+		sortFlag   string
 	)
 
 	cmd := &cobra.Command{
@@ -74,6 +80,10 @@ Use @date alone to find all lines with a matching date annotation — no tags
 required. Use --todo to also match markdown checkbox lines (- [ ] / - [x]).
 When --todo or @date is provided, tags become optional. The done filter applies
 uniformly: checked checkboxes ([x]) and #done lines are both treated as "done".
+
+Results are sorted by note creation date (newest first) by default. Use --sort
+to change the ordering (e.g., --sort title:asc, --sort updated:desc). Sort
+applies at the note level; line order within each note is preserved.
 
 The command pre-filters notes using the inline-tags frontmatter field for
 fast lookups, then extracts matching lines from the content body.`,
@@ -131,6 +141,12 @@ fast lookups, then extracts matching lines from the content body.`,
 
   # Combine with existing filters
   ruin pick "#followup" --parent hub --filter "created:today"
+
+  # Sort results by title (alphabetical)
+  ruin pick "#followup" --sort title:asc
+
+  # Sort results by most recently updated
+  ruin pick "#followup" --sort updated:desc
 
   # JSON output grouped by note
   ruin pick "#followup" --json`,
@@ -226,6 +242,12 @@ fast lookups, then extracts matching lines from the content body.`,
 				filterMatcher = m
 			}
 
+			// Parse --sort
+			sortFields, err := parseSort(sortFlag)
+			if err != nil {
+				return fmt.Errorf("invalid sort: %w", err)
+			}
+
 			// Determine done filter
 			df := doneExclude
 			if allMode {
@@ -287,6 +309,9 @@ fast lookups, then extracts matching lines from the content body.`,
 					Title:   n.Title,
 					File:    path,
 					Matches: matches,
+					created: n.Created,
+					updated: n.Updated,
+					order:   n.Order,
 				})
 			}
 
@@ -296,6 +321,8 @@ fast lookups, then extracts matching lines from the content body.`,
 				}
 				return ErrNoMatches
 			}
+
+			sortPickResults(results, sortFields)
 
 			if *jsonOutput {
 				return outputPickJSON(results)
@@ -312,6 +339,7 @@ fast lookups, then extracts matching lines from the content body.`,
 	cmd.Flags().StringVar(&filterFlag, "filter", "", "filter notes using search query syntax (e.g., \"created:today\", \"@tomorrow\", \"before:2025-06\")")
 	cmd.Flags().StringSliceVar(&notesFlag, "notes", nil, "scope to specific notes by UUID (comma-separated or repeated)")
 	cmd.Flags().StringVar(&parentFlag, "parent", "", "scope to all descendants of a parent note (bookmark, UUID, or title)")
+	cmd.Flags().StringVarP(&sortFlag, "sort", "s", "created:desc", "sort order (e.g., created:desc, title:asc)")
 
 	return cmd
 }
@@ -475,6 +503,68 @@ func matchesTags(lineTagsNorm map[string]bool, queryTags []string, anyMode bool)
 		}
 	}
 	return true
+}
+
+// sortPickResults sorts pick results by the given fields.
+func sortPickResults(results []PickResult, fields []SortField) {
+	sort.Slice(results, func(i, j int) bool {
+		for _, f := range fields {
+			if f.Field == "order" {
+				aSet, bSet := results[i].order != nil, results[j].order != nil
+				if aSet != bSet {
+					return aSet // set before unset
+				}
+			}
+			cmp := comparePickResults(results[i], results[j], f.Field)
+			if cmp != 0 {
+				if f.Ascending {
+					return cmp < 0
+				}
+				return cmp > 0
+			}
+		}
+		return false
+	})
+}
+
+// comparePickResults compares two pick results by the given field.
+func comparePickResults(a, b PickResult, field string) int {
+	switch field {
+	case "created":
+		if a.created.Before(b.created) {
+			return -1
+		}
+		if a.created.After(b.created) {
+			return 1
+		}
+		return 0
+	case "updated":
+		if a.updated.Before(b.updated) {
+			return -1
+		}
+		if a.updated.After(b.updated) {
+			return 1
+		}
+		return 0
+	case "title":
+		return strings.Compare(strings.ToLower(a.Title), strings.ToLower(b.Title))
+	case "order":
+		aOrd, bOrd := 0, 0
+		if a.order != nil {
+			aOrd = *a.order
+		}
+		if b.order != nil {
+			bOrd = *b.order
+		}
+		if aOrd < bOrd {
+			return -1
+		}
+		if aOrd > bOrd {
+			return 1
+		}
+		return 0
+	}
+	return 0
 }
 
 func outputPickJSON(results []PickResult) error {
