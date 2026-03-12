@@ -418,3 +418,190 @@ func TestDoctorCmd_SingleFile_AbsolutePath(t *testing.T) {
 		t.Errorf("TagsReindexed = %v, want 1 entry", output.TagsReindexed)
 	}
 }
+
+func TestDoctorCmd_FullScan_InheritedTags(t *testing.T) {
+	tmpDir := t.TempDir()
+	vlt := vault.New(tmpDir)
+	if _, err := vlt.Initialize(false); err != nil {
+		t.Fatalf("failed to init vault: %v", err)
+	}
+
+	// Create parent with #project tag
+	parentContent := `---
+uuid: parent-uuid
+created: "2025-01-01T10:00:00-05:00"
+updated: "2025-01-01T10:00:00-05:00"
+tags:
+  - "#project"
+---
+# Parent Note
+#project
+
+Some parent content.
+`
+	parentPath := filepath.Join(tmpDir, "parent.md")
+	if err := os.WriteFile(parentPath, []byte(parentContent), 0644); err != nil {
+		t.Fatalf("failed to write parent: %v", err)
+	}
+
+	// Create child without inherited-tags in frontmatter
+	childContent := `---
+uuid: child-uuid
+created: "2025-01-01T10:00:00-05:00"
+updated: "2025-01-01T10:00:00-05:00"
+parent: parent-uuid
+---
+# Child Note
+
+Some child content.
+`
+	childPath := filepath.Join(tmpDir, "child.md")
+	if err := os.WriteFile(childPath, []byte(childContent), 0644); err != nil {
+		t.Fatalf("failed to write child: %v", err)
+	}
+
+	// Seed titles index
+	if err := vlt.UpdateTitleEntry("parent-uuid", "Parent Note", parentPath, ""); err != nil {
+		t.Fatalf("failed to seed parent title: %v", err)
+	}
+	if err := vlt.UpdateTitleEntry("child-uuid", "Child Note", childPath, "parent-uuid"); err != nil {
+		t.Fatalf("failed to seed child title: %v", err)
+	}
+
+	// Run full doctor
+	jsonOut := true
+	cmd := NewDoctorCmd(func() *vault.Vault { return vlt }, &jsonOut)
+
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	cmd.SetArgs([]string{})
+	err := cmd.Execute()
+
+	w.Close()
+	os.Stdout = oldStdout
+
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+
+	var buf bytes.Buffer
+	buf.ReadFrom(r)
+
+	var output DoctorOutput
+	if err := json.Unmarshal(buf.Bytes(), &output); err != nil {
+		t.Fatalf("failed to parse JSON: %v (raw: %s)", err, buf.String())
+	}
+
+	// Child should have inherited tags updated
+	if len(output.InheritedTagsUpdated) != 1 {
+		t.Errorf("InheritedTagsUpdated = %v, want 1 entry", output.InheritedTagsUpdated)
+	}
+
+	// Verify child frontmatter has inherited-tags
+	child, err := note.Load(childPath)
+	if err != nil {
+		t.Fatalf("failed to load child: %v", err)
+	}
+	if len(child.InheritedTags) != 1 || child.InheritedTags[0] != "#project" {
+		t.Errorf("child.InheritedTags = %v, want [#project]", child.InheritedTags)
+	}
+}
+
+func TestDoctorCmd_FullScan_StripInheritedTags(t *testing.T) {
+	tmpDir := t.TempDir()
+	vlt := vault.New(tmpDir)
+	if _, err := vlt.Initialize(false); err != nil {
+		t.Fatalf("failed to init vault: %v", err)
+	}
+
+	// Create parent with #project tag
+	parentContent := `---
+uuid: parent-uuid
+created: "2025-01-01T10:00:00-05:00"
+updated: "2025-01-01T10:00:00-05:00"
+tags:
+  - "#project"
+---
+# Parent Note
+#project
+
+Parent content.
+`
+	parentPath := filepath.Join(tmpDir, "parent.md")
+	if err := os.WriteFile(parentPath, []byte(parentContent), 0644); err != nil {
+		t.Fatalf("failed to write parent: %v", err)
+	}
+
+	// Create child that redundantly has #project in content
+	childContent := `---
+uuid: child-uuid
+created: "2025-01-01T10:00:00-05:00"
+updated: "2025-01-01T10:00:00-05:00"
+tags:
+  - "#project"
+parent: parent-uuid
+---
+# Child Note
+#project
+
+Child content.
+`
+	childPath := filepath.Join(tmpDir, "child.md")
+	if err := os.WriteFile(childPath, []byte(childContent), 0644); err != nil {
+		t.Fatalf("failed to write child: %v", err)
+	}
+
+	// Seed titles index
+	if err := vlt.UpdateTitleEntry("parent-uuid", "Parent Note", parentPath, ""); err != nil {
+		t.Fatalf("failed to seed parent title: %v", err)
+	}
+	if err := vlt.UpdateTitleEntry("child-uuid", "Child Note", childPath, "parent-uuid"); err != nil {
+		t.Fatalf("failed to seed child title: %v", err)
+	}
+
+	// Run full doctor
+	jsonOut := true
+	cmd := NewDoctorCmd(func() *vault.Vault { return vlt }, &jsonOut)
+
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	cmd.SetArgs([]string{})
+	err := cmd.Execute()
+
+	w.Close()
+	os.Stdout = oldStdout
+
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+
+	var buf bytes.Buffer
+	buf.ReadFrom(r)
+
+	var output DoctorOutput
+	if err := json.Unmarshal(buf.Bytes(), &output); err != nil {
+		t.Fatalf("failed to parse JSON: %v (raw: %s)", err, buf.String())
+	}
+
+	// Child should have redundant #project stripped from content
+	if len(output.InheritedTagsStripped) != 1 {
+		t.Errorf("InheritedTagsStripped = %v, want 1 entry", output.InheritedTagsStripped)
+	}
+
+	// Verify child content no longer has #project tag-only line
+	child, err := note.Load(childPath)
+	if err != nil {
+		t.Fatalf("failed to load child: %v", err)
+	}
+	lines := strings.Split(child.Content, "\n")
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "#project" {
+			t.Error("child content still has #project tag-only line after doctor strip")
+		}
+	}
+}

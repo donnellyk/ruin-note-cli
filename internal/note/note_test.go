@@ -299,9 +299,53 @@ func TestNote_RefreshTags(t *testing.T) {
 		t.Errorf("InlineTags = %v, want [#new]", note.InlineTags)
 	}
 
-	// AllTags should have both
+	// AllTags should have both (own global + inline, NOT inherited)
 	if len(note.AllTags()) != 2 {
 		t.Errorf("AllTags() = %v, want 2 tags", note.AllTags())
+	}
+}
+
+func TestNote_EffectiveGlobalTags(t *testing.T) {
+	n := &Note{
+		Tags:          []string{"#own"},
+		InheritedTags: []string{"#inherited", "#own"}, // #own overlaps
+	}
+
+	effective := n.EffectiveGlobalTags()
+	if len(effective) != 2 {
+		t.Fatalf("EffectiveGlobalTags() = %v, want 2 tags", effective)
+	}
+	if effective[0] != "#own" || effective[1] != "#inherited" {
+		t.Errorf("EffectiveGlobalTags() = %v, want [#own, #inherited]", effective)
+	}
+}
+
+func TestNote_EffectiveGlobalTags_NoInherited(t *testing.T) {
+	n := &Note{
+		Tags: []string{"#own"},
+	}
+
+	effective := n.EffectiveGlobalTags()
+	if len(effective) != 1 || effective[0] != "#own" {
+		t.Errorf("EffectiveGlobalTags() = %v, want [#own]", effective)
+	}
+}
+
+func TestNote_AllTags_ExcludesInherited(t *testing.T) {
+	n := &Note{
+		Tags:          []string{"#global"},
+		InlineTags:    []string{"#inline"},
+		InheritedTags: []string{"#inherited"},
+	}
+
+	all := n.AllTags()
+	for _, tag := range all {
+		if tag == "#inherited" {
+			t.Error("AllTags() should not include inherited tags")
+		}
+	}
+	if len(all) != 2 {
+		t.Errorf("AllTags() = %v, want 2 tags", all)
 	}
 }
 

@@ -513,7 +513,7 @@ func tagMatcher(tag string, scope TagScope) QueryMatcher {
 	tagNorm := note.NormalizeTag(tag)
 	return func(n *note.Note) bool {
 		if scope != TagScopeInline {
-			for _, t := range n.Tags {
+			for _, t := range n.EffectiveGlobalTags() {
 				if note.NormalizeTag(t) == tagNorm {
 					return true
 				}
@@ -766,7 +766,7 @@ func searchNotesWithOptions(vlt *vault.Vault, matcher QueryMatcher, info Matcher
 					Path:   path,
 					UUID:   n.UUID,
 					Title:  n.Title,
-					Tags:   n.Tags,
+					Tags:   n.EffectiveGlobalTags(),
 					Parent: n.Parent,
 					note:   n,
 				}
@@ -911,29 +911,31 @@ func formatExtraFields(extra map[string]interface{}) string {
 func outputJSON(results []SearchResult, fmMode FrontmatterMode, includeContent, stripGlobalTags, stripTitle bool) error {
 	// Create output with optional frontmatter fields
 	type jsonResult struct {
-		Path       string                 `json:"path"`
-		UUID       string                 `json:"uuid"`
-		Title      string                 `json:"title,omitempty"`
-		Tags       []string               `json:"tags,omitempty"`
-		InlineTags []string               `json:"inline_tags,omitempty"`
-		Parent     string                 `json:"parent,omitempty"`
-		Created    string                 `json:"created,omitempty"`
-		Updated    string                 `json:"updated,omitempty"`
-		Extra      map[string]interface{} `json:"extra,omitempty"`
-		Content    string                 `json:"content,omitempty"`
+		Path          string                 `json:"path"`
+		UUID          string                 `json:"uuid"`
+		Title         string                 `json:"title,omitempty"`
+		Tags          []string               `json:"tags,omitempty"`
+		InlineTags    []string               `json:"inline_tags,omitempty"`
+		InheritedTags []string               `json:"inherited_tags,omitempty"`
+		Parent        string                 `json:"parent,omitempty"`
+		Created       string                 `json:"created,omitempty"`
+		Updated       string                 `json:"updated,omitempty"`
+		Extra         map[string]interface{} `json:"extra,omitempty"`
+		Content       string                 `json:"content,omitempty"`
 	}
 
 	output := make([]jsonResult, len(results))
 	for i, r := range results {
 		jr := jsonResult{
-			Path:       r.Path,
-			UUID:       r.UUID,
-			Title:      r.Title,
-			Tags:       r.Tags,
-			InlineTags: r.note.InlineTags,
-			Parent:     r.note.Parent,
-			Created:    r.note.Created.Format(note.TimeFormat),
-			Updated:    r.note.Updated.Format(note.TimeFormat),
+			Path:          r.Path,
+			UUID:          r.UUID,
+			Title:         r.Title,
+			Tags:          r.note.EffectiveGlobalTags(),
+			InlineTags:    r.note.InlineTags,
+			InheritedTags: r.note.InheritedTags,
+			Parent:        r.note.Parent,
+			Created:       r.note.Created.Format(note.TimeFormat),
+			Updated:       r.note.Updated.Format(note.TimeFormat),
 		}
 
 		if fmMode == FrontmatterExtra && len(r.note.Extra) > 0 {
@@ -1154,11 +1156,26 @@ func handleEditSingle(vlt *vault.Vault, result SearchResult, force bool, fmMode 
 		RefreshLinkedCards(result.note, titlesIndex)
 	}
 
+	// Refresh inherited tags
+	if _, err := RefreshInheritedTags(result.note, vlt); err != nil {
+		fmt.Fprintf(os.Stderr, "warning: failed to refresh inherited tags: %v\n", err)
+	}
+
 	if err := result.note.Save(); err != nil {
 		return fmt.Errorf("failed to save: %w", err)
 	}
 
 	vlt.SaveNote(result.note, oldGlobalTags, oldInlineTags, fmt.Sprintf("ruin search --edit: Update %q", result.Title))
+
+	// Cascade if global tags changed
+	if !normalizedTagsEqual(oldGlobalTags, result.note.Tags) {
+		if titlesIndex, err := vlt.LoadTitles(); err == nil {
+			if err := CascadeInheritedTags(result.note.UUID, vlt, titlesIndex); err != nil {
+				fmt.Fprintf(os.Stderr, "warning: failed to cascade inherited tags: %v\n", err)
+			}
+		}
+	}
+
 	fmt.Fprintf(os.Stderr, "Modified: 1, Deleted: 0\n")
 	return nil
 }
@@ -1363,6 +1380,11 @@ func applyBulkChanges(vlt *vault.Vault, original, modified string, results []Sea
 			RefreshLinkedCards(result.note, titlesIndex)
 		}
 
+		// Refresh inherited tags
+		if _, err := RefreshInheritedTags(result.note, vlt); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: failed to refresh inherited tags: %v\n", err)
+		}
+
 		result.note.SetTimestamps()
 
 		if err := result.note.Save(); err != nil {
@@ -1371,6 +1393,16 @@ func applyBulkChanges(vlt *vault.Vault, original, modified string, results []Sea
 		}
 
 		vlt.SaveNote(result.note, oldGlobalTags, oldInlineTags, fmt.Sprintf("ruin search --edit: Update %q", result.note.Title))
+
+		// Cascade if global tags changed
+		if !normalizedTagsEqual(oldGlobalTags, result.note.Tags) {
+			if ti, err := vlt.LoadTitles(); err == nil {
+				if err := CascadeInheritedTags(result.note.UUID, vlt, ti); err != nil {
+					fmt.Fprintf(os.Stderr, "warning: failed to cascade inherited tags: %v\n", err)
+				}
+			}
+		}
+
 		modifiedCount++
 	}
 

@@ -1,0 +1,144 @@
+package commands
+
+import (
+	"fmt"
+
+	"kvnd/ruin-note-cli/internal/note"
+	"kvnd/ruin-note-cli/internal/vault"
+)
+
+const maxInheritanceDepth = 100
+
+// ComputeInheritedTags walks the ancestor chain via the titles index and
+// collects global tags from all ancestors. Returns deduplicated tags.
+// Uses a depth limit and visited set for cycle detection.
+func ComputeInheritedTags(noteUUID string, titlesIndex *vault.TitlesIndex, loader func(path string) (*note.Note, error)) []string {
+	entry, ok := titlesIndex.Titles[noteUUID]
+	if !ok || entry.Parent == "" {
+		return nil
+	}
+
+	seen := make(map[string]bool)
+	seen[noteUUID] = true
+
+	var inherited []string
+	tagSeen := make(map[string]bool)
+
+	currentUUID := entry.Parent
+	for depth := 0; depth < maxInheritanceDepth; depth++ {
+		if seen[currentUUID] {
+			break // cycle detected
+		}
+		seen[currentUUID] = true
+
+		parentEntry, ok := titlesIndex.Titles[currentUUID]
+		if !ok {
+			break // orphaned parent
+		}
+
+		parentNote, err := loader(parentEntry.Path)
+		if err != nil {
+			break
+		}
+
+		for _, t := range parentNote.Tags {
+			norm := note.NormalizeTag(t)
+			if !tagSeen[norm] {
+				tagSeen[norm] = true
+				inherited = append(inherited, t)
+			}
+		}
+
+		if parentEntry.Parent == "" {
+			break
+		}
+		currentUUID = parentEntry.Parent
+	}
+
+	return inherited
+}
+
+// RefreshInheritedTags computes and sets inherited tags for a single note.
+// Returns true if the inherited tags changed.
+func RefreshInheritedTags(n *note.Note, vlt *vault.Vault) (bool, error) {
+	if n.Parent == "" {
+		if len(n.InheritedTags) > 0 {
+			n.InheritedTags = nil
+			return true, nil
+		}
+		return false, nil
+	}
+
+	titlesIndex, err := vlt.LoadTitles()
+	if err != nil {
+		return false, fmt.Errorf("failed to load titles index: %w", err)
+	}
+
+	loader := func(path string) (*note.Note, error) {
+		return note.LoadFrontmatterOnly(path)
+	}
+
+	newInherited := ComputeInheritedTags(n.UUID, titlesIndex, loader)
+	if normalizedTagsEqual(n.InheritedTags, newInherited) {
+		return false, nil
+	}
+
+	n.InheritedTags = newInherited
+	return true, nil
+}
+
+// CascadeInheritedTags recomputes inherited tags for all descendants of the
+// given parent UUID. It saves any notes whose inherited tags changed.
+func CascadeInheritedTags(parentUUID string, vlt *vault.Vault, titlesIndex *vault.TitlesIndex) error {
+	// Build parent -> children map
+	children := make(map[string][]string) // parentUUID -> []childUUID
+	for uuid, entry := range titlesIndex.Titles {
+		if entry.Parent != "" {
+			children[entry.Parent] = append(children[entry.Parent], uuid)
+		}
+	}
+
+	// BFS from parentUUID
+	queue := children[parentUUID]
+	visited := make(map[string]bool)
+	visited[parentUUID] = true
+
+	loader := func(path string) (*note.Note, error) {
+		return note.LoadFrontmatterOnly(path)
+	}
+
+	for len(queue) > 0 {
+		uuid := queue[0]
+		queue = queue[1:]
+
+		if visited[uuid] {
+			continue
+		}
+		visited[uuid] = true
+
+		entry, ok := titlesIndex.Titles[uuid]
+		if !ok {
+			continue
+		}
+
+		newInherited := ComputeInheritedTags(uuid, titlesIndex, loader)
+
+		// Load the full note to check and save
+		n, err := note.Load(entry.Path)
+		if err != nil {
+			continue
+		}
+
+		if !normalizedTagsEqual(n.InheritedTags, newInherited) {
+			n.InheritedTags = newInherited
+			if err := n.Save(); err != nil {
+				return fmt.Errorf("failed to save %s: %w", entry.Path, err)
+			}
+		}
+
+		// Enqueue this node's children
+		queue = append(queue, children[uuid]...)
+	}
+
+	return nil
+}

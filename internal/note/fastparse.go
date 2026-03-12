@@ -116,6 +116,8 @@ func parseFMLines(data []byte, fm *Frontmatter) error {
 				fm.Tags = list
 			case "inline-tags":
 				fm.InlineTags = list
+			case "inherited-tags":
+				fm.InheritedTags = list
 			case "dates":
 				fm.Dates = list
 			case "linked-cards":
@@ -131,6 +133,8 @@ func parseFMLines(data []byte, fm *Frontmatter) error {
 				currentList = &fm.Tags
 			case "inline-tags":
 				currentList = &fm.InlineTags
+			case "inherited-tags":
+				currentList = &fm.InheritedTags
 			case "dates":
 				currentList = &fm.Dates
 			case "linked-cards":
@@ -161,6 +165,8 @@ func parseFMLines(data []byte, fm *Frontmatter) error {
 			fm.Tags = []string{strVal}
 		case "inline-tags":
 			fm.InlineTags = []string{strVal}
+		case "inherited-tags":
+			fm.InheritedTags = []string{strVal}
 		case "dates":
 			fm.Dates = []string{strVal}
 		case "linked-cards":
@@ -239,14 +245,15 @@ func LoadFrontmatterOnly(path string) (*Note, error) {
 	}
 
 	note := &Note{
-		UUID:        fm.UUID,
-		Parent:      fm.Parent,
-		Order:       fm.Order,
-		LinkedCards: fm.LinkedCards,
-		Tags:        fm.Tags,
-		InlineTags:  fm.InlineTags,
-		Dates:       fm.Dates,
-		FilePath:    path,
+		UUID:          fm.UUID,
+		Parent:        fm.Parent,
+		Order:         fm.Order,
+		LinkedCards:   fm.LinkedCards,
+		Tags:          fm.Tags,
+		InlineTags:    fm.InlineTags,
+		InheritedTags: fm.InheritedTags,
+		Dates:         fm.Dates,
+		FilePath:      path,
 	}
 
 	// Parse timestamps

@@ -346,3 +346,103 @@ func TestParseFrontmatter_ParentRoundTrip(t *testing.T) {
 		t.Errorf("body = %q, should contain 'Test Note'", body)
 	}
 }
+
+func TestParseFrontmatter_InheritedTags(t *testing.T) {
+	content := `---
+uuid: child-1
+tags:
+  - "#own"
+inherited-tags:
+  - "#from-parent"
+  - "#from-grandparent"
+parent: parent-uuid
+---
+# Child Note
+
+Content.`
+
+	fm, _, err := ParseFrontmatter(content)
+	if err != nil {
+		t.Fatalf("ParseFrontmatter() error = %v", err)
+	}
+
+	if len(fm.InheritedTags) != 2 {
+		t.Fatalf("InheritedTags = %v, want 2 items", fm.InheritedTags)
+	}
+	if fm.InheritedTags[0] != "#from-parent" || fm.InheritedTags[1] != "#from-grandparent" {
+		t.Errorf("InheritedTags = %v", fm.InheritedTags)
+	}
+
+	// Should NOT leak into Extra
+	if _, ok := fm.Extra["inherited-tags"]; ok {
+		t.Error("inherited-tags should not appear in Extra")
+	}
+}
+
+func TestFrontmatter_InheritedTagsRoundTrip(t *testing.T) {
+	fm := &Frontmatter{
+		UUID:          "child-1",
+		Created:       "2025-01-28T10:00:00-05:00",
+		Tags:          []string{"#own"},
+		InheritedTags: []string{"#from-parent"},
+		Parent:        "parent-uuid",
+	}
+
+	serialized, err := fm.Serialize()
+	if err != nil {
+		t.Fatalf("Serialize() error = %v", err)
+	}
+
+	if !strings.Contains(serialized, "inherited-tags") {
+		t.Errorf("Serialize() = %q, should contain inherited-tags", serialized)
+	}
+
+	content := serialized + "# Test Note\n\nContent."
+	parsed, _, err := ParseFrontmatter(content)
+	if err != nil {
+		t.Fatalf("ParseFrontmatter() error = %v", err)
+	}
+
+	if len(parsed.InheritedTags) != 1 || parsed.InheritedTags[0] != "#from-parent" {
+		t.Errorf("round-trip InheritedTags = %v, want [#from-parent]", parsed.InheritedTags)
+	}
+}
+
+func TestFrontmatter_InheritedTagsOmittedWhenEmpty(t *testing.T) {
+	fm := &Frontmatter{
+		UUID: "note-1",
+		Tags: []string{"#own"},
+	}
+
+	serialized, err := fm.Serialize()
+	if err != nil {
+		t.Fatalf("Serialize() error = %v", err)
+	}
+
+	if strings.Contains(serialized, "inherited-tags") {
+		t.Errorf("Serialize() should omit inherited-tags when empty, got %q", serialized)
+	}
+}
+
+func TestFrontmatter_IsEmpty_WithInheritedTags(t *testing.T) {
+	fm := &Frontmatter{InheritedTags: []string{"#tag"}}
+	if fm.IsEmpty() {
+		t.Error("IsEmpty() should return false when InheritedTags is set")
+	}
+}
+
+func TestFrontmatter_MergeInheritedTags(t *testing.T) {
+	fm1 := &Frontmatter{
+		UUID:  "child",
+		Extra: map[string]interface{}{},
+	}
+	fm2 := &Frontmatter{
+		InheritedTags: []string{"#parent-tag"},
+	}
+
+	fm1.Merge(fm2)
+
+	if len(fm1.InheritedTags) != 1 || fm1.InheritedTags[0] != "#parent-tag" {
+		t.Errorf("InheritedTags = %v, want [#parent-tag]", fm1.InheritedTags)
+	}
+}

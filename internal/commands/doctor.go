@@ -17,6 +17,8 @@ type DoctorOutput struct {
 	UUIDGenerated        []string `json:"uuid_generated,omitempty"`
 	TagsReindexed        []string `json:"tags_reindexed,omitempty"`
 	LinkedCardsReindexed []string `json:"linked_cards_reindexed,omitempty"`
+	InheritedTagsUpdated []string `json:"inherited_tags_updated,omitempty"`
+	InheritedTagsStripped []string `json:"inherited_tags_stripped,omitempty"`
 	TagsYMLUpdated       bool     `json:"tags_yml_updated"`
 	TitlesUpdated        bool     `json:"titles_updated"`
 	OrphanedParents      []string `json:"orphaned_parents,omitempty"`
@@ -180,6 +182,31 @@ func doctorFiles(vlt *vault.Vault, paths []string, dryRun bool, jsonOutput bool)
 			needsSave = true
 		}
 
+		// Compute inherited tags
+		var newInherited []string
+		if n.Parent != "" {
+			loader := func(p string) (*note.Note, error) {
+				return note.LoadFrontmatterOnly(p)
+			}
+			newInherited = ComputeInheritedTags(n.UUID, titlesIndex, loader)
+		}
+		if !normalizedTagsEqual(n.InheritedTags, newInherited) {
+			n.InheritedTags = newInherited
+			output.InheritedTagsUpdated = append(output.InheritedTagsUpdated, path)
+			needsSave = true
+		}
+
+		// Strip inherited tags from content
+		if len(newInherited) > 0 {
+			stripped := note.StripInheritedTagsFromContent(n.Content, newInherited)
+			if stripped != n.Content {
+				n.Content = stripped
+				n.RefreshTags()
+				output.InheritedTagsStripped = append(output.InheritedTagsStripped, path)
+				needsSave = true
+			}
+		}
+
 		// Save note if needed
 		if needsSave && !dryRun {
 			if err := n.Save(); err != nil {
@@ -201,7 +228,7 @@ func doctorFiles(vlt *vault.Vault, paths []string, dryRun bool, jsonOutput bool)
 
 	// Commit to version history
 	if !dryRun {
-		repaired := len(output.UUIDGenerated) + len(output.TagsReindexed) + len(output.LinkedCardsReindexed)
+		repaired := len(output.UUIDGenerated) + len(output.TagsReindexed) + len(output.LinkedCardsReindexed) + len(output.InheritedTagsUpdated) + len(output.InheritedTagsStripped)
 		if repaired > 0 {
 			vlt.Commit(fmt.Sprintf("ruin doctor: Repair %d notes", repaired))
 		}
@@ -348,6 +375,91 @@ func doctorFullScan(vlt *vault.Vault, dryRun bool, jsonOutput bool) error {
 		}
 	}
 
+	// Post-loop: compute and fix inherited tags
+	// Build note lookup and parent->children map
+	noteByUUID := make(map[string]*note.Note, len(loadedNotes))
+	for _, n := range loadedNotes {
+		noteByUUID[n.UUID] = n
+	}
+
+	loader := func(path string) (*note.Note, error) {
+		// Try to find in already-loaded notes first
+		for _, n := range loadedNotes {
+			if n.FilePath == path {
+				return n, nil
+			}
+		}
+		return note.LoadFrontmatterOnly(path)
+	}
+
+	// Process topologically: BFS from roots (notes without parents)
+	childrenMap := make(map[string][]string)
+	var roots []string
+	for uuid, entry := range titleEntries {
+		if entry.Parent == "" {
+			roots = append(roots, uuid)
+		} else {
+			childrenMap[entry.Parent] = append(childrenMap[entry.Parent], uuid)
+		}
+	}
+
+	// BFS order ensures parents are processed before children
+	queue := make([]string, len(roots))
+	copy(queue, roots)
+	for i := 0; i < len(queue); i++ {
+		queue = append(queue, childrenMap[queue[i]]...)
+	}
+
+	for _, uuid := range queue {
+		n, ok := noteByUUID[uuid]
+		if !ok {
+			continue
+		}
+
+		var newInherited []string
+		entry := titleEntries[uuid]
+		if entry.Parent != "" {
+			newInherited = ComputeInheritedTags(uuid, tempIndex, loader)
+		}
+
+		inheritedChanged := !normalizedTagsEqual(n.InheritedTags, newInherited)
+
+		// Strip inherited tags from content (tag-only lines)
+		var contentChanged bool
+		if len(newInherited) > 0 {
+			stripped := note.StripInheritedTagsFromContent(n.Content, newInherited)
+			if stripped != n.Content {
+				n.Content = stripped
+				n.RefreshTags()
+				contentChanged = true
+
+				// Re-collect tags for index after stripping
+				for _, t := range n.AllTags() {
+					tagCounts[t]++
+				}
+				for _, t := range n.Tags {
+					globalTagSet[t] = true
+				}
+				for _, t := range n.InlineTags {
+					inlineTagSet[t] = true
+				}
+
+				output.InheritedTagsStripped = append(output.InheritedTagsStripped, n.FilePath)
+			}
+		}
+
+		if inheritedChanged {
+			n.InheritedTags = newInherited
+			output.InheritedTagsUpdated = append(output.InheritedTagsUpdated, n.FilePath)
+		}
+
+		if (inheritedChanged || contentChanged) && !dryRun {
+			if err := n.Save(); err != nil {
+				fmt.Fprintf(os.Stderr, "%swarning: failed to save inherited tags for %s: %v\n", prefix, n.FilePath, err)
+			}
+		}
+	}
+
 	// Rebuild tags.yml
 	if !dryRun {
 		if err := vlt.RebuildTagsIndex(tagCounts, globalTagSet, inlineTagSet); err != nil {
@@ -393,7 +505,7 @@ func doctorFullScan(vlt *vault.Vault, dryRun bool, jsonOutput bool) error {
 
 	// Commit to version history
 	if !dryRun {
-		repaired := len(output.UUIDGenerated) + len(output.TagsReindexed) + len(output.LinkedCardsReindexed)
+		repaired := len(output.UUIDGenerated) + len(output.TagsReindexed) + len(output.LinkedCardsReindexed) + len(output.InheritedTagsUpdated) + len(output.InheritedTagsStripped)
 		if repaired > 0 {
 			vlt.Commit(fmt.Sprintf("ruin doctor: Repair %d notes", repaired))
 		}
@@ -420,6 +532,12 @@ func doctorPrintOutput(output *DoctorOutput, prefix string, jsonOutput bool) err
 	}
 	if len(output.LinkedCardsReindexed) > 0 {
 		fmt.Fprintf(os.Stderr, "  %d notes: %sreindexed linked-cards\n", len(output.LinkedCardsReindexed), prefix)
+	}
+	if len(output.InheritedTagsUpdated) > 0 {
+		fmt.Fprintf(os.Stderr, "  %d notes: %supdated inherited-tags\n", len(output.InheritedTagsUpdated), prefix)
+	}
+	if len(output.InheritedTagsStripped) > 0 {
+		fmt.Fprintf(os.Stderr, "  %d notes: %sstripped redundant inherited tags from content\n", len(output.InheritedTagsStripped), prefix)
 	}
 	if output.TagsYMLUpdated {
 		fmt.Fprintf(os.Stderr, "%sUpdated .ruin/tags.yml\n", prefix)

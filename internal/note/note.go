@@ -19,9 +19,10 @@ type Note struct {
 	UUID        string
 	Created     time.Time
 	Updated     time.Time
-	Tags        []string // Global tags (categorization)
-	InlineTags  []string // Inline tags (contextual annotations within content)
-	Dates       []string // Dates referenced in content (@YYYY-MM-DD tokens)
+	Tags          []string // Global tags (categorization)
+	InlineTags    []string // Inline tags (contextual annotations within content)
+	InheritedTags []string // Global tags inherited from ancestor notes
+	Dates         []string // Dates referenced in content (@YYYY-MM-DD tokens)
 	Parent      string   // UUID of parent note
 	Order       *int     // Manual sort order (nil = unset)
 	LinkedCards []string // Resolved UUIDs from [[wiki links]]
@@ -45,12 +46,13 @@ func Parse(content string) (*Note, error) {
 	}
 
 	note := &Note{
-		UUID:        fm.UUID,
-		Parent:      fm.Parent,
-		Order:       fm.Order,
-		LinkedCards: fm.LinkedCards,
-		Content:     body,
-		Extra:       fm.Extra,
+		UUID:          fm.UUID,
+		Parent:        fm.Parent,
+		Order:         fm.Order,
+		LinkedCards:   fm.LinkedCards,
+		InheritedTags: fm.InheritedTags,
+		Content:       body,
+		Extra:         fm.Extra,
 	}
 
 	// Parse timestamps
@@ -107,14 +109,15 @@ func extractTitle(content string) string {
 // Serialize converts the note back to markdown with frontmatter.
 func (n *Note) Serialize() (string, error) {
 	fm := &Frontmatter{
-		UUID:        n.UUID,
-		Tags:        n.Tags,
-		InlineTags:  n.InlineTags,
-		Dates:       n.Dates,
-		Parent:      n.Parent,
-		Order:       n.Order,
-		LinkedCards: n.LinkedCards,
-		Extra:       n.Extra,
+		UUID:          n.UUID,
+		Tags:          n.Tags,
+		InlineTags:    n.InlineTags,
+		InheritedTags: n.InheritedTags,
+		Dates:         n.Dates,
+		Parent:        n.Parent,
+		Order:         n.Order,
+		LinkedCards:   n.LinkedCards,
+		Extra:         n.Extra,
 	}
 
 	if !n.Created.IsZero() {
@@ -185,8 +188,15 @@ func (n *Note) RefreshDates() {
 	n.Dates = ExtractDates(n.Content)
 }
 
+// EffectiveGlobalTags returns own global tags merged with inherited tags (deduplicated).
+// Use this for output/matching where inherited tags should be visible.
+func (n *Note) EffectiveGlobalTags() []string {
+	return MergeTags(n.Tags, n.InheritedTags)
+}
+
 // AllTags returns all tags (global + inline merged, deduplicated).
 // Use this for tag index operations where both types should be counted.
+// Does NOT include inherited tags (parent already counts them).
 func (n *Note) AllTags() []string {
 	return MergeTags(n.Tags, n.InlineTags)
 }

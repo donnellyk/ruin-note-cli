@@ -697,3 +697,83 @@ parent: parent-uuid
 		}
 	}
 }
+
+func TestParseFrontmatterFast_InheritedTags_BlockList(t *testing.T) {
+	data := []byte(`---
+uuid: child-1
+tags:
+  - "#own"
+inherited-tags:
+  - "#from-parent"
+  - "#from-grandparent"
+parent: parent-uuid
+---
+# Child
+`)
+
+	fm, _, err := ParseFrontmatterFast(data)
+	if err != nil {
+		t.Fatalf("ParseFrontmatterFast() error = %v", err)
+	}
+
+	if len(fm.InheritedTags) != 2 {
+		t.Fatalf("InheritedTags = %v, want 2 items", fm.InheritedTags)
+	}
+	if fm.InheritedTags[0] != "#from-parent" || fm.InheritedTags[1] != "#from-grandparent" {
+		t.Errorf("InheritedTags = %v", fm.InheritedTags)
+	}
+}
+
+func TestParseFrontmatterFast_InheritedTags_FlowList(t *testing.T) {
+	data := []byte(`---
+uuid: child-1
+inherited-tags: ["#from-parent", "#from-grandparent"]
+---
+# Child
+`)
+
+	fm, _, err := ParseFrontmatterFast(data)
+	if err != nil {
+		t.Fatalf("ParseFrontmatterFast() error = %v", err)
+	}
+
+	if len(fm.InheritedTags) != 2 {
+		t.Fatalf("InheritedTags = %v, want 2 items", fm.InheritedTags)
+	}
+	if fm.InheritedTags[0] != "#from-parent" || fm.InheritedTags[1] != "#from-grandparent" {
+		t.Errorf("InheritedTags = %v", fm.InheritedTags)
+	}
+}
+
+func TestLoadFrontmatterOnly_InheritedTags(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "child.md")
+
+	content := `---
+uuid: child-1
+tags:
+  - "#own"
+inherited-tags:
+  - "#from-parent"
+parent: parent-uuid
+---
+# Child Note
+
+Content.
+`
+	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+		t.Fatalf("failed to write file: %v", err)
+	}
+
+	n, err := LoadFrontmatterOnly(path)
+	if err != nil {
+		t.Fatalf("LoadFrontmatterOnly() error = %v", err)
+	}
+
+	if len(n.InheritedTags) != 1 || n.InheritedTags[0] != "#from-parent" {
+		t.Errorf("InheritedTags = %v, want [#from-parent]", n.InheritedTags)
+	}
+	if len(n.Tags) != 1 || n.Tags[0] != "#own" {
+		t.Errorf("Tags = %v, want [#own]", n.Tags)
+	}
+}

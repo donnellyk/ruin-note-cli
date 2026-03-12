@@ -312,3 +312,64 @@ func TestIsTagOnlyLine(t *testing.T) {
 		})
 	}
 }
+
+func TestStripInheritedTagsFromContent(t *testing.T) {
+	tests := []struct {
+		name          string
+		content       string
+		inheritedTags []string
+		want          string
+	}{
+		{
+			name:          "all tags removed from line",
+			content:       "# Title\n#project\n\nSome content.",
+			inheritedTags: []string{"#project"},
+			want:          "# Title\n\nSome content.",
+		},
+		{
+			name:          "partial removal with formatting",
+			content:       "# Title\n#project, #local\n\nSome content.",
+			inheritedTags: []string{"#project"},
+			want:          "# Title\n#local\n\nSome content.",
+		},
+		{
+			name:          "no match leaves content unchanged",
+			content:       "# Title\n#local\n\nSome content.",
+			inheritedTags: []string{"#project"},
+			want:          "# Title\n#local\n\nSome content.",
+		},
+		{
+			name:          "inline tags not affected",
+			content:       "# Title\nSome content with #project tag.",
+			inheritedTags: []string{"#project"},
+			want:          "# Title\nSome content with #project tag.",
+		},
+		{
+			name:          "empty inherited tags",
+			content:       "# Title\n#project\n\nContent.",
+			inheritedTags: nil,
+			want:          "# Title\n#project\n\nContent.",
+		},
+		{
+			name:          "multiple lines stripped",
+			content:       "# Title\n#a\n#b\n\nContent.",
+			inheritedTags: []string{"#a", "#b"},
+			want:          "# Title\n\nContent.",
+		},
+		{
+			name:          "case insensitive match",
+			content:       "# Title\n#Project\n\nContent.",
+			inheritedTags: []string{"#project"},
+			want:          "# Title\n\nContent.",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := StripInheritedTagsFromContent(tt.content, tt.inheritedTags)
+			if got != tt.want {
+				t.Errorf("StripInheritedTagsFromContent() =\n%q\nwant:\n%q", got, tt.want)
+			}
+		})
+	}
+}

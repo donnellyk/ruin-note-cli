@@ -186,6 +186,11 @@ New UUIDs in the updated content are an error (use 'log' to create new notes).`,
 					RefreshLinkedCards(n, titlesIndex)
 				}
 
+				// Refresh inherited tags
+				if _, err := RefreshInheritedTags(n, vlt); err != nil {
+					fmt.Fprintf(os.Stderr, "warning: failed to refresh inherited tags: %v\n", err)
+				}
+
 				n.SetTimestamps()
 
 				if !dryRun {
@@ -195,6 +200,15 @@ New UUIDs in the updated content are an error (use 'log' to create new notes).`,
 					}
 
 					vlt.SaveNote(n, oldGlobalTags, oldInlineTags, fmt.Sprintf("ruin update: Modify %q", n.Title))
+
+					// Cascade if global tags changed
+					if !normalizedTagsEqual(oldGlobalTags, n.Tags) {
+						if ti, err := vlt.LoadTitles(); err == nil {
+							if err := CascadeInheritedTags(n.UUID, vlt, ti); err != nil {
+								fmt.Fprintf(os.Stderr, "warning: failed to cascade inherited tags: %v\n", err)
+							}
+						}
+					}
 				}
 
 				output.Modified = append(output.Modified, path)

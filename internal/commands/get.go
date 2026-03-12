@@ -160,25 +160,27 @@ Returns an error if no match is found.`,
 // outputSingleJSON outputs a single result as JSON.
 func outputSingleJSON(r SearchResult, fmMode FrontmatterMode, includeContent, stripGlobalTags, stripTitle bool) error {
 	type jsonResult struct {
-		Path    string                 `json:"path"`
-		UUID    string                 `json:"uuid"`
-		Title   string                 `json:"title,omitempty"`
-		Tags    []string               `json:"tags,omitempty"`
-		Parent  string                 `json:"parent,omitempty"`
-		Created string                 `json:"created,omitempty"`
-		Updated string                 `json:"updated,omitempty"`
-		Extra   map[string]interface{} `json:"extra,omitempty"`
-		Content string                 `json:"content,omitempty"`
+		Path          string                 `json:"path"`
+		UUID          string                 `json:"uuid"`
+		Title         string                 `json:"title,omitempty"`
+		Tags          []string               `json:"tags,omitempty"`
+		InheritedTags []string               `json:"inherited_tags,omitempty"`
+		Parent        string                 `json:"parent,omitempty"`
+		Created       string                 `json:"created,omitempty"`
+		Updated       string                 `json:"updated,omitempty"`
+		Extra         map[string]interface{} `json:"extra,omitempty"`
+		Content       string                 `json:"content,omitempty"`
 	}
 
 	jr := jsonResult{
-		Path:    r.Path,
-		UUID:    r.UUID,
-		Title:   r.Title,
-		Tags:    r.Tags,
-		Parent:  r.note.Parent,
-		Created: r.note.Created.Format(note.TimeFormat),
-		Updated: r.note.Updated.Format(note.TimeFormat),
+		Path:          r.Path,
+		UUID:          r.UUID,
+		Title:         r.Title,
+		Tags:          r.note.EffectiveGlobalTags(),
+		InheritedTags: r.note.InheritedTags,
+		Parent:        r.note.Parent,
+		Created:       r.note.Created.Format(note.TimeFormat),
+		Updated:       r.note.Updated.Format(note.TimeFormat),
 	}
 
 	if fmMode == FrontmatterExtra && len(r.note.Extra) > 0 {

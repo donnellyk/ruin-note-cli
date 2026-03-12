@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/spf13/cobra"
 	"kvnd/ruin-note-cli/internal/commands"
@@ -26,6 +27,7 @@ var (
 )
 
 func main() {
+	sanitizeLeadingDashArgs()
 	if err := rootCmd.Execute(); err != nil {
 		// Determine appropriate exit code based on error type
 		switch {
@@ -151,4 +153,52 @@ const (
 // printError writes an error message to stderr
 func printError(format string, args ...interface{}) {
 	fmt.Fprintf(os.Stderr, "error: "+format+"\n", args...)
+}
+
+// sanitizeLeadingDashArgs fixes a cobra bug where positional arguments starting
+// with "- " (dash-space, e.g. markdown list items) are treated as flags.
+// See https://github.com/spf13/cobra/issues/2295
+//
+// Only applies to "log" since its content arg commonly starts with "- ".
+// The fix removes the "- " arg from its position and appends it after a "--"
+// separator at the end, so flags in any position still get parsed correctly.
+func sanitizeLeadingDashArgs() {
+	// Find "log" subcommand
+	logIdx := -1
+	for i := 1; i < len(os.Args); i++ {
+		if os.Args[i] == "--" {
+			return
+		}
+		if os.Args[i] == "log" && !strings.HasPrefix(os.Args[i], "-") {
+			logIdx = i
+			break
+		}
+	}
+	if logIdx < 0 {
+		return
+	}
+
+	// After "log", find the first arg starting with "- " (dash-space)
+	dashArgIdx := -1
+	for i := logIdx + 1; i < len(os.Args); i++ {
+		if os.Args[i] == "--" {
+			return // explicit separator already present
+		}
+		if strings.HasPrefix(os.Args[i], "- ") {
+			dashArgIdx = i
+			break
+		}
+	}
+	if dashArgIdx < 0 {
+		return
+	}
+
+	// Remove the "- " arg and re-append it after "--" at the end.
+	// This keeps all flags (before or after) parseable.
+	dashArg := os.Args[dashArgIdx]
+	newArgs := make([]string, 0, len(os.Args)+1)
+	newArgs = append(newArgs, os.Args[:dashArgIdx]...)
+	newArgs = append(newArgs, os.Args[dashArgIdx+1:]...)
+	newArgs = append(newArgs, "--", dashArg)
+	os.Args = newArgs
 }

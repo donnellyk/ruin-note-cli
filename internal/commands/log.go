@@ -118,6 +118,13 @@ Details here..."
 				n.Parent = parent.UUID
 			}
 
+			// Refresh inherited tags from parent chain
+			if n.Parent != "" {
+				if _, err := RefreshInheritedTags(n, vlt); err != nil {
+					fmt.Fprintf(os.Stderr, "warning: failed to refresh inherited tags: %v\n", err)
+				}
+			}
+
 			// Determine filename
 			filename := determineFilename(n, title, useH1)
 

@@ -852,6 +852,9 @@ func frontmatterLineCount(n *note.Note) (int, error) {
 // refresh tags/dates/links, set timestamps, and save the file.
 // Callers should follow this with vlt.SaveNote() for index updates.
 func saveWithIndexUpdate(n *note.Note, vlt *vault.Vault) error {
+	oldGlobalTags := make([]string, len(n.Tags))
+	copy(oldGlobalTags, n.Tags)
+
 	n.RefreshTags()
 	n.Content = note.ResolveDateTokens(n.Content)
 	n.RefreshDates()
@@ -861,10 +864,24 @@ func saveWithIndexUpdate(n *note.Note, vlt *vault.Vault) error {
 		RefreshLinkedCards(n, titlesIndex)
 	}
 
+	// Refresh inherited tags from parent chain
+	if _, err := RefreshInheritedTags(n, vlt); err != nil {
+		fmt.Fprintf(os.Stderr, "warning: failed to refresh inherited tags: %v\n", err)
+	}
+
 	n.SetTimestamps()
 
 	if err := n.Save(); err != nil {
 		return fmt.Errorf("failed to save: %w", err)
+	}
+
+	// If global tags changed, cascade to descendants
+	if !normalizedTagsEqual(oldGlobalTags, n.Tags) {
+		if titlesIndex, err := vlt.LoadTitles(); err == nil {
+			if err := CascadeInheritedTags(n.UUID, vlt, titlesIndex); err != nil {
+				fmt.Fprintf(os.Stderr, "warning: failed to cascade inherited tags: %v\n", err)
+			}
+		}
 	}
 
 	return nil

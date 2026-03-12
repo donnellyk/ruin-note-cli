@@ -352,3 +352,70 @@ func MergeTags(globalTags, inlineTags []string) []string {
 
 	return result
 }
+
+// StripInheritedTagsFromContent removes inherited tags from tag-only lines in content.
+// If all tags on a line are inherited, the line is removed entirely.
+// If some tags remain, the line is reconstructed with clean formatting.
+// Non-tag-only lines are never modified.
+func StripInheritedTagsFromContent(content string, inheritedTags []string) string {
+	if len(inheritedTags) == 0 {
+		return content
+	}
+
+	// Build lookup set
+	inheritedSet := make(map[string]bool, len(inheritedTags))
+	for _, t := range inheritedTags {
+		inheritedSet[NormalizeTag(t)] = true
+	}
+
+	lines := strings.Split(content, "\n")
+	var result []string
+	prevBlank := false
+
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+
+		// Pass through non-tag-only lines unchanged
+		if !IsTagOnlyLine(trimmed) {
+			if trimmed == "" {
+				if prevBlank {
+					continue // collapse consecutive blank lines
+				}
+				prevBlank = true
+			} else {
+				prevBlank = false
+			}
+			result = append(result, line)
+			continue
+		}
+
+		// Extract tags from this line
+		tags := findAllTags(line)
+
+		// Separate into keep vs strip
+		var keepTags []string
+		for _, tm := range tags {
+			if !inheritedSet[NormalizeTag(tm.Tag)] {
+				keepTags = append(keepTags, tm.Tag)
+			}
+		}
+
+		if len(keepTags) == 0 {
+			// All tags were inherited — remove line
+			continue
+		}
+
+		if len(keepTags) == len(tags) {
+			// Nothing stripped — keep original line
+			prevBlank = false
+			result = append(result, line)
+			continue
+		}
+
+		// Reconstruct with remaining tags
+		prevBlank = false
+		result = append(result, strings.Join(keepTags, ", "))
+	}
+
+	return strings.Join(result, "\n")
+}

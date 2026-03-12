@@ -565,7 +565,7 @@ dates:
 Content with #tags inline and a date reference @2025-02-03.
 ```
 
-**Managed fields** (set by CLI): `uuid`, `created`, `updated`, `tags` (global only), `inline-tags` (inline only), `dates` (referenced dates), `parent`, `order`, `linked-cards`
+**Managed fields** (set by CLI): `uuid`, `created`, `updated`, `tags` (global only), `inline-tags` (inline only), `inherited-tags` (global tags from ancestor notes), `dates` (referenced dates), `parent`, `order`, `linked-cards`
 
 **User fields**: Any other YAML keys are preserved.
 
@@ -573,6 +573,18 @@ Content with #tags inline and a date reference @2025-02-03.
 
 - Simple: `#foo`, `#bar`, `#2025/may`
 - Spaced: `#daily note#`
+
+## Inherited Tags
+
+When a note has a parent, the parent's global tags (and grandparent's, etc.) are automatically propagated to the child's `inherited-tags` frontmatter field. This is transitive — the entire ancestor chain is walked.
+
+- `inherited-tags` is computed on save (`log`, `search --edit`, `update`, `note set/append/merge`)
+- When a parent's global tags change, all descendants are cascade-updated
+- `doctor` recomputes inherited tags for all notes and strips redundant inherited tags from content (tag-only lines)
+- `search` matches inherited tags (via `EffectiveGlobalTags`)
+- JSON output includes both `tags` (own + inherited merged) and `inherited_tags` (inherited only)
+- Inherited tags are NOT counted in `tags.yml` (the parent already counts them)
+- `AllTags()` (used for tag index) excludes inherited tags
 
 ## Wiki Links
 

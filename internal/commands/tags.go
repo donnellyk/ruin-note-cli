@@ -240,6 +240,21 @@ See also:
 				updated++
 			}
 
+			// Cascade inherited tags for any notes whose global tags changed
+			if updated > 0 {
+				if titlesIndex, err := vlt.LoadTitles(); err == nil {
+					for _, path := range toUpdate {
+						n, err := note.LoadFrontmatterOnly(path)
+						if err != nil {
+							continue
+						}
+						if err := CascadeInheritedTags(n.UUID, vlt, titlesIndex); err != nil {
+							errors = append(errors, fmt.Sprintf("Failed to cascade inherited tags for %s: %v", path, err))
+						}
+					}
+				}
+			}
+
 			// Update tags index
 			if err := rebuildTagsIndex(vlt); err != nil {
 				errors = append(errors, fmt.Sprintf("Failed to rebuild tags index: %v", err))
@@ -386,6 +401,21 @@ See also:
 				}
 
 				updated++
+			}
+
+			// Cascade inherited tags for any notes whose global tags changed
+			if updated > 0 {
+				if titlesIndex, err := vlt.LoadTitles(); err == nil {
+					for _, path := range toUpdate {
+						n, err := note.LoadFrontmatterOnly(path)
+						if err != nil {
+							continue
+						}
+						if err := CascadeInheritedTags(n.UUID, vlt, titlesIndex); err != nil {
+							errors = append(errors, fmt.Sprintf("Failed to cascade inherited tags for %s: %v", path, err))
+						}
+					}
+				}
 			}
 
 			// Update tags index
