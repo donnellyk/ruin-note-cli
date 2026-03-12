@@ -702,13 +702,7 @@ func benchmarkCompose(b *testing.B, vlt *vault.Vault, rootUUID string, maxDepth 
 		b.Fatalf("failed to load titles: %v", err)
 	}
 
-	// Build parent->children map
-	childrenMap := make(map[string][]string)
-	for uuid, entry := range index.Titles {
-		if entry.Parent != "" {
-			childrenMap[entry.Parent] = append(childrenMap[entry.Parent], uuid)
-		}
-	}
+	childrenMap := index.ChildrenMap()
 	for parent := range childrenMap {
 		sortChildUUIDs(vlt, index, childrenMap[parent], SortField{Field: "title", Ascending: true})
 	}
@@ -726,12 +720,7 @@ func benchmarkCollectTree(b *testing.B, vlt *vault.Vault, rootUUID string, maxDe
 		b.Fatalf("failed to load titles: %v", err)
 	}
 
-	childrenMap := make(map[string][]string)
-	for uuid, entry := range index.Titles {
-		if entry.Parent != "" {
-			childrenMap[entry.Parent] = append(childrenMap[entry.Parent], uuid)
-		}
-	}
+	childrenMap := index.ChildrenMap()
 	for parent := range childrenMap {
 		sortChildUUIDs(vlt, index, childrenMap[parent], SortField{Field: "title", Ascending: true})
 	}

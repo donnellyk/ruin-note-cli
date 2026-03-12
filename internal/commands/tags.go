@@ -220,12 +220,16 @@ See also:
 			// Apply changes
 			var updated int
 			var errors []string
+			var globalTagsChangedUUIDs []string
 			for _, path := range toUpdate {
 				n, err := note.Load(path)
 				if err != nil {
 					errors = append(errors, fmt.Sprintf("Failed to load %s: %v", path, err))
 					continue
 				}
+
+				oldGlobalTags := make([]string, len(n.Tags))
+				copy(oldGlobalTags, n.Tags)
 
 				// Replace tag in content
 				n.Content = replaceTag(n.Content, oldTag, newTag)
@@ -237,19 +241,18 @@ See also:
 					continue
 				}
 
+				if !normalizedTagsEqual(oldGlobalTags, n.Tags) {
+					globalTagsChangedUUIDs = append(globalTagsChangedUUIDs, n.UUID)
+				}
 				updated++
 			}
 
-			// Cascade inherited tags for any notes whose global tags changed
-			if updated > 0 {
+			// Cascade inherited tags for notes whose global tags changed
+			if len(globalTagsChangedUUIDs) > 0 {
 				if titlesIndex, err := vlt.LoadTitles(); err == nil {
-					for _, path := range toUpdate {
-						n, err := note.LoadFrontmatterOnly(path)
-						if err != nil {
-							continue
-						}
-						if err := CascadeInheritedTags(n.UUID, vlt, titlesIndex); err != nil {
-							errors = append(errors, fmt.Sprintf("Failed to cascade inherited tags for %s: %v", path, err))
+					for _, uuid := range globalTagsChangedUUIDs {
+						if err := CascadeInheritedTags(uuid, vlt, titlesIndex); err != nil {
+							errors = append(errors, fmt.Sprintf("Failed to cascade inherited tags for %s: %v", uuid, err))
 						}
 					}
 				}
@@ -383,12 +386,16 @@ See also:
 			// Apply changes
 			var updated int
 			var errors []string
+			var globalTagsChangedUUIDs []string
 			for _, path := range toUpdate {
 				n, err := note.Load(path)
 				if err != nil {
 					errors = append(errors, fmt.Sprintf("Failed to load %s: %v", path, err))
 					continue
 				}
+
+				oldGlobalTags := make([]string, len(n.Tags))
+				copy(oldGlobalTags, n.Tags)
 
 				// Remove tag from content
 				n.Content = removeTag(n.Content, tag)
@@ -400,19 +407,18 @@ See also:
 					continue
 				}
 
+				if !normalizedTagsEqual(oldGlobalTags, n.Tags) {
+					globalTagsChangedUUIDs = append(globalTagsChangedUUIDs, n.UUID)
+				}
 				updated++
 			}
 
-			// Cascade inherited tags for any notes whose global tags changed
-			if updated > 0 {
+			// Cascade inherited tags for notes whose global tags changed
+			if len(globalTagsChangedUUIDs) > 0 {
 				if titlesIndex, err := vlt.LoadTitles(); err == nil {
-					for _, path := range toUpdate {
-						n, err := note.LoadFrontmatterOnly(path)
-						if err != nil {
-							continue
-						}
-						if err := CascadeInheritedTags(n.UUID, vlt, titlesIndex); err != nil {
-							errors = append(errors, fmt.Sprintf("Failed to cascade inherited tags for %s: %v", path, err))
+					for _, uuid := range globalTagsChangedUUIDs {
+						if err := CascadeInheritedTags(uuid, vlt, titlesIndex); err != nil {
+							errors = append(errors, fmt.Sprintf("Failed to cascade inherited tags for %s: %v", uuid, err))
 						}
 					}
 				}

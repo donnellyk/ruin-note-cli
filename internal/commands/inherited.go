@@ -90,13 +90,7 @@ func RefreshInheritedTags(n *note.Note, vlt *vault.Vault) (bool, error) {
 // CascadeInheritedTags recomputes inherited tags for all descendants of the
 // given parent UUID. It saves any notes whose inherited tags changed.
 func CascadeInheritedTags(parentUUID string, vlt *vault.Vault, titlesIndex *vault.TitlesIndex) error {
-	// Build parent -> children map
-	children := make(map[string][]string) // parentUUID -> []childUUID
-	for uuid, entry := range titlesIndex.Titles {
-		if entry.Parent != "" {
-			children[entry.Parent] = append(children[entry.Parent], uuid)
-		}
-	}
+	children := titlesIndex.ChildrenMap()
 
 	// BFS from parentUUID
 	queue := children[parentUUID]

@@ -393,13 +393,11 @@ func doctorFullScan(vlt *vault.Vault, dryRun bool, jsonOutput bool) error {
 	}
 
 	// Process topologically: BFS from roots (notes without parents)
-	childrenMap := make(map[string][]string)
+	childrenMap := tempIndex.ChildrenMap()
 	var roots []string
 	for uuid, entry := range titleEntries {
 		if entry.Parent == "" {
 			roots = append(roots, uuid)
-		} else {
-			childrenMap[entry.Parent] = append(childrenMap[entry.Parent], uuid)
 		}
 	}
 
@@ -429,14 +427,21 @@ func doctorFullScan(vlt *vault.Vault, dryRun bool, jsonOutput bool) error {
 		if len(newInherited) > 0 {
 			stripped := note.StripInheritedTagsFromContent(n.Content, newInherited)
 			if stripped != n.Content {
+				// Subtract old tag counts before refreshing
+				for _, t := range n.AllTags() {
+					tagCounts[t]--
+				}
+
 				n.Content = stripped
 				n.RefreshTags()
 				contentChanged = true
 
-				// Re-collect tags for index after stripping
+				// Re-collect corrected tags for index
 				for _, t := range n.AllTags() {
 					tagCounts[t]++
 				}
+				// Refresh scope sets (idempotent for sets, but needed
+				// in case a tag was entirely removed from this note)
 				for _, t := range n.Tags {
 					globalTagSet[t] = true
 				}

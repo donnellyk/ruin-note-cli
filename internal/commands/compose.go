@@ -92,13 +92,7 @@ Children are sorted by title by default.`,
 				return fmt.Errorf("failed to load titles index: %w", err)
 			}
 
-			// Build parent->children map
-			childrenMap := make(map[string][]string)
-			for uuid, entry := range index.Titles {
-				if entry.Parent != "" {
-					childrenMap[entry.Parent] = append(childrenMap[entry.Parent], uuid)
-				}
-			}
+			childrenMap := index.ChildrenMap()
 
 			// Sort children
 			for parent := range childrenMap {

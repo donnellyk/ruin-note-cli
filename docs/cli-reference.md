@@ -544,6 +544,8 @@ With `--normalize-headers`, each child's headings are rebased so its minimum hea
 
 Separator lines between notes fall in gaps not covered by any entry. To map a composed line back to the original note content: `original_line = (composed_line - start_line) + 1`.
 
+**List merging**: When two adjacent sibling notes at the same depth both contain only list content (lines starting with `-`, `*`, `+`, or `1.`), they are separated by a single newline instead of a blank line. This causes the lists to merge into one contiguous list in the composed output.
+
 ## Note Format
 
 Notes are markdown files with YAML frontmatter:

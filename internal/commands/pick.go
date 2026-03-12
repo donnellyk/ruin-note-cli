@@ -192,12 +192,7 @@ fast lookups, then extracts matching lines from the content body.`,
 				}
 				allowedPaths = make(map[string]bool)
 				// Build parent->children map for recursive descent
-				children := make(map[string][]string)
-				for uuid, entry := range index.Titles {
-					if entry.Parent != "" {
-						children[entry.Parent] = append(children[entry.Parent], uuid)
-					}
-				}
+				children := index.ChildrenMap()
 				// BFS to collect all descendants
 				queue := children[parentNote.UUID]
 				for len(queue) > 0 {

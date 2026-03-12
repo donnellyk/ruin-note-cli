@@ -177,12 +177,7 @@ func setupComposeTestVault(t *testing.T, notes []testNote) (*vault.Vault, *vault
 		t.Fatalf("failed to save titles: %v", err)
 	}
 
-	childrenMap := make(map[string][]string)
-	for uuid, entry := range index.Titles {
-		if entry.Parent != "" {
-			childrenMap[entry.Parent] = append(childrenMap[entry.Parent], uuid)
-		}
-	}
+	childrenMap := index.ChildrenMap()
 
 	// Sort children by title for deterministic ordering
 	for parent := range childrenMap {

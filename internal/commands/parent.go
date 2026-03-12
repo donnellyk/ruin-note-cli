@@ -165,13 +165,7 @@ type childInfo struct {
 }
 
 func outputChildrenRecursive(index *vault.TitlesIndex, parentUUID string, jsonOut bool) error {
-	// Build parent->children map
-	childrenMap := make(map[string][]string)
-	for uuid, entry := range index.Titles {
-		if entry.Parent != "" {
-			childrenMap[entry.Parent] = append(childrenMap[entry.Parent], uuid)
-		}
-	}
+	childrenMap := index.ChildrenMap()
 
 	// Sort children by title
 	for parent := range childrenMap {
@@ -248,13 +242,7 @@ Without arguments, shows the full forest (all root notes and their descendants).
 				return fmt.Errorf("failed to load titles index: %w", err)
 			}
 
-			// Build parent->children map
-			childrenMap := make(map[string][]string)
-			for uuid, entry := range index.Titles {
-				if entry.Parent != "" {
-					childrenMap[entry.Parent] = append(childrenMap[entry.Parent], uuid)
-				}
-			}
+			childrenMap := index.ChildrenMap()
 
 			// Sort children by title
 			for parent := range childrenMap {

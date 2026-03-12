@@ -98,6 +98,17 @@ func (v *Vault) RebuildTitlesIndex(entries map[string]TitleEntry) error {
 	return v.SaveTitles(index)
 }
 
+// ChildrenMap builds a map from parent UUID to child UUIDs.
+func (idx *TitlesIndex) ChildrenMap() map[string][]string {
+	children := make(map[string][]string)
+	for uuid, entry := range idx.Titles {
+		if entry.Parent != "" {
+			children[entry.Parent] = append(children[entry.Parent], uuid)
+		}
+	}
+	return children
+}
+
 // FindByTitle returns the UUID for a note with an exact case-insensitive title match.
 func (idx *TitlesIndex) FindByTitle(title string) (string, bool) {
 	titleLower := strings.ToLower(strings.TrimSpace(title))
