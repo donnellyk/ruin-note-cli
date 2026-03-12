@@ -14,6 +14,24 @@ import (
 )
 
 var headingPattern = regexp.MustCompile(`(?m)^(#{1,6})\s`)
+var listLinePattern = regexp.MustCompile(`^[ \t]*(?:[-*+]|\d+\.)\s`)
+
+// isListOnlyContent returns true if every non-blank line starts with a
+// markdown list marker (-, *, +, 1.) including checkbox variants.
+func isListOnlyContent(content string) bool {
+	if strings.TrimSpace(content) == "" {
+		return false
+	}
+	for _, line := range strings.Split(content, "\n") {
+		if strings.TrimSpace(line) == "" {
+			continue
+		}
+		if !listLinePattern.MatchString(line) {
+			return false
+		}
+	}
+	return true
+}
 
 // NewComposeCmd creates the compose command.
 func NewComposeCmd(getVault func() *vault.Vault, jsonOutput *bool) *cobra.Command {
@@ -265,6 +283,9 @@ func composeTextWithSourceMap(vlt *vault.Vault, index *vault.TitlesIndex, childr
 	var sourceMap []sourceEntry
 	nextLine := 1
 
+	var prevDepth int
+	var prevListOnly bool
+
 	var walk func(uuid string, depth int)
 	walk = func(uuid string, depth int) {
 		if visited[uuid] {
@@ -305,9 +326,15 @@ func composeTextWithSourceMap(vlt *vault.Vault, index *vault.TitlesIndex, childr
 		}
 
 		// Add separator between notes (\n\n = line terminator + blank line = 1 gap line)
+		// Suppress blank line between list-only siblings at the same depth.
 		if b.Len() > 0 {
-			b.WriteString("\n\n")
-			nextLine++
+			listOnly := isListOnlyContent(content)
+			if depth == prevDepth && prevListOnly && listOnly {
+				b.WriteString("\n")
+			} else {
+				b.WriteString("\n\n")
+				nextLine++
+			}
 		}
 
 		startLine := nextLine
@@ -324,6 +351,8 @@ func composeTextWithSourceMap(vlt *vault.Vault, index *vault.TitlesIndex, childr
 
 		b.WriteString(content)
 		nextLine = endLine + 1
+		prevDepth = depth
+		prevListOnly = isListOnlyContent(content)
 
 		// Recurse into children
 		if maxDepth > 0 && depth >= maxDepth {

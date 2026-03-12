@@ -10,6 +10,38 @@ import (
 	"kvnd/ruin-note-cli/internal/vault"
 )
 
+func TestIsListOnlyContent(t *testing.T) {
+	tests := []struct {
+		name    string
+		content string
+		want    bool
+	}{
+		{"dash list", "- item 1\n- item 2\n- item 3", true},
+		{"asterisk list", "* item 1\n* item 2", true},
+		{"plus list", "+ item 1\n+ item 2", true},
+		{"numbered list", "1. first\n2. second\n3. third", true},
+		{"checkboxes", "- [ ] todo\n- [x] done", true},
+		{"nested list with indentation", "- top\n  - nested\n    - deep", true},
+		{"blank lines between items", "- item 1\n\n- item 2\n\n- item 3", true},
+		{"mixed markers", "- dash\n* star\n+ plus\n1. number", true},
+		{"header plus list", "# Title\n- item", false},
+		{"prose", "This is a paragraph of text.", false},
+		{"mixed prose and list", "Some text\n- item", false},
+		{"empty string", "", false},
+		{"whitespace only", "   \n  ", false},
+		{"list then prose", "- item\nsome text", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := isListOnlyContent(tt.content)
+			if got != tt.want {
+				t.Errorf("isListOnlyContent(%q) = %v, want %v", tt.content, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestAdjustHeadings(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -791,5 +823,148 @@ Child body`,
 
 	if textOld != textNew {
 		t.Errorf("composeText and composeTextWithSourceMap produced different output:\nold: %q\nnew: %q", textOld, textNew)
+	}
+}
+
+func TestComposeTextWithSourceMap_ListSiblingsNoGap(t *testing.T) {
+	vlt, index, childrenMap := setupComposeTestVault(t, []testNote{
+		{
+			uuid:     "root-1",
+			title:    "Root",
+			filename: "Root.md",
+			raw: `---
+uuid: root-1
+created: "2025-01-01T10:00:00-05:00"
+updated: "2025-01-01T10:00:00-05:00"
+---
+# Root`,
+		},
+		{
+			uuid:     "child-a",
+			title:    "Alpha",
+			filename: "Alpha.md",
+			parent:   "root-1",
+			raw: `---
+uuid: child-a
+created: "2025-01-02T10:00:00-05:00"
+updated: "2025-01-02T10:00:00-05:00"
+parent: root-1
+---
+- item a1
+- item a2`,
+		},
+		{
+			uuid:     "child-b",
+			title:    "Beta",
+			filename: "Beta.md",
+			parent:   "root-1",
+			raw: `---
+uuid: child-b
+created: "2025-01-03T10:00:00-05:00"
+updated: "2025-01-03T10:00:00-05:00"
+parent: root-1
+---
+- item b1
+- item b2`,
+		},
+	})
+
+	text, sm := composeTextWithSourceMap(vlt, index, childrenMap, "root-1", make(map[string]bool), 0, 0, false, false, false)
+
+	// Root: "# Root" = line 1
+	// separator: \n\n (blank line at line 2, because root is not list-only)
+	// Alpha: "- item a1\n- item a2" = lines 3-4
+	// separator: \n (NO blank line, both siblings are list-only)
+	// Beta: "- item b1\n- item b2" = lines 5-6
+	lines := strings.Split(text, "\n")
+	if len(lines) != 6 {
+		t.Fatalf("total lines = %d, want 6, text = %q", len(lines), text)
+	}
+
+	// Verify no blank line between list siblings
+	want := "# Root\n\n- item a1\n- item a2\n- item b1\n- item b2"
+	if text != want {
+		t.Errorf("composed text = %q, want %q", text, want)
+	}
+
+	if len(sm) != 3 {
+		t.Fatalf("source_map length = %d, want 3", len(sm))
+	}
+
+	// Root: line 1
+	if sm[0].StartLine != 1 || sm[0].EndLine != 1 {
+		t.Errorf("root range = %d-%d, want 1-1", sm[0].StartLine, sm[0].EndLine)
+	}
+	// Alpha: lines 3-4 (gap at line 2)
+	if sm[1].StartLine != 3 || sm[1].EndLine != 4 {
+		t.Errorf("alpha range = %d-%d, want 3-4", sm[1].StartLine, sm[1].EndLine)
+	}
+	// Beta: lines 5-6 (no gap)
+	if sm[2].StartLine != 5 || sm[2].EndLine != 6 {
+		t.Errorf("beta range = %d-%d, want 5-6", sm[2].StartLine, sm[2].EndLine)
+	}
+}
+
+func TestComposeTextWithSourceMap_MixedSiblingsKeepGap(t *testing.T) {
+	vlt, index, childrenMap := setupComposeTestVault(t, []testNote{
+		{
+			uuid:     "root-1",
+			title:    "Root",
+			filename: "Root.md",
+			raw: `---
+uuid: root-1
+created: "2025-01-01T10:00:00-05:00"
+updated: "2025-01-01T10:00:00-05:00"
+---
+# Root`,
+		},
+		{
+			uuid:     "child-a",
+			title:    "Alpha",
+			filename: "Alpha.md",
+			parent:   "root-1",
+			raw: `---
+uuid: child-a
+created: "2025-01-02T10:00:00-05:00"
+updated: "2025-01-02T10:00:00-05:00"
+parent: root-1
+---
+- item a1
+- item a2`,
+		},
+		{
+			uuid:     "child-b",
+			title:    "Beta",
+			filename: "Beta.md",
+			parent:   "root-1",
+			raw: `---
+uuid: child-b
+created: "2025-01-03T10:00:00-05:00"
+updated: "2025-01-03T10:00:00-05:00"
+parent: root-1
+---
+Some prose content here.`,
+		},
+	})
+
+	text, sm := composeTextWithSourceMap(vlt, index, childrenMap, "root-1", make(map[string]bool), 0, 0, false, false, false)
+
+	// Root: "# Root" = line 1
+	// separator: \n\n (blank line 2)
+	// Alpha: "- item a1\n- item a2" = lines 3-4
+	// separator: \n\n (blank line 5, because Beta is not list-only)
+	// Beta: "Some prose content here." = line 6
+	want := "# Root\n\n- item a1\n- item a2\n\nSome prose content here."
+	if text != want {
+		t.Errorf("composed text = %q, want %q", text, want)
+	}
+
+	if len(sm) != 3 {
+		t.Fatalf("source_map length = %d, want 3", len(sm))
+	}
+
+	// Beta starts at line 6 (with blank gap at line 5)
+	if sm[2].StartLine != 6 || sm[2].EndLine != 6 {
+		t.Errorf("beta range = %d-%d, want 6-6", sm[2].StartLine, sm[2].EndLine)
 	}
 }
