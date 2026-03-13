@@ -457,13 +457,17 @@ Lists direct children of a note. With `--recursive`, shows the full subtree.
 
 ```
 ruin parent save <name> <note>
+ruin parent save <name> --file <path.yml>
 ```
 
 | Flag | Short | Description |
 |------|-------|-------------|
 | `--force` | `-f` | Skip confirmation when overwriting |
+| `--file` | `-F` | Path to a YML composition file (instead of a note) |
 
-Save a named bookmark mapping `<name>` to a note's UUID. The bookmark can be used anywhere a note reference is accepted (e.g., `--parent`, `compose`, other `parent` subcommands).
+Save a named bookmark mapping `<name>` to a note's UUID or a YML composition file. The bookmark can be used anywhere a note reference is accepted (e.g., `--parent`, `compose`, other `parent` subcommands). File-based bookmarks are resolved automatically by `ruin compose`.
+
+When `--file` is used, the path is stored relative to the vault root if the file is inside the vault, or as an absolute path otherwise.
 
 #### parent list
 
@@ -471,7 +475,7 @@ Save a named bookmark mapping `<name>` to a note's UUID. The bookmark can be use
 ruin parent list
 ```
 
-List all saved parent bookmarks. Shows `name: title (uuid)` per line, or JSON array with `--json`.
+List all saved parent bookmarks. Shows `name: title (uuid)` or `name: [file] path` per line, or JSON array with `--json`.
 
 #### parent delete
 
@@ -513,6 +517,7 @@ Case-insensitive prefix match on note titles. Default output: `<uuid>\t<title>` 
 
 ```
 ruin compose <note>
+ruin compose --file compose-spec.yml
 ```
 
 | Flag | Short | Description |
@@ -525,12 +530,39 @@ ruin compose <note>
 | `--force` | `-f` | Skip confirmation for deletions in edit mode |
 | `--content` | | Include per-node `content` fields in JSON output (requires `--json`) |
 | `--normalize-headers` | | Normalize child headings so siblings share the same top-level |
+| `--file` | `-F` | Path to a YML composition file |
+| `--expand-embeds` | | Expand `![[note]]` embeds inline with referenced note content |
+| `--explain` | | Print a decision log instead of composed content |
 
 Recursively assembles a document from a note and its children. Headings in children are adjusted by depth level (capped at H6).
 
 With `--normalize-headers`, each child's headings are rebased so its minimum heading level maps to its tree depth + 1. This ensures sibling notes at the same depth share the same top-level heading regardless of their original heading levels.
 
-**JSON output** (`--json`): Always includes `composed_content` (flat composed text) and `source_map` (line-level mapping from composed output to source notes). The `--content` flag controls whether per-node `content` fields are populated (omitted by default).
+**YML composition** (`--file`): Instead of using frontmatter parent-child relationships, a YML file declares the note tree:
+
+```yaml
+root: "Project Hub"
+children:
+  - note: "Chapter 1"
+    children:
+      - note: "Section 1.1"
+      - note: "Section 1.2"
+  - note: "Chapter 2"
+```
+
+Notes are referenced by title, UUID, or path. Children order in the YML file is preserved (the `--sort` flag only applies to frontmatter-sourced children). If a node has no explicit YML children, its frontmatter children are used as fallback.
+
+`--file` and `<note>` are mutually exclusive. Named parent bookmarks that point to a file are resolved automatically (see `parent save --file`).
+
+**Embed expansion** (`--expand-embeds`): Expands `![[Note Title]]` embeds inline with the referenced note's content. Supports `![[Note#Header]]` to embed only a specific header section. Embeds are only recognized on standalone lines (not inline within prose).
+
+When a note is both embedded via `![[...]]` and a direct child, the embed takes precedence and the child is deduplicated. Embedded notes get their children expanded recursively beneath them.
+
+Without `--expand-embeds`, `![[...]]` lines pass through as-is.
+
+**Explain mode** (`--explain`): Outputs a decision log showing how the composition tree is resolved, without emitting actual note content. Useful for debugging. Works with `--json` for machine-readable output.
+
+**JSON output** (`--json`): Always includes `composed_content` (flat composed text) and `source_map` (line-level mapping from composed output to source notes). The `--content` flag controls whether per-node `content` fields are populated (omitted by default). Embedded nodes include `"embedded": true`.
 
 **Source map**: Each entry maps a range of composed output lines to a source note:
 
@@ -542,7 +574,7 @@ With `--normalize-headers`, each child's headings are rebased so its minimum hea
 | `start_line` | int | First line in composed output (1-indexed) |
 | `end_line` | int | Last line in composed output (1-indexed) |
 
-Separator lines between notes fall in gaps not covered by any entry. To map a composed line back to the original note content: `original_line = (composed_line - start_line) + 1`.
+Separator lines between notes fall in gaps not covered by any entry. To map a composed line back to the original note content: `original_line = (composed_line - start_line) + 1`. With embed expansion, a note's content may be split across non-contiguous line ranges (multiple source map entries with the same UUID).
 
 **List merging**: When two adjacent sibling notes at the same depth both contain only list content (lines starting with `-`, `*`, `+`, or `1.`), they are separated by a single newline instead of a blank line. This causes the lists to merge into one contiguous list in the composed output.
 

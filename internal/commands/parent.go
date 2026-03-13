@@ -362,18 +362,24 @@ func printTreeNodes(index *vault.TitlesIndex, childrenMap map[string][]string, u
 }
 
 func newParentSaveCmd(getVault func() *vault.Vault, jsonOutput *bool) *cobra.Command {
-	var force bool
+	var (
+		force bool
+		file  string
+	)
 
 	cmd := &cobra.Command{
-		Use:   "save <name> <note>",
+		Use:   "save <name> [note]",
 		Short: "Save a named parent bookmark",
-		Long: `Save a named bookmark that maps a short name to a note UUID.
+		Long: `Save a named bookmark that maps a short name to a note UUID or composition file.
 
 The bookmark can then be used anywhere a note reference is accepted
-(e.g., --parent, compose, parent set/get/remove/children/tree).`,
+(e.g., --parent, compose, parent set/get/remove/children/tree).
+
+Use --file to bookmark a YML composition file instead of a note.`,
 		Example: `  ruin parent save alpha "Project Alpha Hub"
-  ruin parent save docs "Documentation Root" --force`,
-		Args: cobra.ExactArgs(2),
+  ruin parent save docs "Documentation Root" --force
+  ruin parent save project --file project.yml`,
+		Args: cobra.RangeArgs(1, 2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			vlt := getVault()
 			if vlt == nil {
@@ -382,9 +388,11 @@ The bookmark can then be used anywhere a note reference is accepted
 
 			name := args[0]
 
-			n, err := ResolveNote(vlt, args[1])
-			if err != nil {
-				return fmt.Errorf("note: %w", err)
+			if file != "" && len(args) > 1 {
+				return fmt.Errorf("provide either a note argument or --file, not both")
+			}
+			if file == "" && len(args) < 2 {
+				return fmt.Errorf("provide a note argument or --file")
 			}
 
 			index, err := vlt.LoadParents()
@@ -406,7 +414,12 @@ The bookmark can then be used anywhere a note reference is accepted
 					return fmt.Errorf("non-interactive mode requires --force")
 				}
 
-				fmt.Fprintf(os.Stderr, "Bookmark %q already exists (UUID: %s). Overwrite? [y/N] ", name, index.Parents[existingIdx].UUID)
+				existing := index.Parents[existingIdx]
+				if existing.File != "" {
+					fmt.Fprintf(os.Stderr, "Bookmark %q already exists (file: %s). Overwrite? [y/N] ", name, existing.File)
+				} else {
+					fmt.Fprintf(os.Stderr, "Bookmark %q already exists (UUID: %s). Overwrite? [y/N] ", name, existing.UUID)
+				}
 				reader := bufio.NewReader(os.Stdin)
 				response, err := reader.ReadString('\n')
 				if err != nil {
@@ -418,9 +431,55 @@ The bookmark can then be used anywhere a note reference is accepted
 				}
 			}
 
-			// Upsert
+			if file != "" {
+				if _, err := os.Stat(file); err != nil {
+					return fmt.Errorf("file not found: %s", file)
+				}
+
+				storedPath, err := ResolveComposeFilePath(file, vlt.Path)
+				if err != nil {
+					return fmt.Errorf("failed to resolve file path: %w", err)
+				}
+
+				if existingIdx >= 0 {
+					index.Parents[existingIdx].UUID = ""
+					index.Parents[existingIdx].File = storedPath
+				} else {
+					index.Parents = append(index.Parents, vault.ParentEntry{
+						Name: name,
+						File: storedPath,
+					})
+				}
+
+				if err := vlt.SaveParents(index); err != nil {
+					return fmt.Errorf("failed to save parents: %w", err)
+				}
+
+				if *jsonOutput {
+					output := struct {
+						Name string `json:"name"`
+						File string `json:"file"`
+					}{
+						Name: name,
+						File: storedPath,
+					}
+					enc := json.NewEncoder(os.Stdout)
+					enc.SetIndent("", "  ")
+					return enc.Encode(output)
+				}
+
+				fmt.Fprintf(os.Stderr, "Saved parent %q -> %s\n", name, storedPath)
+				return nil
+			}
+
+			n, err := ResolveNote(vlt, args[1])
+			if err != nil {
+				return fmt.Errorf("note: %w", err)
+			}
+
 			if existingIdx >= 0 {
 				index.Parents[existingIdx].UUID = n.UUID
+				index.Parents[existingIdx].File = ""
 			} else {
 				index.Parents = append(index.Parents, vault.ParentEntry{
 					Name: name,
@@ -453,6 +512,7 @@ The bookmark can then be used anywhere a note reference is accepted
 	}
 
 	cmd.Flags().BoolVarP(&force, "force", "f", false, "skip confirmation when overwriting")
+	cmd.Flags().StringVarP(&file, "file", "F", "", "path to a YML composition file")
 	return cmd
 }
 
@@ -479,22 +539,30 @@ func newParentListCmd(getVault func() *vault.Vault, jsonOutput *bool) *cobra.Com
 			if *jsonOutput {
 				type listEntry struct {
 					Name  string `json:"name"`
-					UUID  string `json:"uuid"`
-					Title string `json:"title"`
+					UUID  string `json:"uuid,omitempty"`
+					Title string `json:"title,omitempty"`
+					File  string `json:"file,omitempty"`
 				}
 				var entries []listEntry
 				for _, p := range index.Parents {
-					title := ""
-					if titles != nil {
-						if te, ok := titles.Titles[p.UUID]; ok {
-							title = te.Title
+					if p.File != "" {
+						entries = append(entries, listEntry{
+							Name: p.Name,
+							File: p.File,
+						})
+					} else {
+						title := ""
+						if titles != nil {
+							if te, ok := titles.Titles[p.UUID]; ok {
+								title = te.Title
+							}
 						}
+						entries = append(entries, listEntry{
+							Name:  p.Name,
+							UUID:  p.UUID,
+							Title: title,
+						})
 					}
-					entries = append(entries, listEntry{
-						Name:  p.Name,
-						UUID:  p.UUID,
-						Title: title,
-					})
 				}
 				enc := json.NewEncoder(os.Stdout)
 				enc.SetIndent("", "  ")
@@ -507,13 +575,17 @@ func newParentListCmd(getVault func() *vault.Vault, jsonOutput *bool) *cobra.Com
 			}
 
 			for _, p := range index.Parents {
-				title := p.UUID
-				if titles != nil {
-					if te, ok := titles.Titles[p.UUID]; ok {
-						title = te.Title
+				if p.File != "" {
+					fmt.Printf("%s: %s (file)\n", p.Name, p.File)
+				} else {
+					title := p.UUID
+					if titles != nil {
+						if te, ok := titles.Titles[p.UUID]; ok {
+							title = te.Title
+						}
 					}
+					fmt.Printf("%s: %s (%s)\n", p.Name, title, p.UUID)
 				}
-				fmt.Printf("%s: %s (%s)\n", p.Name, title, p.UUID)
 			}
 			return nil
 		},

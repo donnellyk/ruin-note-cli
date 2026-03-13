@@ -44,6 +44,9 @@ func NewComposeCmd(getVault func() *vault.Vault, jsonOutput *bool) *cobra.Comman
 		force            bool
 		content          bool
 		normalizeHeaders bool
+		composeFile      string
+		expandEmbeds     bool
+		explain          bool
 	)
 
 	cmd := &cobra.Command{
@@ -61,18 +64,41 @@ Children are sorted by title by default.`,
   ruin compose <uuid> --normalize-headers
   ruin compose <uuid> --sort created:desc
   ruin compose <uuid> --json
-  ruin compose <uuid> --edit`,
-		Args: cobra.ExactArgs(1),
+  ruin compose <uuid> --edit
+  ruin compose --file compose-spec.yml
+  ruin compose <note> --expand-embeds
+  ruin compose <note> --explain`,
+		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			vlt := getVault()
 			if vlt == nil {
 				return fmt.Errorf("vault not configured")
 			}
 
+			// Check for file-based bookmark
+			if len(args) == 1 && composeFile == "" {
+				if bookmark, ok := vlt.LookupParent(args[0]); ok && bookmark.File != "" {
+					composeFile = LoadComposeFilePath(bookmark.File, vlt.Path)
+					args = nil
+				}
+			}
+
+			if composeFile != "" && len(args) > 0 {
+				return fmt.Errorf("provide a note argument or --file, not both")
+			}
+			if composeFile == "" && len(args) == 0 {
+				return fmt.Errorf("provide a note or --file")
+			}
+
 			if edit && *jsonOutput {
 				return errMutuallyExclusive("--json", "--edit")
 			}
-
+			if explain && edit {
+				return errMutuallyExclusive("--explain", "--edit")
+			}
+			if explain && content {
+				return errMutuallyExclusive("--explain", "--content")
+			}
 			if content && !*jsonOutput {
 				return fmt.Errorf("--content requires --json")
 			}
@@ -82,26 +108,60 @@ Children are sorted by title by default.`,
 				return err
 			}
 
-			root, err := ResolveNote(vlt, args[0])
-			if err != nil {
-				return err
-			}
-
 			index, err := vlt.LoadTitles()
 			if err != nil {
 				return fmt.Errorf("failed to load titles index: %w", err)
 			}
 
+			var rootUUID string
+			var ymlParents map[string]bool
 			childrenMap := index.ChildrenMap()
 
-			// Sort children
+			if composeFile != "" {
+				spec, err := ParseComposeFile(composeFile)
+				if err != nil {
+					return err
+				}
+				result, err := BuildChildrenMapFromSpec(spec, vlt, index)
+				if err != nil {
+					return err
+				}
+				rootUUID = result.RootUUID
+				ymlParents = result.YMLParents
+				// Merge: YML children override frontmatter children for YML parents
+				for parent, children := range result.ChildrenMap {
+					childrenMap[parent] = children
+				}
+				// For nodes without YML children, frontmatter children are already in childrenMap
+			} else {
+				root, err := ResolveNote(vlt, args[0])
+				if err != nil {
+					return err
+				}
+				rootUUID = root.UUID
+			}
+
 			for parent := range childrenMap {
+				if ymlParents != nil && ymlParents[parent] {
+					continue
+				}
 				uuids := childrenMap[parent]
 				sortChildUUIDs(vlt, index, uuids, sortField)
 			}
 
+			walker := newComposeWalker(vlt, index, childrenMap, maxDepth, stripTitle, stripGlobalTag, normalizeHeaders)
+			walker.expandEmbeds = expandEmbeds
+			tree := walker.Walk(rootUUID, 0)
+			if tree == nil {
+				return fmt.Errorf("no notes found in tree")
+			}
+
+			if explain {
+				return renderExplain(tree, ymlParents, *jsonOutput)
+			}
+
 			if edit {
-				results := collectTreeNotes(vlt, index, childrenMap, root.UUID, make(map[string]bool), maxDepth, 0)
+				results := renderEditList(tree)
 				if len(results) == 0 {
 					return fmt.Errorf("no notes found in tree")
 				}
@@ -109,19 +169,17 @@ Children are sorted by title by default.`,
 			}
 
 			if *jsonOutput {
-				tree := composeJSON(vlt, index, childrenMap, root.UUID, make(map[string]bool), maxDepth, 0, stripTitle, stripGlobalTag, normalizeHeaders, content)
-				composedText, sourceMap := composeTextWithSourceMap(vlt, index, childrenMap, root.UUID, make(map[string]bool), maxDepth, 0, stripTitle, stripGlobalTag, normalizeHeaders)
-				tree.ComposedContent = composedText
-				tree.SourceMap = sourceMap
+				jsonTree := renderJSON(tree, content)
+				composedText, sourceMap := renderText(tree)
+				jsonTree.ComposedContent = composedText
+				jsonTree.SourceMap = sourceMap
 				enc := json.NewEncoder(os.Stdout)
 				enc.SetIndent("", "  ")
-				return enc.Encode(tree)
+				return enc.Encode(jsonTree)
 			}
 
-			// Text output
-			var b strings.Builder
-			composeText(vlt, index, childrenMap, root.UUID, make(map[string]bool), &b, maxDepth, 0, stripTitle, stripGlobalTag, normalizeHeaders)
-			fmt.Print(b.String())
+			composedText, _ := renderText(tree)
+			fmt.Print(composedText)
 			return nil
 		},
 	}
@@ -134,6 +192,9 @@ Children are sorted by title by default.`,
 	cmd.Flags().BoolVarP(&force, "force", "f", false, "skip confirmation for deletions in edit mode")
 	cmd.Flags().BoolVar(&content, "content", false, "include per-node content in JSON output")
 	cmd.Flags().BoolVar(&normalizeHeaders, "normalize-headers", false, "normalize child headings so siblings share the same top-level")
+	cmd.Flags().StringVarP(&composeFile, "file", "F", "", "path to a YML composition file")
+	cmd.Flags().BoolVar(&expandEmbeds, "expand-embeds", false, "expand ![[note]] embeds inline")
+	cmd.Flags().BoolVar(&explain, "explain", false, "print a decision log instead of composed content")
 	return cmd
 }
 
@@ -450,6 +511,7 @@ type composeNode struct {
 	UUID            string        `json:"uuid"`
 	Title           string        `json:"title"`
 	Path            string        `json:"path"`
+	Embedded        bool          `json:"embedded,omitempty"`
 	Content         string        `json:"content,omitempty"`
 	Children        []composeNode `json:"children,omitempty"`
 	ComposedContent string        `json:"composed_content,omitempty"`

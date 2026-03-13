@@ -12,10 +12,13 @@ import (
 // Resolution order: saved parent bookmark, exact UUID match, title substring, path substring.
 func ResolveNote(vlt *vault.Vault, identifier string) (*note.Note, error) {
 	// 0. Saved parent bookmark lookup (exact name match)
-	if uuid, ok := vlt.LookupParent(identifier); ok {
+	if bookmark, ok := vlt.LookupParent(identifier); ok {
+		if bookmark.File != "" {
+			return nil, fmt.Errorf("bookmark %q is a composition file — use \"ruin compose %s\"", identifier, identifier)
+		}
 		index, err := vlt.LoadTitles()
 		if err == nil {
-			if entry, ok := index.Titles[uuid]; ok {
+			if entry, ok := index.Titles[bookmark.UUID]; ok {
 				n, err := note.Load(entry.Path)
 				if err == nil {
 					return n, nil
