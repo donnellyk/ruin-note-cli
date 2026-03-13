@@ -207,6 +207,12 @@ func doctorFiles(vlt *vault.Vault, paths []string, dryRun bool, jsonOutput bool)
 			}
 		}
 
+		// Ensure #link tag for URL notes
+		if n.EnsureLinkTag() {
+			n.RefreshTags()
+			needsSave = true
+		}
+
 		// Save note if needed
 		if needsSave && !dryRun {
 			if err := n.Save(); err != nil {
@@ -456,6 +462,12 @@ func doctorFullScan(vlt *vault.Vault, dryRun bool, jsonOutput bool) error {
 		if inheritedChanged {
 			n.InheritedTags = newInherited
 			output.InheritedTagsUpdated = append(output.InheritedTagsUpdated, n.FilePath)
+		}
+
+		// Ensure #link tag for URL notes
+		if n.EnsureLinkTag() {
+			n.RefreshTags()
+			contentChanged = true
 		}
 
 		if (inheritedChanged || contentChanged) && !dryRun {

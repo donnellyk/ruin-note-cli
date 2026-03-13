@@ -1152,3 +1152,115 @@ tags:
 		}
 	})
 }
+
+func TestLinkFilter(t *testing.T) {
+	// Test that link: filter is parsed correctly
+	matcher, info, err := parseQuery("link:example.com", TagScopeAll)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if info.NeedsBody {
+		t.Error("link filter should not need body")
+	}
+
+	// Test matching
+	n := &note.Note{URL: "https://example.com/page"}
+	if !matcher(n) {
+		t.Error("expected match for note with matching URL")
+	}
+
+	n2 := &note.Note{URL: "https://other.com/page"}
+	if matcher(n2) {
+		t.Error("expected no match for note with different URL")
+	}
+
+	n3 := &note.Note{}
+	if matcher(n3) {
+		t.Error("expected no match for note with no URL")
+	}
+}
+
+func TestLinkFilter_CaseInsensitive(t *testing.T) {
+	matcher, _, err := parseQuery("link:EXAMPLE.COM", TagScopeAll)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	n := &note.Note{URL: "https://example.com/page"}
+	if !matcher(n) {
+		t.Error("expected case-insensitive match")
+	}
+}
+
+func TestLinkFilter_Integration(t *testing.T) {
+	tmpDir := t.TempDir()
+	vlt := vault.New(tmpDir)
+	if _, err := vlt.Initialize(false); err != nil {
+		t.Fatalf("failed to initialize vault: %v", err)
+	}
+
+	// Create a link note with url frontmatter
+	linkNote := `---
+uuid: uuid-link1
+created: "2025-01-01T10:00:00-05:00"
+updated: "2025-01-01T10:00:00-05:00"
+url: "https://go.dev/blog/go1.22"
+tags:
+  - "#link"
+---
+# Go 1.22
+#link
+
+https://go.dev/blog/go1.22
+`
+	// Create a non-link note
+	plainNote := `---
+uuid: uuid-plain1
+created: "2025-01-02T10:00:00-05:00"
+updated: "2025-01-02T10:00:00-05:00"
+tags:
+  - "#daily"
+---
+# Daily Note
+#daily
+
+Just a regular note.
+`
+
+	for name, content := range map[string]string{
+		"link-note.md":  linkNote,
+		"plain-note.md": plainNote,
+	} {
+		path := filepath.Join(tmpDir, name)
+		if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+			t.Fatalf("failed to write test note: %v", err)
+		}
+	}
+
+	jsonOut := true
+	cmd := NewSearchCmd(func() *vault.Vault { return vlt }, &jsonOut)
+
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	cmd.SetArgs([]string{"link:go.dev"})
+	err := cmd.Execute()
+
+	w.Close()
+	os.Stdout = oldStdout
+
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+
+	var buf bytes.Buffer
+	buf.ReadFrom(r)
+
+	var results []json.RawMessage
+	json.Unmarshal(buf.Bytes(), &results)
+
+	if len(results) != 1 {
+		t.Errorf("got %d results, want 1\noutput: %s", len(results), buf.String())
+	}
+}

@@ -176,6 +176,9 @@ New UUIDs in the updated content are an error (use 'log' to create new notes).`,
 				// Update content
 				n.Content = updatedMap[uuid]
 				n.RefreshTags()
+				if n.EnsureLinkTag() {
+					n.RefreshTags()
+				}
 
 				// Resolve date tokens and extract dates
 				n.Content = note.ResolveDateTokens(n.Content)

@@ -154,6 +154,8 @@ func parseFMLines(data []byte, fm *Frontmatter) error {
 			fm.Created = strVal
 		case "updated":
 			fm.Updated = strVal
+		case "url":
+			fm.URL = strVal
 		case "parent":
 			fm.Parent = strVal
 		case "order":
@@ -249,6 +251,7 @@ func LoadFrontmatterOnly(path string) (*Note, error) {
 		Parent:        fm.Parent,
 		Order:         fm.Order,
 		LinkedCards:   fm.LinkedCards,
+		URL:           fm.URL,
 		Tags:          fm.Tags,
 		InlineTags:    fm.InlineTags,
 		InheritedTags: fm.InheritedTags,

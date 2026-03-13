@@ -2,16 +2,17 @@ package commands
 
 import (
 	"bufio"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
 	"kvnd/ruin-note-cli/internal/note"
+	"kvnd/ruin-note-cli/internal/urlresolve"
 	"kvnd/ruin-note-cli/internal/vault"
 )
 
@@ -31,6 +32,7 @@ func NewLogCmd(getVault func() *vault.Vault, jsonOutput *bool) *cobra.Command {
 		useStdin  bool
 		parentRef string
 		orderVal  int
+		noFetch   bool
 	)
 
 	cmd := &cobra.Command{
@@ -70,7 +72,6 @@ Details here..."
 				return fmt.Errorf("vault not configured")
 			}
 
-			// Get content from args or stdin
 			content, err := getContent(args, useStdin)
 			if err != nil {
 				return err
@@ -80,28 +81,9 @@ Details here..."
 				return fmt.Errorf("no content provided")
 			}
 
-			// Parse the content as a note
 			n, err := note.Parse(content)
 			if err != nil {
 				return fmt.Errorf("failed to parse content: %w", err)
-			}
-
-			// Ensure UUID and timestamps
-			n.EnsureUUID()
-			n.SetTimestamps()
-
-			// Refresh tags from content
-			n.RefreshTags()
-
-			// Resolve date tokens and extract dates
-			n.Content = note.ResolveDateTokens(n.Content)
-			n.RefreshDates()
-
-			// Refresh linked-cards from wiki links
-			if titlesIndex, err := vlt.LoadTitles(); err == nil {
-				RefreshLinkedCards(n, titlesIndex)
-			} else {
-				fmt.Fprintf(os.Stderr, "warning: failed to load titles index for linked-cards: %v\n", err)
 			}
 
 			// Set order if specified
@@ -118,32 +100,28 @@ Details here..."
 				n.Parent = parent.UUID
 			}
 
-			// Refresh inherited tags from parent chain
-			if n.Parent != "" {
-				if _, err := RefreshInheritedTags(n, vlt); err != nil {
-					fmt.Fprintf(os.Stderr, "warning: failed to refresh inherited tags: %v\n", err)
+			// URL auto-detection: if content starts with a URL and no title is set
+			urlResolved := false
+			if title == "" && !useH1 && n.Title == "" && n.IsURLNote() && !noFetch {
+				extractedURL := n.ExtractURL()
+				if extractedURL != "" {
+					resolver := urlresolve.NewHTMLResolver()
+					meta, err := resolver.Resolve(context.Background(), extractedURL)
+					if err != nil {
+						fmt.Fprintf(os.Stderr, "warning: failed to resolve URL: %v\n", err)
+					} else if meta.Title != "" {
+						sanitized := sanitizeTitle(meta.Title)
+						n.Content = "# " + sanitized + "\n\n" + n.Content
+						n.Title = sanitized
+						urlResolved = true
+					}
 				}
 			}
 
-			// Determine filename
-			filename := determineFilename(n, title, useH1)
-
-			// Set file path
-			n.FilePath = filepath.Join(vlt.Path, filename+".md")
-
-			// Check if file already exists
-			if _, err := os.Stat(n.FilePath); err == nil {
-				return fmt.Errorf("file already exists: %s", n.FilePath)
+			if err := createNote(n, vlt, title, useH1 || urlResolved); err != nil {
+				return err
 			}
 
-			// Save the note
-			if err := n.Save(); err != nil {
-				return fmt.Errorf("failed to save note: %w", err)
-			}
-
-			vlt.CreateNote(n, fmt.Sprintf("ruin log: Create %q", filename))
-
-			// Output result
 			if *jsonOutput {
 				output := LogOutput{
 					Path:   n.FilePath,
@@ -166,6 +144,7 @@ Details here..."
 	cmd.Flags().BoolVar(&useStdin, "stdin", false, "read content from stdin")
 	cmd.Flags().StringVar(&parentRef, "parent", "", "set parent note (UUID, title, or path substring)")
 	cmd.Flags().IntVar(&orderVal, "order", 0, "set manual sort order")
+	cmd.Flags().BoolVar(&noFetch, "no-fetch", false, "skip URL title resolution for link notes")
 
 	return cmd
 }
@@ -232,4 +211,9 @@ func determineFilename(n *note.Note, titleFlag string, useH1 bool) string {
 		t = time.Now()
 	}
 	return t.Format("2006-01-02T15-04-05")
+}
+
+// sanitizeTitle strips newlines and collapses whitespace in a resolved HTML title.
+func sanitizeTitle(s string) string {
+	return strings.Join(strings.Fields(s), " ")
 }

@@ -54,7 +54,11 @@ ruin-note-cli/
 │   │   ├── frontmatter.go    # YAML frontmatter parsing/writing
 │   │   ├── bulk.go           # Bulk export/import format
 │   │   ├── tags.go           # Tag extraction logic
-│   │   └── links.go          # Wiki link extraction ([[title]])
+│   │   ├── links.go          # Wiki link extraction ([[title]])
+│   │   └── url.go            # URL note detection, extraction, auto-tagging
+│   ├── urlresolve/
+│   │   ├── resolver.go       # Resolver interface, URLMetadata struct
+│   │   └── html.go           # HTMLResolver (HTTP fetch + HTML metadata extraction)
 │   └── commands/
 │       ├── log.go            # log command implementation
 │       ├── search.go         # search command implementation
@@ -67,6 +71,7 @@ ruin-note-cli/
 │       ├── suggest.go        # suggest command (title prefix matching)
 │       ├── compose.go        # compose command (recursive document assembly)
 │       ├── pick.go           # pick command (inline tag line extraction)
+│       ├── link.go           # link command (new, resolve, list)
 │       ├── resolve.go        # Note resolution (UUID, title, path lookup)
 │       └── links.go          # Wiki link resolution (RefreshLinkedCards)
 ├── scripts/
@@ -114,6 +119,7 @@ ruin-note-cli/
 - `inline-tags`: inline tags (tags on lines that also contain non-tag content)
 - `parent`: UUID of parent note (optional, omitted if empty)
 - `linked-cards`: resolved UUIDs from `[[wiki links]]` (optional, omitted if empty)
+- `url`: URL for link notes (optional, auto-promoted from body by save pipeline)
 
 ## Common Commands
 

@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"fmt"
 	"runtime"
 	"sort"
 	"strings"
@@ -195,4 +196,43 @@ func compareResults(a, b SearchResult, field string) int {
 		return 0
 	}
 	return 0
+}
+
+// dispatchSearchResults handles sort, limit, and output dispatch for search results.
+func dispatchSearchResults(vlt *vault.Vault, results []SearchResult, flags *SearchFlags, jsonOutput bool, sortFields []SortField) error {
+	if len(sortFields) > 0 {
+		sortResults(results, sortFields)
+		if flags.Limit > 0 && len(results) > flags.Limit {
+			results = results[:flags.Limit]
+		}
+	}
+
+	if len(results) == 0 {
+		if jsonOutput {
+			fmt.Println("[]")
+		}
+		return nil
+	}
+
+	fmMode := FrontmatterMode(flags.Frontmatter)
+	if flags.Frontmatter != "" && flags.Frontmatter != "none" && flags.Frontmatter != "extra" && flags.Frontmatter != "full" {
+		return fmt.Errorf("invalid frontmatter mode: %s (use: none, extra, full)", flags.Frontmatter)
+	}
+
+	if flags.Edit {
+		if flags.First && len(results) > 1 {
+			results = results[:1]
+		}
+		return handleEdit(vlt, results, flags.Force, fmMode)
+	}
+	if flags.Bulk {
+		return outputBulk(results, fmMode)
+	}
+	if flags.First {
+		return outputFirst(results, fmMode)
+	}
+	if jsonOutput {
+		return outputJSON(results, fmMode, flags.Content, flags.StripGlobalTags, flags.StripTitle)
+	}
+	return outputPaths(results, fmMode)
 }

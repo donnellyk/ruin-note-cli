@@ -3,6 +3,7 @@ package commands
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"kvnd/ruin-note-cli/internal/note"
@@ -23,6 +24,47 @@ func frontmatterLineCount(n *note.Note) (int, error) {
 	return strings.Count(fm, "\n"), nil
 }
 
+// createNote performs the shared create-note pipeline:
+// EnsureUUID, SetTimestamps, save pipeline, filename generation, file write, and index creation.
+// The note's Content, URL, Parent, Order, and Title should be set by the caller before calling this.
+func createNote(n *note.Note, vlt *vault.Vault, titleFlag string, useH1 bool) error {
+	n.EnsureUUID()
+	n.SetTimestamps()
+
+	n.RefreshTags()
+	if n.EnsureLinkTag() {
+		n.RefreshTags()
+	}
+	n.Content = note.ResolveDateTokens(n.Content)
+	n.RefreshDates()
+
+	if titlesIndex, err := vlt.LoadTitles(); err == nil {
+		RefreshLinkedCards(n, titlesIndex)
+	} else {
+		fmt.Fprintf(os.Stderr, "warning: failed to load titles index for linked-cards: %v\n", err)
+	}
+
+	if n.Parent != "" {
+		if _, err := RefreshInheritedTags(n, vlt); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: failed to refresh inherited tags: %v\n", err)
+		}
+	}
+
+	filename := determineFilename(n, titleFlag, useH1)
+	n.FilePath = filepath.Join(vlt.Path, filename+".md")
+
+	if _, err := os.Stat(n.FilePath); err == nil {
+		return fmt.Errorf("file already exists: %s", n.FilePath)
+	}
+
+	if err := n.Save(); err != nil {
+		return fmt.Errorf("failed to save note: %w", err)
+	}
+
+	vlt.CreateNote(n, fmt.Sprintf("ruin: Create %q", filename))
+	return nil
+}
+
 // saveWithIndexUpdate performs the shared note-level post-modification flow:
 // refresh tags/dates/links, set timestamps, and save the file.
 // Callers should follow this with vlt.SaveNote() for index updates.
@@ -31,6 +73,9 @@ func saveWithIndexUpdate(n *note.Note, vlt *vault.Vault) error {
 	copy(oldGlobalTags, n.Tags)
 
 	n.RefreshTags()
+	if n.EnsureLinkTag() {
+		n.RefreshTags()
+	}
 	n.Content = note.ResolveDateTokens(n.Content)
 	n.RefreshDates()
 

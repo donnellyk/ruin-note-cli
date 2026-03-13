@@ -200,6 +200,8 @@ func parseTermMatcher(term string, tagScope TagScope) (QueryMatcher, MatcherInfo
 			return pathMatcher(value), fmOnly, nil
 		case "parent":
 			return parentMatcher(value), fmOnly, nil
+		case "link":
+			return linkMatcher(value), fmOnly, nil
 		case "todo":
 			switch strings.ToLower(value) {
 			case "open":

@@ -136,6 +136,11 @@ func handleEditSingle(vlt *vault.Vault, result SearchResult, force bool, fmMode 
 		result.note.RefreshTags()
 	}
 
+	// Ensure #link tag for URL notes
+	if result.note.EnsureLinkTag() {
+		result.note.RefreshTags()
+	}
+
 	// Resolve date tokens and extract dates
 	result.note.Content = note.ResolveDateTokens(result.note.Content)
 	result.note.RefreshDates()
@@ -359,6 +364,11 @@ func applyBulkChanges(vlt *vault.Vault, original, modified string, results []Sea
 
 		// Refresh tags from content (unless overridden by frontmatter)
 		if !strings.HasPrefix(strings.TrimLeft(modContent, "\n\r"), "---") {
+			result.note.RefreshTags()
+		}
+
+		// Ensure #link tag for URL notes
+		if result.note.EnsureLinkTag() {
 			result.note.RefreshTags()
 		}
 

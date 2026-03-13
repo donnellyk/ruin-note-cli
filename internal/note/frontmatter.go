@@ -24,6 +24,7 @@ type Frontmatter struct {
 	Parent      string   `yaml:"parent,omitempty"`
 	Order       *int     `yaml:"order,omitempty"`
 	LinkedCards []string `yaml:"linked-cards,omitempty"`
+	URL         string   `yaml:"url,omitempty"`
 
 	// Extra holds any additional frontmatter fields not explicitly defined.
 	// This preserves user-added fields.
@@ -126,6 +127,10 @@ func parseFrontmatterYAML(yamlContent string) (*Frontmatter, error) {
 		fm.LinkedCards = toStringSlice(v)
 		delete(raw, "linked-cards")
 	}
+	if v, ok := raw["url"].(string); ok {
+		fm.URL = v
+		delete(raw, "url")
+	}
 
 	// Store remaining fields as extra
 	fm.Extra = raw
@@ -207,6 +212,9 @@ func (fm *Frontmatter) Serialize() (string, error) {
 	if len(fm.LinkedCards) > 0 {
 		data["linked-cards"] = fm.LinkedCards
 	}
+	if fm.URL != "" {
+		data["url"] = fm.URL
+	}
 
 	// Add extra fields
 	for k, v := range fm.Extra {
@@ -238,6 +246,7 @@ func (fm *Frontmatter) IsEmpty() bool {
 		fm.Parent == "" &&
 		fm.Order == nil &&
 		len(fm.LinkedCards) == 0 &&
+		fm.URL == "" &&
 		len(fm.Extra) == 0
 }
 
@@ -277,6 +286,9 @@ func (fm *Frontmatter) Merge(other *Frontmatter) {
 	}
 	if len(other.LinkedCards) > 0 {
 		fm.LinkedCards = other.LinkedCards
+	}
+	if other.URL != "" {
+		fm.URL = other.URL
 	}
 
 	// Merge extra fields

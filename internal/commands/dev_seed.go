@@ -20,11 +20,11 @@ func newSeedCmd(jsonOutput *bool) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "seed [path]",
 		Short: "Create a test vault with sample notes",
-		Long: `Create a test vault with 105 sample notes for development and testing.
+		Long: `Create a test vault with 110 sample notes for development and testing.
 
-Generates 5 hub notes and 100 regular notes (daily logs, code notes,
-meeting notes, ideas, and task lists) with realistic content, tags,
-parent relationships, and wiki links.`,
+Generates 5 hub notes, 100 regular notes (daily logs, code notes,
+meeting notes, ideas, and task lists), and 5 link notes with realistic
+content, tags, parent relationships, and wiki links.`,
 		Example: `  ruin dev seed                          # Create at /tmp/ruin-test-vault
   ruin dev seed ~/my-test-vault          # Create at custom path
   ruin dev seed --clean                  # Remove test vault
@@ -592,6 +592,90 @@ Think about this more. Maybe prototype something. #draft
 		order = nil
 	}
 
+	// --- Create link notes ---
+	fmt.Fprintln(os.Stderr, "  Creating 5 link notes...")
+	linkNotes := []struct {
+		uuid, filename, content string
+		parent                  string
+	}{
+		{
+			uuid:     "test-uuid-link-001",
+			filename: "Link-Go-Blog.md",
+			content: `# Go 1.22 Release Notes
+
+https://go.dev/blog/go1.22
+
+#link #code
+
+Great overview of the new features in Go 1.22.
+`,
+		},
+		{
+			uuid:     "test-uuid-link-002",
+			filename: "Link-Minimal.md",
+			content: `https://example.com/article
+
+#link
+`,
+		},
+		{
+			uuid:     "test-uuid-link-003",
+			filename: "Link-Annotated.md",
+			content: `# Local-First Software
+
+https://www.inkandswitch.com/local-first/
+
+#link #idea #design
+
+This paper changed how I think about data ownership. Key takeaway:
+the best apps keep data on the user's device and sync peer-to-peer.
+`,
+		},
+		{
+			uuid:     "test-uuid-link-004",
+			filename: "Link-With-Comment.md",
+			content: `# CLI Tool Design Patterns
+
+https://jvns.ca/blog/2024/cli-tools/
+
+#link #code #docs
+
+Julia's take on CLI UX is spot-on. We should adopt the "progressive disclosure" pattern for ruin's help text.
+`,
+		},
+		{
+			uuid:     "test-uuid-link-005",
+			filename: "Link-With-Parent.md",
+			content: `# Platform API Reference
+
+https://docs.acme.dev/api/v2
+
+#link #platform
+
+Official API docs for the v2 platform endpoints.
+`,
+			parent: "test-uuid-hub-platform",
+		},
+	}
+
+	for i, ln := range linkNotes {
+		created := baseTime.Add(time.Duration(110+i) * time.Hour)
+		n := &note.Note{
+			UUID:     ln.uuid,
+			Created:  created,
+			Updated:  created,
+			Parent:   ln.parent,
+			FilePath: filepath.Join(path, ln.filename),
+			Content:  ln.content,
+		}
+		n.RefreshTags()
+		n.URL = n.ExtractURL()
+		if err := n.Save(); err != nil {
+			return fmt.Errorf("failed to save link note %s: %w", ln.filename, err)
+		}
+		fmt.Fprintf(os.Stderr, "    %s (%s)\n", ln.filename, n.UUID)
+	}
+
 	// --- Write queries.yml ---
 	fmt.Fprintln(os.Stderr, "  Writing saved queries...")
 	queriesYML := `queries:
@@ -642,13 +726,14 @@ Think about this more. Maybe prototype something. #draft
 	}
 
 	fmt.Fprintln(os.Stderr, "")
-	fmt.Fprintf(os.Stderr, "Done. Created 105 notes (5 hubs + 100 regular) at: %s\n", path)
+	fmt.Fprintf(os.Stderr, "Done. Created 110 notes (5 hubs + 100 regular + 5 link) at: %s\n", path)
 	fmt.Fprintln(os.Stderr, "  - 25 daily logs")
 	fmt.Fprintln(os.Stderr, "  - 25 code notes")
 	fmt.Fprintln(os.Stderr, "  - 20 meeting notes")
 	fmt.Fprintln(os.Stderr, "  - 15 idea notes")
 	fmt.Fprintln(os.Stderr, "  - 15 task lists")
 	fmt.Fprintln(os.Stderr, "  - 5 hub (project) notes")
+	fmt.Fprintln(os.Stderr, "  - 5 link notes")
 	fmt.Fprintln(os.Stderr, "  - 3 notes with orphaned parent references")
 	fmt.Fprintln(os.Stderr, "  - Wiki links ([[Title]]) in code and idea notes")
 	fmt.Fprintln(os.Stderr, "  - 5 saved queries in queries.yml")

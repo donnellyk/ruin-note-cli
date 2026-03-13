@@ -26,6 +26,7 @@ type Note struct {
 	Parent      string   // UUID of parent note
 	Order       *int     // Manual sort order (nil = unset)
 	LinkedCards []string // Resolved UUIDs from [[wiki links]]
+	URL         string   // URL for link notes
 	Title       string   // H1 header text (without #)
 	Content     string   // Full markdown content (without frontmatter)
 	FilePath    string   // Path to the file on disk
@@ -50,6 +51,7 @@ func Parse(content string) (*Note, error) {
 		Parent:        fm.Parent,
 		Order:         fm.Order,
 		LinkedCards:   fm.LinkedCards,
+		URL:           fm.URL,
 		InheritedTags: fm.InheritedTags,
 		Content:       body,
 		Extra:         fm.Extra,
@@ -117,6 +119,7 @@ func (n *Note) Serialize() (string, error) {
 		Parent:        n.Parent,
 		Order:         n.Order,
 		LinkedCards:   n.LinkedCards,
+		URL:           n.URL,
 		Extra:         n.Extra,
 	}
 
