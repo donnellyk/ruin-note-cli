@@ -546,10 +546,17 @@ func newParentListCmd(getVault func() *vault.Vault, jsonOutput *bool) *cobra.Com
 				var entries []listEntry
 				for _, p := range index.Parents {
 					if p.File != "" {
-						entries = append(entries, listEntry{
+						entry := listEntry{
 							Name: p.Name,
 							File: p.File,
-						})
+						}
+						absPath := LoadComposeFilePath(p.File, vlt.Path)
+						if spec, err := ParseComposeFile(absPath); err == nil {
+							if rootNote, err := ResolveNote(vlt, spec.Root); err == nil {
+								entry.Title = rootNote.Title
+							}
+						}
+						entries = append(entries, entry)
 					} else {
 						title := ""
 						if titles != nil {
@@ -576,7 +583,14 @@ func newParentListCmd(getVault func() *vault.Vault, jsonOutput *bool) *cobra.Com
 
 			for _, p := range index.Parents {
 				if p.File != "" {
-					fmt.Printf("%s: %s (file)\n", p.Name, p.File)
+					label := p.File
+					absPath := LoadComposeFilePath(p.File, vlt.Path)
+					if spec, err := ParseComposeFile(absPath); err == nil {
+						if rootNote, err := ResolveNote(vlt, spec.Root); err == nil {
+							label = rootNote.Title
+						}
+					}
+					fmt.Printf("%s: %s (file)\n", p.Name, label)
 				} else {
 					title := p.UUID
 					if titles != nil {
