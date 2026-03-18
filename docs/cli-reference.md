@@ -101,6 +101,7 @@ Date tokens in queries are resolved dynamically. In note content, they are resol
 - `title:TEXT`, `path:TEXT`
 - `parent:UUID` — notes with specific parent
 - `parent:none` — notes with no parent
+- `link:TEXT` — notes with URL containing text
 - `todo:open` — notes with unchecked checkboxes (`- [ ]`)
 - `todo:done` — notes with checked checkboxes (`- [x]`)
 - `todo:any` — notes with any checkboxes
@@ -120,6 +121,8 @@ Date tokens in queries are resolved dynamically. In note content, they are resol
 | `--everything` | | Return all notes (no query required) |
 | `--global-tags` | | Only match global tags (categorization) |
 | `--inline-tags` | | Only match inline tags (contextual annotations) |
+| `--link` | | Only match link notes (notes with a URL) |
+| `--notes` | | Constrain to specific note UUIDs (comma-separated) |
 
 By default, tag searches check both global and inline tags. Use `--global-tags` or `--inline-tags` to restrict scope (mutually exclusive).
 

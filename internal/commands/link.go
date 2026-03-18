@@ -209,7 +209,7 @@ func newLinkListCmd(getVault func() *vault.Vault, jsonOutput *bool) *cobra.Comma
 	cmd := &cobra.Command{
 		Use:   "list",
 		Short: "List link notes",
-		Long:  "List all notes tagged with #link. Shortcut for: ruin search \"#link\"",
+		Long:  "List all link notes (notes with a URL). Equivalent to: ruin search --link",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			vlt := getVault()
 			if vlt == nil {
@@ -220,30 +220,7 @@ func newLinkListCmd(getVault func() *vault.Vault, jsonOutput *bool) *cobra.Comma
 				return err
 			}
 
-			matcher := tagMatcher("#link", TagScopeAll)
-			info := MatcherInfo{NeedsBody: false}
-
-			var sortFields []SortField
-			if flags.Sort != "" {
-				var err error
-				sortFields, err = parseSort(flags.Sort)
-				if err != nil {
-					return fmt.Errorf("invalid sort: %w", err)
-				}
-			}
-
-			var opts SearchOptions
-			if flags.Limit > 0 && len(sortFields) == 0 {
-				opts.Limit = flags.Limit
-			}
-			opts.NeedFullNote = flags.Bulk || flags.First || flags.Edit || flags.Content || flags.Frontmatter != ""
-
-			results, err := searchNotesWithOptions(vlt, matcher, info, opts)
-			if err != nil {
-				return fmt.Errorf("search failed: %w", err)
-			}
-
-			return dispatchSearchResults(vlt, results, &flags, *jsonOutput, sortFields)
+			return executeSearch(vlt, linkNoteMatcher(), MatcherInfo{NeedsBody: true}, &flags, *jsonOutput, nil)
 		},
 	}
 

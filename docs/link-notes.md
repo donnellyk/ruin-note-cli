@@ -71,7 +71,7 @@ ruin link resolve https://example.com --json
 
 ### `ruin link list`
 
-List all link notes. Convenience alias for `ruin search "#link"`.
+List all link notes (notes with a URL). Equivalent to `ruin search --link`.
 
 Supports all standard search flags (`--sort`, `--limit`, `--edit`, `--bulk`, `--first`, `--json`, etc.). Default sort: `created:desc`.
 

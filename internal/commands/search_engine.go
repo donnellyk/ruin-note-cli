@@ -20,6 +20,9 @@ type SearchOptions struct {
 	// When false and MatcherInfo.NeedsBody is false, the fast path skips
 	// full file reads for non-matching notes and defers full load for matches.
 	NeedFullNote bool
+	// UUIDs constrains the search to only these note UUIDs (empty = no constraint).
+	// Resolved to file paths via titles index before searching.
+	UUIDs []string
 }
 
 // searchNotes finds all notes matching the query.
@@ -35,6 +38,27 @@ func searchNotesWithOptions(vlt *vault.Vault, matcher QueryMatcher, info Matcher
 	notePaths, err := vlt.ListNotes()
 	if err != nil {
 		return nil, err
+	}
+
+	// Pre-filter by UUID set if specified
+	if len(opts.UUIDs) > 0 {
+		titles, err := vlt.LoadTitles()
+		if err != nil {
+			return nil, fmt.Errorf("failed to load titles for UUID filter: %w", err)
+		}
+		allowedPaths := make(map[string]bool, len(opts.UUIDs))
+		for _, uuid := range opts.UUIDs {
+			if entry, ok := titles.Titles[uuid]; ok {
+				allowedPaths[entry.Path] = true
+			}
+		}
+		filtered := notePaths[:0]
+		for _, p := range notePaths {
+			if allowedPaths[p] {
+				filtered = append(filtered, p)
+			}
+		}
+		notePaths = filtered
 	}
 
 	numWorkers := runtime.NumCPU()

@@ -101,6 +101,13 @@ func parentMatcher(value string) QueryMatcher {
 	}
 }
 
+// linkNoteMatcher returns a matcher that checks if a note is a link note (has a URL).
+func linkNoteMatcher() QueryMatcher {
+	return func(n *note.Note) bool {
+		return n.IsURLNote()
+	}
+}
+
 // linkMatcher returns a matcher that checks if a note's URL field contains the given text.
 func linkMatcher(text string) QueryMatcher {
 	textLower := strings.ToLower(text)

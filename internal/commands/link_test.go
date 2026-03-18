@@ -307,3 +307,96 @@ func TestLinkList(t *testing.T) {
 		t.Errorf("link list output should contain .md file paths, got: %s", output)
 	}
 }
+
+func TestLinkList_FindsByURL(t *testing.T) {
+	tmpDir := t.TempDir()
+	vlt := vault.New(tmpDir)
+	if _, err := vlt.Initialize(false); err != nil {
+		t.Fatalf("failed to initialize vault: %v", err)
+	}
+
+	// Note with URL in frontmatter but NO #link tag
+	urlNoTag := `---
+uuid: uuid-url-notag
+created: "2025-01-01T10:00:00-05:00"
+updated: "2025-01-01T10:00:00-05:00"
+url: "https://example.com/article"
+tags:
+  - "#reading"
+---
+# Example Article
+#reading
+
+https://example.com/article
+`
+	// Note with #link tag but NO url
+	tagNoURL := `---
+uuid: uuid-tag-nourl
+created: "2025-01-02T10:00:00-05:00"
+updated: "2025-01-02T10:00:00-05:00"
+tags:
+  - "#link"
+---
+# Miscategorized
+#link
+
+Not actually a link note.
+`
+	// Plain note — neither URL nor #link
+	plain := `---
+uuid: uuid-plain
+created: "2025-01-03T10:00:00-05:00"
+updated: "2025-01-03T10:00:00-05:00"
+tags:
+  - "#daily"
+---
+# Daily
+#daily
+
+Just a note.
+`
+
+	for name, content := range map[string]string{
+		"url-notag.md": urlNoTag,
+		"tag-nourl.md": tagNoURL,
+		"plain.md":     plain,
+	} {
+		if err := os.WriteFile(filepath.Join(tmpDir, name), []byte(content), 0644); err != nil {
+			t.Fatalf("failed to write %s: %v", name, err)
+		}
+	}
+
+	jsonOut := true
+	cmd := NewLinkCmd(func() *vault.Vault { return vlt }, &jsonOut)
+
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	cmd.SetArgs([]string{"list"})
+	err := cmd.Execute()
+
+	w.Close()
+	os.Stdout = oldStdout
+
+	if err != nil {
+		t.Fatalf("link list failed: %v", err)
+	}
+
+	var buf [8192]byte
+	n, _ := r.Read(buf[:])
+	output := string(buf[:n])
+
+	// Should find the note with a URL but no #link tag
+	if !strings.Contains(output, "uuid-url-notag") {
+		t.Errorf("expected to find note with URL (no #link tag), got: %s", output)
+	}
+	// Should NOT find the note with #link tag but no URL
+	if strings.Contains(output, "uuid-tag-nourl") {
+		t.Errorf("should not find note with #link tag but no URL, got: %s", output)
+	}
+	// Should NOT find the plain note
+	if strings.Contains(output, "uuid-plain") {
+		t.Errorf("should not find plain note, got: %s", output)
+	}
+}

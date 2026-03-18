@@ -352,79 +352,13 @@ See also:
 				return err
 			}
 
-			// Parse frontmatter mode
-			fmMode := FrontmatterMode(flags.Frontmatter)
-			if flags.Frontmatter != "" && flags.Frontmatter != "none" && flags.Frontmatter != "extra" && flags.Frontmatter != "full" {
-				return fmt.Errorf("invalid frontmatter mode: %s (use: none, extra, full)", flags.Frontmatter)
-			}
-
 			// Parse query
 			matcher, info, err := parseQuery(query, TagScopeAll)
 			if err != nil {
 				return fmt.Errorf("invalid query: %w", err)
 			}
 
-			// Parse sort fields
-			var sortFields []SortField
-			if flags.Sort != "" {
-				sortFields, err = parseSort(flags.Sort)
-				if err != nil {
-					return fmt.Errorf("invalid sort: %w", err)
-				}
-			}
-
-			// Find matching notes
-			var opts SearchOptions
-			if flags.Limit > 0 && len(sortFields) == 0 {
-				opts.Limit = flags.Limit
-			}
-			opts.NeedFullNote = flags.Bulk || flags.First || flags.Edit || flags.Content || flags.Frontmatter != ""
-			results, err := searchNotesWithOptions(vlt, matcher, info, opts)
-			if err != nil {
-				return fmt.Errorf("search failed: %w", err)
-			}
-
-			// Sort results
-			if len(sortFields) > 0 {
-				sortResults(results, sortFields)
-			}
-
-			// Apply limit
-			if flags.Limit > 0 && len(results) > flags.Limit {
-				results = results[:flags.Limit]
-			}
-
-			// No results
-			if len(results) == 0 {
-				if *jsonOutput {
-					fmt.Println("[]")
-				}
-				return nil
-			}
-
-			// Output based on mode
-			if flags.Edit {
-				// --first limits edit to first match only
-				if flags.First && len(results) > 1 {
-					results = results[:1]
-				}
-				return handleEdit(vlt, results, flags.Force, fmMode)
-			}
-
-			if flags.Bulk {
-				return outputBulk(results, fmMode)
-			}
-
-			if flags.First {
-				return outputFirst(results, fmMode)
-			}
-
-			if *jsonOutput {
-				return outputJSON(results, fmMode, flags.Content, flags.StripGlobalTags, flags.StripTitle)
-			}
-
-			// Default: list of paths (with optional frontmatter)
-			return outputPaths(results, fmMode)
+			return executeSearch(vlt, matcher, info, &flags, *jsonOutput, nil)
 		},
 	}
 
