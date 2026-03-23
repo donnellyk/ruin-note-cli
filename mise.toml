@@ -1,0 +1,169 @@
+[tools]
+go = "1.21"
+
+[vars]
+binary_name = "ruin"
+build_dir = "./build"
+cmd_path = "./cmd/ruin"
+bench_dir = "./benchmarks"
+bench_time = "3s"
+
+# Build
+[tasks.build]
+description = "Build the binary"
+run = """
+VERSION=$(git describe --tags --always --dirty 2>/dev/null || echo "dev")
+go build -ldflags "-X main.version=$VERSION" -o {{vars.binary_name}} {{vars.cmd_path}}
+"""
+
+[tasks."build-race"]
+description = "Build with race detector"
+run = """
+VERSION=$(git describe --tags --always --dirty 2>/dev/null || echo "dev")
+go build -ldflags "-X main.version=$VERSION" -race -o {{vars.binary_name}} {{vars.cmd_path}}
+"""
+
+[tasks."build-all"]
+description = "Build for all platforms (darwin, linux, windows)"
+depends = ["clean"]
+run = """
+mkdir -p {{vars.build_dir}}
+VERSION=$(git describe --tags --always --dirty 2>/dev/null || echo "dev")
+LDFLAGS="-X main.version=$VERSION"
+GOOS=darwin GOARCH=amd64 go build -ldflags "$LDFLAGS" -o {{vars.build_dir}}/{{vars.binary_name}}-darwin-amd64 {{vars.cmd_path}}
+GOOS=darwin GOARCH=arm64 go build -ldflags "$LDFLAGS" -o {{vars.build_dir}}/{{vars.binary_name}}-darwin-arm64 {{vars.cmd_path}}
+GOOS=linux GOARCH=amd64 go build -ldflags "$LDFLAGS" -o {{vars.build_dir}}/{{vars.binary_name}}-linux-amd64 {{vars.cmd_path}}
+GOOS=linux GOARCH=arm64 go build -ldflags "$LDFLAGS" -o {{vars.build_dir}}/{{vars.binary_name}}-linux-arm64 {{vars.cmd_path}}
+GOOS=windows GOARCH=amd64 go build -ldflags "$LDFLAGS" -o {{vars.build_dir}}/{{vars.binary_name}}-windows-amd64.exe {{vars.cmd_path}}
+"""
+
+[tasks.install]
+description = "Install to $GOPATH/bin"
+run = """
+VERSION=$(git describe --tags --always --dirty 2>/dev/null || echo "dev")
+go install -ldflags "-X main.version=$VERSION" {{vars.cmd_path}}
+"""
+
+# Test
+# EDITOR=true prevents tests from opening the user's editor (e.g. --edit flag tests)
+[tasks.test]
+description = "Run all tests"
+env = { EDITOR = "true" }
+run = "go test ./..."
+
+[tasks."test-v"]
+description = "Run tests with verbose output"
+env = { EDITOR = "true" }
+run = "go test -v ./..."
+
+[tasks."test-coverage"]
+description = "Run tests with coverage report"
+env = { EDITOR = "true" }
+run = """
+go test -coverprofile=coverage.out ./...
+go tool cover -html=coverage.out -o coverage.html
+echo "Coverage report: coverage.html"
+"""
+
+[tasks."test-race"]
+description = "Run tests with race detector"
+env = { EDITOR = "true" }
+run = "go test -race ./..."
+
+# Quality
+[tasks.fmt]
+description = "Format code"
+run = "go fmt ./..."
+
+[tasks."fmt-check"]
+description = "Check if code is formatted"
+run = 'test -z "$(gofmt -l .)" || (echo "Files need formatting:"; gofmt -l .; exit 1)'
+
+[tasks.vet]
+description = "Run go vet"
+run = "go vet ./..."
+
+[tasks.lint]
+description = "Run golangci-lint"
+run = "golangci-lint run"
+
+[tasks.check]
+description = "Run fmt-check, vet, and test"
+depends = ["fmt-check", "vet", "test"]
+
+# Benchmarking
+[tasks.bench]
+description = "Run all benchmarks"
+run = "go test -run=^$ -bench=. -benchtime={{vars.bench_time}} -benchmem ./internal/commands/..."
+
+[tasks."bench-realistic"]
+description = "Run realistic vault benchmarks"
+run = "go test -run=^$ -bench=Realistic -benchtime={{vars.bench_time}} -benchmem ./internal/commands/..."
+
+[tasks."bench-save"]
+description = "Run benchmarks and save with timestamp"
+run = """
+mkdir -p {{vars.bench_dir}}
+FILENAME={{vars.bench_dir}}/$(date +%Y-%m-%d-%H%M%S).txt
+go test -run=^$ -bench=. -benchtime={{vars.bench_time}} -benchmem ./internal/commands/... > "$FILENAME"
+echo "Saved to $FILENAME"
+"""
+
+[tasks."bench-baseline"]
+description = "Save current results as baseline"
+run = """
+mkdir -p {{vars.bench_dir}}
+go test -run=^$ -bench=. -benchtime={{vars.bench_time}} -benchmem ./internal/commands/... > {{vars.bench_dir}}/baseline.txt
+echo "Baseline saved to {{vars.bench_dir}}/baseline.txt"
+"""
+
+[tasks."bench-compare"]
+description = "Compare current to baseline (requires benchstat)"
+run = """
+if [ ! -f {{vars.bench_dir}}/baseline.txt ]; then echo "No baseline. Run 'mise run bench-baseline' first."; exit 1; fi
+go test -run=^$ -bench=. -benchtime={{vars.bench_time}} -benchmem ./internal/commands/... > {{vars.bench_dir}}/current.txt
+echo "Comparing baseline vs current:"
+benchstat {{vars.bench_dir}}/baseline.txt {{vars.bench_dir}}/current.txt || echo "Install benchstat: go install golang.org/x/perf/cmd/benchstat@latest"
+"""
+
+[tasks."bench-vault-small"]
+description = "Create small benchmark vault"
+run = "./scripts/create-benchmark-vault.sh small /tmp/ruin-bench-small"
+
+[tasks."bench-vault-medium"]
+description = "Create medium benchmark vault"
+run = "./scripts/create-benchmark-vault.sh medium /tmp/ruin-bench-medium"
+
+[tasks."bench-vault-large"]
+description = "Create large benchmark vault"
+run = "./scripts/create-benchmark-vault.sh large /tmp/ruin-bench-large"
+
+[tasks."bench-vault"]
+description = "Run search on benchmark vault"
+depends = ["build"]
+run = """
+if [ ! -d /tmp/ruin-bench-medium ]; then mise run bench-vault-medium; fi
+echo "Benchmarking against /tmp/ruin-bench-medium..."
+time ./{{vars.binary_name}} --vault /tmp/ruin-bench-medium search "#daily" > /dev/null
+time ./{{vars.binary_name}} --vault /tmp/ruin-bench-medium search "lorem" > /dev/null
+"""
+
+# Test Vault
+[tasks."test-vault"]
+description = "Create/reset test vault at /tmp/ruin-test-vault"
+depends = ["build"]
+run = "./{{vars.binary_name}} dev seed --reset"
+
+[tasks."test-vault-clean"]
+description = "Remove test vault"
+depends = ["build"]
+run = "./{{vars.binary_name}} dev seed --clean"
+
+# Clean
+[tasks.clean]
+description = "Remove build artifacts"
+run = """
+rm -f {{vars.binary_name}}
+rm -f coverage.out coverage.html
+rm -rf {{vars.build_dir}}
+"""

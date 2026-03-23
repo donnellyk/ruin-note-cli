@@ -5,7 +5,7 @@ A Zettelkasten-inspired note-taking CLI written in Go.
 ## Important
 - This is a CLI with downstream dependencies. Avoid breaking changes unless necessary. Highlight breaking changes.
 - Do not edit `Todos` section in "IMPLEMENTATION_PLAN.md`
-- When running `go test` directly, always set `EDITOR=true` to prevent editor popups (or use `make test` which does this automatically).
+- When running `go test` directly, always set `EDITOR=true` to prevent editor popups (or use `mise run test` which sets it automatically).
 - When running the `ruin` binary for manual testing, always use `--vault /tmp/ruin-test-vault` (create it first with `ruin dev seed` if needed). Never run against the user's real vault.
 - Never modify `~/.config/ruin`. Use `--vault`. Do not run `config vault_path ~/path`. Stop before changing vault path.
 
@@ -17,24 +17,24 @@ A Zettelkasten-inspired note-taking CLI written in Go.
 
 ### Build & Run
 ```bash
-make build    # or: go build -o ruin ./cmd/ruin
+mise run build    # or: go build -o ruin ./cmd/ruin
 ./ruin --help
 ```
 
 ### Run Tests
 ```bash
-make test                    # Preferred: sets EDITOR=true to prevent editor popups
+mise run test                # Preferred: sets EDITOR=true via mise.toml [env]
 EDITOR=true go test ./...    # If running go test directly
 ```
 
 ### Install Locally
 ```bash
-make install  # or: go install ./cmd/ruin
+mise run install  # or: go install ./cmd/ruin
 ```
 
-### All Make Targets
+### All Tasks
 ```bash
-make help     # Show all available targets
+mise tasks     # Show all available tasks
 ```
 
 ## Project Structure
@@ -78,7 +78,7 @@ ruin-note-cli/
 │   └── create-benchmark-vault.sh  # Benchmark vault generator
 ├── go.mod
 ├── go.sum
-├── Makefile
+├── mise.toml
 ├── CLAUDE.md
 └── IMPLEMENTATION_PLAN.md
 ```
@@ -134,7 +134,7 @@ go fmt ./...
 ```
 
 ### Test Vault
-Use the `dev seed` command to create a test vault for manual testing (build first with `make build`):
+Use the `dev seed` command to create a test vault for manual testing (build first with `mise run build`):
 ```bash
 ./ruin dev seed                          # Create at /tmp/ruin-test-vault
 ./ruin dev seed ~/my-vault               # Create at custom path
