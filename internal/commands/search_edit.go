@@ -2,6 +2,7 @@ package commands
 
 import (
 	"fmt"
+	"maps"
 	"os"
 	"os/exec"
 	"strings"
@@ -119,11 +120,9 @@ func handleEditSingle(vlt *vault.Vault, result SearchResult, force bool, fmMode 
 
 		if len(fm.Extra) > 0 {
 			if result.note.Extra == nil {
-				result.note.Extra = make(map[string]interface{})
+				result.note.Extra = make(map[string]any)
 			}
-			for k, v := range fm.Extra {
-				result.note.Extra[k] = v
-			}
+			maps.Copy(result.note.Extra, fm.Extra)
 		}
 
 		if len(fm.Tags) > 0 {
@@ -343,11 +342,9 @@ func applyBulkChanges(vlt *vault.Vault, original, modified string, results []Sea
 			// Extra fields can be modified
 			if len(fm.Extra) > 0 {
 				if result.note.Extra == nil {
-					result.note.Extra = make(map[string]interface{})
+					result.note.Extra = make(map[string]any)
 				}
-				for k, v := range fm.Extra {
-					result.note.Extra[k] = v
-				}
+				maps.Copy(result.note.Extra, fm.Extra)
 			}
 
 			// Tags from frontmatter override extracted tags if explicitly set

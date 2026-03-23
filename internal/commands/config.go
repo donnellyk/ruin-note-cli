@@ -128,11 +128,10 @@ func setConfigValue(cfg *config.Config, key, value string) error {
 
 // ListConfigKeys returns all available config keys (for shell completion).
 func ListConfigKeys() []string {
-	cfg := &config.Config{}
-	t := reflect.TypeOf(*cfg)
+	t := reflect.TypeFor[config.Config]()
 	keys := make([]string, 0, t.NumField())
-	for i := 0; i < t.NumField(); i++ {
-		tag := t.Field(i).Tag.Get("yaml")
+	for field := range t.Fields() {
+		tag := field.Tag.Get("yaml")
 		if tag != "" && tag != "-" {
 			keys = append(keys, tag)
 		}

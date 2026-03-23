@@ -32,7 +32,7 @@ type Note struct {
 	FilePath      string   // Path to the file on disk
 
 	// Extra preserves additional frontmatter fields added by the user.
-	Extra map[string]interface{}
+	Extra map[string]any
 }
 
 // headerPattern matches any markdown header (H1 through H6).

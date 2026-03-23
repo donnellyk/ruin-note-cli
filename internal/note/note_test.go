@@ -107,7 +107,7 @@ func TestNote_RoundTrip(t *testing.T) {
 		Tags:       []string{"#test"},
 		InlineTags: []string{},
 		Content:    "# Test Note\n#test\n\nContent here.",
-		Extra:      map[string]interface{}{"custom": "field"},
+		Extra:      map[string]any{"custom": "field"},
 	}
 
 	// Serialize

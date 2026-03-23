@@ -99,9 +99,10 @@ func newLinkNewCmd(getVault func() *vault.Vault, jsonOutput *bool) *cobra.Comman
 			}
 
 			// Build tag line
-			tagLine := "#link"
+			var tagLine strings.Builder
+			tagLine.WriteString("#link")
 			if tags != "" {
-				for _, t := range strings.Split(tags, ",") {
+				for t := range strings.SplitSeq(tags, ",") {
 					t = strings.TrimSpace(t)
 					if t == "" {
 						continue
@@ -109,10 +110,10 @@ func newLinkNewCmd(getVault func() *vault.Vault, jsonOutput *bool) *cobra.Comman
 					if !strings.HasPrefix(t, "#") {
 						t = "#" + t
 					}
-					tagLine += " " + t
+					tagLine.WriteString(" " + t)
 				}
 			}
-			content.WriteString("\n" + tagLine + "\n")
+			content.WriteString("\n" + tagLine.String() + "\n")
 
 			n, err := note.Parse(content.String())
 			if err != nil {

@@ -3,6 +3,7 @@ package commands
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
 	"os"
 	"regexp"
 	"sort"
@@ -22,7 +23,7 @@ func isListOnlyContent(content string) bool {
 	if strings.TrimSpace(content) == "" {
 		return false
 	}
-	for _, line := range strings.Split(content, "\n") {
+	for line := range strings.SplitSeq(content, "\n") {
 		if strings.TrimSpace(line) == "" {
 			continue
 		}
@@ -129,9 +130,7 @@ Children are sorted by title by default.`,
 				rootUUID = result.RootUUID
 				ymlParents = result.YMLParents
 				// Merge: YML children override frontmatter children for YML parents
-				for parent, children := range result.ChildrenMap {
-					childrenMap[parent] = children
-				}
+				maps.Copy(childrenMap, result.ChildrenMap)
 				// For nodes without YML children, frontmatter children are already in childrenMap
 			} else {
 				root, err := ResolveNote(vlt, args[0])
@@ -436,10 +435,7 @@ func adjustHeadings(content string, depth int) string {
 			}
 		}
 
-		newLevel := hashes + depth
-		if newLevel > 6 {
-			newLevel = 6
-		}
+		newLevel := min(hashes+depth, 6)
 
 		return strings.Repeat("#", newLevel) + match[hashes:]
 	})
@@ -487,13 +483,7 @@ func normalizeHeadings(content string, depth int) string {
 			}
 		}
 
-		newLevel := hashes + delta
-		if newLevel < 1 {
-			newLevel = 1
-		}
-		if newLevel > 6 {
-			newLevel = 6
-		}
+		newLevel := min(max(hashes+delta, 1), 6)
 
 		return strings.Repeat("#", newLevel) + match[hashes:]
 	})

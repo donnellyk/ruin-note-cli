@@ -3,6 +3,7 @@ package note
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -395,7 +396,7 @@ func TestLoadFrontmatterOnly_FallbackOnLargeFrontmatter(t *testing.T) {
 	// Create a file with frontmatter > 4KB to trigger fallback
 	var content string
 	content = "---\nuuid: large-fm\ntags:\n"
-	for i := 0; i < 300; i++ {
+	for i := range 300 {
 		content += "  - \"#tag-with-a-longer-name-" + string(rune('a'+i%26)) + "\"\n"
 	}
 	content += "---\n# Title\n\nBody.\n"
@@ -627,9 +628,9 @@ func BenchmarkLoadFrontmatterOnly_LargeFile(b *testing.B) {
 	tmpDir := b.TempDir()
 
 	// 5KB body
-	body := ""
-	for i := 0; i < 80; i++ {
-		body += "Lorem ipsum dolor sit amet, consectetur adipiscing elit. "
+	var body strings.Builder
+	for range 80 {
+		body.WriteString("Lorem ipsum dolor sit amet, consectetur adipiscing elit. ")
 	}
 
 	content := `---
@@ -645,7 +646,7 @@ parent: parent-uuid
 ---
 # Large Note
 
-` + body + "\n"
+` + body.String() + "\n"
 
 	path := filepath.Join(tmpDir, "large.md")
 	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
@@ -664,9 +665,9 @@ parent: parent-uuid
 func BenchmarkLoadFull_LargeFile(b *testing.B) {
 	tmpDir := b.TempDir()
 
-	body := ""
-	for i := 0; i < 80; i++ {
-		body += "Lorem ipsum dolor sit amet, consectetur adipiscing elit. "
+	var body strings.Builder
+	for range 80 {
+		body.WriteString("Lorem ipsum dolor sit amet, consectetur adipiscing elit. ")
 	}
 
 	content := `---
@@ -682,7 +683,7 @@ parent: parent-uuid
 ---
 # Large Note
 
-` + body + "\n"
+` + body.String() + "\n"
 
 	path := filepath.Join(tmpDir, "large.md")
 	if err := os.WriteFile(path, []byte(content), 0644); err != nil {

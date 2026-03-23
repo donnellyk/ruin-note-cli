@@ -648,7 +648,7 @@ Child body`,
 		t.Fatalf("json.Marshal failed: %v", err)
 	}
 
-	var raw map[string]interface{}
+	var raw map[string]any
 	if err := json.Unmarshal(data, &raw); err != nil {
 		t.Fatalf("json.Unmarshal failed: %v", err)
 	}
@@ -663,7 +663,7 @@ Child body`,
 	if !ok {
 		t.Fatal("source_map missing from JSON output")
 	}
-	smArr, ok := sm.([]interface{})
+	smArr, ok := sm.([]any)
 	if !ok {
 		t.Fatal("source_map is not an array")
 	}
@@ -719,7 +719,7 @@ Child body`,
 		t.Fatalf("json.Marshal failed: %v", err)
 	}
 
-	var raw map[string]interface{}
+	var raw map[string]any
 	if err := json.Unmarshal(data, &raw); err != nil {
 		t.Fatalf("json.Unmarshal failed: %v", err)
 	}
@@ -732,11 +732,11 @@ Child body`,
 	}
 
 	// Children should also have content
-	children, ok := raw["children"].([]interface{})
+	children, ok := raw["children"].([]any)
 	if !ok || len(children) == 0 {
 		t.Fatal("children missing or empty")
 	}
-	child := children[0].(map[string]interface{})
+	child := children[0].(map[string]any)
 	if _, ok := child["content"]; !ok {
 		t.Error("child content missing when --content is used")
 	}

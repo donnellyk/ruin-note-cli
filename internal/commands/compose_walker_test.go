@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"maps"
 	"strings"
 	"testing"
 )
@@ -396,9 +397,7 @@ func TestWalkerYMLComposition(t *testing.T) {
 	}
 
 	childrenMap := index.ChildrenMap()
-	for parent, children := range result.ChildrenMap {
-		childrenMap[parent] = children
-	}
+	maps.Copy(childrenMap, result.ChildrenMap)
 
 	walker := newComposeWalker(vlt, index, childrenMap, 0, false, false, true)
 	tree := walker.Walk(result.RootUUID, 0)
@@ -446,9 +445,7 @@ func TestWalkerYMLComposition_HybridFallback(t *testing.T) {
 	}
 
 	childrenMap := index.ChildrenMap()
-	for parent, children := range result.ChildrenMap {
-		childrenMap[parent] = children
-	}
+	maps.Copy(childrenMap, result.ChildrenMap)
 
 	walker := newComposeWalker(vlt, index, childrenMap, 0, false, false, true)
 	tree := walker.Walk(result.RootUUID, 0)

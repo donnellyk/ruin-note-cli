@@ -118,7 +118,7 @@ func TestFrontmatter_Serialize(t *testing.T) {
 		Created:    "2025-01-28T10:00:00-05:00",
 		Tags:       []string{"#ruin", "#log"},
 		InlineTags: []string{"#followup"},
-		Extra:      map[string]interface{}{"custom": "value"},
+		Extra:      map[string]any{"custom": "value"},
 	}
 
 	result, err := fm.Serialize()
@@ -179,7 +179,7 @@ func TestFrontmatter_IsEmpty(t *testing.T) {
 		},
 		{
 			name: "has extra",
-			fm:   &Frontmatter{Extra: map[string]interface{}{"key": "val"}},
+			fm:   &Frontmatter{Extra: map[string]any{"key": "val"}},
 			want: false,
 		},
 	}
@@ -258,13 +258,13 @@ func TestFrontmatter_Merge(t *testing.T) {
 	fm1 := &Frontmatter{
 		UUID:    "original",
 		Created: "2025-01-01",
-		Extra:   map[string]interface{}{"key1": "val1"},
+		Extra:   map[string]any{"key1": "val1"},
 	}
 
 	fm2 := &Frontmatter{
 		UUID:    "new",
 		Updated: "2025-01-02",
-		Extra:   map[string]interface{}{"key2": "val2"},
+		Extra:   map[string]any{"key2": "val2"},
 	}
 
 	fm1.Merge(fm2)
@@ -293,7 +293,7 @@ func TestFrontmatter_Merge(t *testing.T) {
 func TestFrontmatter_MergeParent(t *testing.T) {
 	fm1 := &Frontmatter{
 		UUID:  "child",
-		Extra: map[string]interface{}{},
+		Extra: map[string]any{},
 	}
 
 	fm2 := &Frontmatter{
@@ -434,7 +434,7 @@ func TestFrontmatter_IsEmpty_WithInheritedTags(t *testing.T) {
 func TestFrontmatter_MergeInheritedTags(t *testing.T) {
 	fm1 := &Frontmatter{
 		UUID:  "child",
-		Extra: map[string]interface{}{},
+		Extra: map[string]any{},
 	}
 	fm2 := &Frontmatter{
 		InheritedTags: []string{"#parent-tag"},

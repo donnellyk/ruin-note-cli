@@ -160,16 +160,16 @@ Returns an error if no match is found.`,
 // outputSingleJSON outputs a single result as JSON.
 func outputSingleJSON(r SearchResult, fmMode FrontmatterMode, includeContent, stripGlobalTags, stripTitle bool) error {
 	type jsonResult struct {
-		Path          string                 `json:"path"`
-		UUID          string                 `json:"uuid"`
-		Title         string                 `json:"title,omitempty"`
-		Tags          []string               `json:"tags,omitempty"`
-		InheritedTags []string               `json:"inherited_tags,omitempty"`
-		Parent        string                 `json:"parent,omitempty"`
-		Created       string                 `json:"created,omitempty"`
-		Updated       string                 `json:"updated,omitempty"`
-		Extra         map[string]interface{} `json:"extra,omitempty"`
-		Content       string                 `json:"content,omitempty"`
+		Path          string         `json:"path"`
+		UUID          string         `json:"uuid"`
+		Title         string         `json:"title,omitempty"`
+		Tags          []string       `json:"tags,omitempty"`
+		InheritedTags []string       `json:"inherited_tags,omitempty"`
+		Parent        string         `json:"parent,omitempty"`
+		Created       string         `json:"created,omitempty"`
+		Updated       string         `json:"updated,omitempty"`
+		Extra         map[string]any `json:"extra,omitempty"`
+		Content       string         `json:"content,omitempty"`
 	}
 
 	jr := jsonResult{

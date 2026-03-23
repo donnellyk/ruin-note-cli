@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"maps"
 	"strings"
 	"time"
 
@@ -28,7 +29,7 @@ type Frontmatter struct {
 
 	// Extra holds any additional frontmatter fields not explicitly defined.
 	// This preserves user-added fields.
-	Extra map[string]interface{} `yaml:"-"`
+	Extra map[string]any `yaml:"-"`
 }
 
 // ParseFrontmatter extracts frontmatter from markdown content.
@@ -39,22 +40,22 @@ func ParseFrontmatter(content string) (*Frontmatter, string, error) {
 
 	// Check if content starts with frontmatter delimiter
 	if !strings.HasPrefix(content, frontmatterDelimiter) {
-		return &Frontmatter{Extra: make(map[string]interface{})}, content, nil
+		return &Frontmatter{Extra: make(map[string]any)}, content, nil
 	}
 
 	// Find the closing delimiter
 	rest := content[len(frontmatterDelimiter):]
-	closingIdx := strings.Index(rest, "\n"+frontmatterDelimiter)
-	if closingIdx == -1 {
+	before, after, ok := strings.Cut(rest, "\n"+frontmatterDelimiter)
+	if !ok {
 		// No closing delimiter, treat as no frontmatter
-		return &Frontmatter{Extra: make(map[string]interface{})}, content, nil
+		return &Frontmatter{Extra: make(map[string]any)}, content, nil
 	}
 
 	// Extract frontmatter YAML
-	fmYAML := rest[:closingIdx]
+	fmYAML := before
 
 	// Find where content starts after closing delimiter
-	afterClosing := rest[closingIdx+len("\n"+frontmatterDelimiter):]
+	afterClosing := after
 	// Skip the newline after closing delimiter if present
 	if strings.HasPrefix(afterClosing, "\n") {
 		afterClosing = afterClosing[1:]
@@ -72,10 +73,10 @@ func ParseFrontmatter(content string) (*Frontmatter, string, error) {
 }
 
 func parseFrontmatterYAML(yamlContent string) (*Frontmatter, error) {
-	fm := &Frontmatter{Extra: make(map[string]interface{})}
+	fm := &Frontmatter{Extra: make(map[string]any)}
 
 	// First, unmarshal into a generic map to capture all fields
-	var raw map[string]interface{}
+	var raw map[string]any
 	if err := yaml.Unmarshal([]byte(yamlContent), &raw); err != nil {
 		return nil, err
 	}
@@ -139,7 +140,7 @@ func parseFrontmatterYAML(yamlContent string) (*Frontmatter, error) {
 }
 
 // valueToString converts various types to string (handles time.Time from YAML)
-func valueToString(v interface{}) string {
+func valueToString(v any) string {
 	switch val := v.(type) {
 	case string:
 		return val
@@ -150,13 +151,13 @@ func valueToString(v interface{}) string {
 	}
 }
 
-func toStringSlice(v interface{}) []string {
+func toStringSlice(v any) []string {
 	if v == nil {
 		return nil
 	}
 
 	switch val := v.(type) {
-	case []interface{}:
+	case []any:
 		result := make([]string, 0, len(val))
 		for _, item := range val {
 			if s, ok := item.(string); ok {
@@ -179,7 +180,7 @@ func (fm *Frontmatter) Serialize() (string, error) {
 	}
 
 	// Build a map with known fields first (for ordering), then extra
-	data := make(map[string]interface{})
+	data := make(map[string]any)
 
 	// Add known fields in preferred order
 	if fm.UUID != "" {
@@ -217,9 +218,7 @@ func (fm *Frontmatter) Serialize() (string, error) {
 	}
 
 	// Add extra fields
-	for k, v := range fm.Extra {
-		data[k] = v
-	}
+	maps.Copy(data, fm.Extra)
 
 	// Use yaml.v3 encoder for better control
 	var buf bytes.Buffer
@@ -293,11 +292,9 @@ func (fm *Frontmatter) Merge(other *Frontmatter) {
 
 	// Merge extra fields
 	if fm.Extra == nil {
-		fm.Extra = make(map[string]interface{})
+		fm.Extra = make(map[string]any)
 	}
-	for k, v := range other.Extra {
-		fm.Extra[k] = v
-	}
+	maps.Copy(fm.Extra, other.Extra)
 }
 
 // ErrInvalidFrontmatter indicates malformed frontmatter.

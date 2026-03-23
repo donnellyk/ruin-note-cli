@@ -61,16 +61,13 @@ func searchNotesWithOptions(vlt *vault.Vault, matcher QueryMatcher, info Matcher
 		notePaths = filtered
 	}
 
-	numWorkers := runtime.NumCPU()
-	if numWorkers > 8 {
-		numWorkers = 8 // Cap at 8 workers to avoid excessive parallelism
-	}
-	if len(notePaths) < numWorkers {
-		numWorkers = len(notePaths)
-	}
-	if numWorkers < 1 {
-		numWorkers = 1
-	}
+	numWorkers := max(
+		// Cap at 8 workers to avoid excessive parallelism
+		min(
+
+			len(notePaths), min(runtime.NumCPU(),
+
+				8)), 1)
 
 	// Channel for paths to process
 	pathsChan := make(chan string, len(notePaths))
@@ -122,7 +119,7 @@ func searchNotesWithOptions(vlt *vault.Vault, matcher QueryMatcher, info Matcher
 
 	// Start workers
 	wg.Add(numWorkers)
-	for i := 0; i < numWorkers; i++ {
+	for range numWorkers {
 		go processNote()
 	}
 

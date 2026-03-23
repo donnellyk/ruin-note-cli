@@ -97,8 +97,8 @@ func (g *GitVersioning) ensureGitignore() error {
 	}
 
 	content := string(data)
-	lines := strings.Split(content, "\n")
-	for _, line := range lines {
+	lines := strings.SplitSeq(content, "\n")
+	for line := range lines {
 		if strings.TrimSpace(line) == ".ruin/" {
 			return nil // Already has .ruin/ entry
 		}

@@ -2,6 +2,7 @@ package note
 
 import (
 	"regexp"
+	"slices"
 	"strings"
 )
 
@@ -42,7 +43,7 @@ func ToggleCheckbox(line string) string {
 
 // HasUncheckedTodos returns true if the content contains at least one unchecked checkbox.
 func HasUncheckedTodos(content string) bool {
-	for _, line := range strings.Split(content, "\n") {
+	for line := range strings.SplitSeq(content, "\n") {
 		if IsCheckboxLine(line) && !IsCheckedLine(line) {
 			return true
 		}
@@ -52,20 +53,10 @@ func HasUncheckedTodos(content string) bool {
 
 // HasCheckedTodos returns true if the content contains at least one checked checkbox.
 func HasCheckedTodos(content string) bool {
-	for _, line := range strings.Split(content, "\n") {
-		if IsCheckedLine(line) {
-			return true
-		}
-	}
-	return false
+	return slices.ContainsFunc(strings.Split(content, "\n"), IsCheckedLine)
 }
 
 // HasAnyTodos returns true if the content contains any checkbox lines.
 func HasAnyTodos(content string) bool {
-	for _, line := range strings.Split(content, "\n") {
-		if IsCheckboxLine(line) {
-			return true
-		}
-	}
-	return false
+	return slices.ContainsFunc(strings.Split(content, "\n"), IsCheckboxLine)
 }

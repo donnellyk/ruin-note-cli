@@ -15,7 +15,7 @@ import (
 var ErrFrontmatterTruncated = errors.New("frontmatter truncated")
 
 var bufPool = sync.Pool{
-	New: func() interface{} {
+	New: func() any {
 		buf := make([]byte, 4096)
 		return &buf
 	},
@@ -73,8 +73,8 @@ func parseFMLines(data []byte, fm *Frontmatter) error {
 	var currentKey string
 	var currentList *[]string
 
-	lines := bytes.Split(data, []byte("\n"))
-	for _, line := range lines {
+	lines := bytes.SplitSeq(data, []byte("\n"))
+	for line := range lines {
 		// Strip \r
 		if len(line) > 0 && line[len(line)-1] == '\r' {
 			line = line[:len(line)-1]

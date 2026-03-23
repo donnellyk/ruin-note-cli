@@ -2,6 +2,7 @@ package commands
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	"kvnd/ruin-note-cli/internal/dateparse"
@@ -32,12 +33,7 @@ func isDateTerm(term string) bool {
 // dateMatcher returns a matcher that checks if a note has the given date in its dates field.
 func dateMatcher(dateStr string) QueryMatcher {
 	return func(n *note.Note) bool {
-		for _, d := range n.Dates {
-			if d == dateStr {
-				return true
-			}
-		}
-		return false
+		return slices.Contains(n.Dates, dateStr)
 	}
 }
 

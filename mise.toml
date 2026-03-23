@@ -1,5 +1,5 @@
 [tools]
-go = "1.21"
+go = "1.26"
 
 [vars]
 binary_name = "ruin"

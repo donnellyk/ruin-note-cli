@@ -154,7 +154,7 @@ func (v *Vault) Initialize(force bool) (*InitResult, error) {
 	return result, nil
 }
 
-func (v *Vault) initJSONFile(path string, data interface{}, force bool, result *InitResult) error {
+func (v *Vault) initJSONFile(path string, data any, force bool, result *InitResult) error {
 	_, err := os.Stat(path)
 	exists := err == nil
 
@@ -176,7 +176,7 @@ func (v *Vault) initJSONFile(path string, data interface{}, force bool, result *
 	return nil
 }
 
-func (v *Vault) initMetadataFile(path string, data interface{}, force bool, result *InitResult) error {
+func (v *Vault) initMetadataFile(path string, data any, force bool, result *InitResult) error {
 	_, err := os.Stat(path)
 	exists := err == nil
 

@@ -687,7 +687,7 @@ func newParentDeleteCmd(getVault func() *vault.Vault, jsonOutput *bool) *cobra.C
 // would create a cycle. It walks from proposedParent up the ancestor chain.
 func detectCycle(index *vault.TitlesIndex, childUUID, proposedParentUUID string) error {
 	current := proposedParentUUID
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		if current == childUUID {
 			return fmt.Errorf("cycle detected: setting this parent would create a circular relationship")
 		}

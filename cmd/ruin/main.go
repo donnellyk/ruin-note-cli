@@ -152,7 +152,7 @@ const (
 )
 
 // printError writes an error message to stderr
-func printError(format string, args ...interface{}) {
+func printError(format string, args ...any) {
 	fmt.Fprintf(os.Stderr, "error: "+format+"\n", args...)
 }
 

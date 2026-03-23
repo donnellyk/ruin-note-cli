@@ -226,8 +226,8 @@ func parseTermMatcher(term string, tagScope TagScope) (QueryMatcher, MatcherInfo
 func parseSort(s string) ([]SortField, error) {
 	var fields []SortField
 
-	parts := strings.Split(s, ",")
-	for _, part := range parts {
+	parts := strings.SplitSeq(s, ",")
+	for part := range parts {
 		part = strings.TrimSpace(part)
 		if part == "" {
 			continue

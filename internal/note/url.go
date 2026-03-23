@@ -28,8 +28,8 @@ func (n *Note) ExtractURL() string {
 		return n.URL
 	}
 	// Check first non-empty, non-title, non-tag-only line
-	lines := strings.Split(n.Content, "\n")
-	for _, line := range lines {
+	lines := strings.SplitSeq(n.Content, "\n")
+	for line := range lines {
 		trimmed := strings.TrimSpace(line)
 		if trimmed == "" {
 			continue

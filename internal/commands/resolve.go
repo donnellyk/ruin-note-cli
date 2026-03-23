@@ -91,11 +91,8 @@ type matchCandidate struct {
 func ambiguousError(identifier string, candidates []matchCandidate) error {
 	var b strings.Builder
 	fmt.Fprintf(&b, "ambiguous match for %q: %d notes matched", identifier, len(candidates))
-	limit := len(candidates)
-	if limit > 10 {
-		limit = 10
-	}
-	for i := 0; i < limit; i++ {
+	limit := min(len(candidates), 10)
+	for i := range limit {
 		c := candidates[i]
 		fmt.Fprintf(&b, "\n  %s  %s", c.uuid, c.entry.Title)
 	}

@@ -597,8 +597,8 @@ Child content.
 	if err != nil {
 		t.Fatalf("failed to load child: %v", err)
 	}
-	lines := strings.Split(child.Content, "\n")
-	for _, line := range lines {
+	lines := strings.SplitSeq(child.Content, "\n")
+	for line := range lines {
 		trimmed := strings.TrimSpace(line)
 		if trimmed == "#project" {
 			t.Error("child content still has #project tag-only line after doctor strip")

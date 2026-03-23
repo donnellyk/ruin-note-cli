@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -344,10 +345,8 @@ fast lookups, then extracts matching lines from the content body.`,
 func noteHasInlineTag(n *note.Note, queryTags []string) bool {
 	for _, it := range n.InlineTags {
 		itNorm := note.NormalizeTag(it)
-		for _, qt := range queryTags {
-			if itNorm == qt {
-				return true
-			}
+		if slices.Contains(queryTags, itNorm) {
+			return true
 		}
 	}
 	return false
@@ -438,13 +437,7 @@ func pickLinesFromNote(n *note.Note, queryTags []string, dateRanges []dateparse.
 			// Every date range must be satisfied by at least one line date
 			allRanges := true
 			for _, dr := range dateRanges {
-				found := false
-				for _, pd := range parsedDates {
-					if dr.Contains(pd) {
-						found = true
-						break
-					}
-				}
+				found := slices.ContainsFunc(parsedDates, dr.Contains)
 				if !found {
 					allRanges = false
 					break

@@ -25,7 +25,7 @@ func ComputeInheritedTags(noteUUID string, titlesIndex *vault.TitlesIndex, loade
 	tagSeen := make(map[string]bool)
 
 	currentUUID := entry.Parent
-	for depth := 0; depth < maxInheritanceDepth; depth++ {
+	for range maxInheritanceDepth {
 		if seen[currentUUID] {
 			break // cycle detected
 		}

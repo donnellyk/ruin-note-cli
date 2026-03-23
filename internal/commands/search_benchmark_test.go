@@ -32,7 +32,7 @@ func setupBenchmarkVault(b *testing.B, numNotes int) *vault.Vault {
 
 	// Create 5 hub notes as parent targets
 	numHubs := 5
-	for h := 0; h < numHubs; h++ {
+	for h := range numHubs {
 		content := fmt.Sprintf(`---
 uuid: hub-%d
 created: 2025-01-01T10:00:00-05:00
@@ -50,7 +50,7 @@ Project hub note for benchmarking.
 		}
 	}
 
-	for i := 0; i < numNotes; i++ {
+	for i := range numNotes {
 		tagSet := tags[i%len(tags)]
 
 		// ~30% of notes get a parent
@@ -163,7 +163,7 @@ func setupLargeNoteVault(b *testing.B, numNotes int) *vault.Vault {
 	}
 
 	// Create 3 hub notes
-	for h := 0; h < 3; h++ {
+	for h := range 3 {
 		content := fmt.Sprintf(`---
 uuid: hub-%d
 created: 2025-01-01T10:00:00-05:00
@@ -181,7 +181,7 @@ Project hub note.
 		}
 	}
 
-	for i := 0; i < numNotes; i++ {
+	for i := range numNotes {
 		tagSet := tags[i%len(tags)]
 		parentLine := ""
 		if i%3 == 0 {
@@ -258,7 +258,7 @@ func setupRealisticVault(b *testing.B, numNotes int) *vault.Vault {
 
 	// Create 5 hub notes
 	numHubs := 5
-	for h := 0; h < numHubs; h++ {
+	for h := range numHubs {
 		content := fmt.Sprintf(`---
 uuid: hub-%d
 created: 2025-01-01T10:00:00-05:00
@@ -276,13 +276,13 @@ Project hub note for benchmarking.
 		}
 	}
 
-	for i := 0; i < numNotes; i++ {
+	for i := range numNotes {
 		tagSet := tags[i%len(tags)]
-		tagYAML := ""
-		tagContent := ""
+		var tagYAML strings.Builder
+		var tagContent strings.Builder
 		for _, t := range tagSet {
-			tagYAML += fmt.Sprintf("\n  - \"%s\"", t)
-			tagContent += t + " "
+			tagYAML.WriteString(fmt.Sprintf("\n  - \"%s\"", t))
+			tagContent.WriteString(t + " ")
 		}
 
 		// ~30% get a parent
@@ -303,7 +303,7 @@ updated: 2025-01-%02dT10:00:00-05:00
 tags:%s%s
 ---
 Quick thought %s
-`, i, (i%28)+1, (i%28)+1, tagYAML, parentLine, tagContent)
+`, i, (i%28)+1, (i%28)+1, tagYAML.String(), parentLine, tagContent.String())
 
 		case pct < 70: // 30% small (~500 bytes)
 			content = fmt.Sprintf(`---
@@ -321,7 +321,7 @@ tags:%s%s
 - Task 1
 - Task 2
 - Task 3
-`, i, (i%28)+1, (i%28)+1, tagYAML, parentLine, i, tagContent, paragraph)
+`, i, (i%28)+1, (i%28)+1, tagYAML.String(), parentLine, i, tagContent.String(), paragraph)
 
 		case pct < 90: // 20% medium (~2KB)
 			content = fmt.Sprintf(`---
@@ -350,7 +350,7 @@ tags:%s%s
 
 ## Notes
 %s
-`, i, (i%28)+1, (i%28)+1, tagYAML, parentLine, i, tagContent,
+`, i, (i%28)+1, (i%28)+1, tagYAML.String(), parentLine, i, tagContent.String(),
 				strings.Repeat(paragraph, 3),
 				strings.Repeat(paragraph, 3),
 				strings.Repeat(paragraph, 2),
@@ -383,7 +383,7 @@ tags:%s%s
 
 ## References
 %s
-`, i, (i%28)+1, (i%28)+1, tagYAML, parentLine, i, tagContent,
+`, i, (i%28)+1, (i%28)+1, tagYAML.String(), parentLine, i, tagContent.String(),
 				strings.Repeat(paragraph, 8),
 				strings.Repeat(paragraph, 10),
 				strings.Repeat(paragraph, 20),
@@ -454,7 +454,7 @@ func setupComposeVault(b *testing.B, numHubs, numChildrenPerHub int) (*vault.Vau
 	index := &vault.TitlesIndex{Titles: make(map[string]vault.TitleEntry)}
 
 	// Create hub notes
-	for h := 0; h < numHubs; h++ {
+	for h := range numHubs {
 		uuid := fmt.Sprintf("hub-%d", h)
 		title := fmt.Sprintf("Hub %d", h)
 		filename := fmt.Sprintf("hub-%04d.md", h)
@@ -478,9 +478,9 @@ Hub note content.
 
 	// Create children for each hub
 	noteNum := 0
-	for h := 0; h < numHubs; h++ {
+	for h := range numHubs {
 		hubUUID := fmt.Sprintf("hub-%d", h)
-		for c := 0; c < numChildrenPerHub; c++ {
+		for c := range numChildrenPerHub {
 			uuid := fmt.Sprintf("child-%d", noteNum)
 			title := fmt.Sprintf("Child %d of Hub %d", c, h)
 			filename := fmt.Sprintf("child-%05d.md", noteNum)
@@ -561,7 +561,7 @@ Note content for tree traversal benchmarking.
 	for d := 1; d <= depth; d++ {
 		var nextLevel []string
 		for _, parentUUID := range currentLevel {
-			for f := 0; f < fanOut; f++ {
+			for f := range fanOut {
 				uuid := fmt.Sprintf("n-%d-%d-%d", d, noteNum, f)
 				title := fmt.Sprintf("Level %d Child %d", d, f)
 				createNote(uuid, title, parentUUID)
