@@ -901,4 +901,3 @@ func TestSearchOptions_EarlyTermination(t *testing.T) {
 		t.Errorf("with limit=1, found %d results, want 1", len(lines))
 	}
 }
-

@@ -353,7 +353,6 @@ func noteHasInlineTag(n *note.Note, queryTags []string) bool {
 	return false
 }
 
-
 // pickLinesFromNote extracts content lines that match the queried inline tags.
 // Tag-only lines and the title line are skipped (those contain global tags).
 // If dateRanges is non-empty, lines must contain at least one @YYYY-MM-DD date

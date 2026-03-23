@@ -16,20 +16,20 @@ const TimeFormat = "2006-01-02T15:04:05-07:00"
 
 // Note represents a markdown note with frontmatter.
 type Note struct {
-	UUID        string
-	Created     time.Time
-	Updated     time.Time
+	UUID          string
+	Created       time.Time
+	Updated       time.Time
 	Tags          []string // Global tags (categorization)
 	InlineTags    []string // Inline tags (contextual annotations within content)
 	InheritedTags []string // Global tags inherited from ancestor notes
 	Dates         []string // Dates referenced in content (@YYYY-MM-DD tokens)
-	Parent      string   // UUID of parent note
-	Order       *int     // Manual sort order (nil = unset)
-	LinkedCards []string // Resolved UUIDs from [[wiki links]]
-	URL         string   // URL for link notes
-	Title       string   // H1 header text (without #)
-	Content     string   // Full markdown content (without frontmatter)
-	FilePath    string   // Path to the file on disk
+	Parent        string   // UUID of parent note
+	Order         *int     // Manual sort order (nil = unset)
+	LinkedCards   []string // Resolved UUIDs from [[wiki links]]
+	URL           string   // URL for link notes
+	Title         string   // H1 header text (without #)
+	Content       string   // Full markdown content (without frontmatter)
+	FilePath      string   // Path to the file on disk
 
 	// Extra preserves additional frontmatter fields added by the user.
 	Extra map[string]interface{}

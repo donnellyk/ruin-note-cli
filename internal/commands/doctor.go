@@ -13,16 +13,16 @@ import (
 
 // DoctorOutput represents the JSON output for the doctor command.
 type DoctorOutput struct {
-	Scanned              int      `json:"scanned"`
-	UUIDGenerated        []string `json:"uuid_generated,omitempty"`
-	TagsReindexed        []string `json:"tags_reindexed,omitempty"`
-	LinkedCardsReindexed []string `json:"linked_cards_reindexed,omitempty"`
-	InheritedTagsUpdated []string `json:"inherited_tags_updated,omitempty"`
+	Scanned               int      `json:"scanned"`
+	UUIDGenerated         []string `json:"uuid_generated,omitempty"`
+	TagsReindexed         []string `json:"tags_reindexed,omitempty"`
+	LinkedCardsReindexed  []string `json:"linked_cards_reindexed,omitempty"`
+	InheritedTagsUpdated  []string `json:"inherited_tags_updated,omitempty"`
 	InheritedTagsStripped []string `json:"inherited_tags_stripped,omitempty"`
-	TagsYMLUpdated       bool     `json:"tags_yml_updated"`
-	TitlesUpdated        bool     `json:"titles_updated"`
-	OrphanedParents      []string `json:"orphaned_parents,omitempty"`
-	OrphanedBookmarks    []string `json:"orphaned_bookmarks,omitempty"`
+	TagsYMLUpdated        bool     `json:"tags_yml_updated"`
+	TitlesUpdated         bool     `json:"titles_updated"`
+	OrphanedParents       []string `json:"orphaned_parents,omitempty"`
+	OrphanedBookmarks     []string `json:"orphaned_bookmarks,omitempty"`
 }
 
 // NewDoctorCmd creates the doctor command.

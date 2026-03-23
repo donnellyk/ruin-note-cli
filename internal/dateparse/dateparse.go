@@ -97,7 +97,7 @@ func parseNaturalLanguage(s string, now time.Time) (DateRange, bool) {
 		if weekday == 0 {
 			weekday = 7
 		}
-		monday := today.AddDate(0, 0, -(weekday-1) - 7)
+		monday := today.AddDate(0, 0, -(weekday-1)-7)
 		return DateRange{Start: monday, End: monday.AddDate(0, 0, 7)}, true
 
 	case "next-week":
@@ -105,7 +105,7 @@ func parseNaturalLanguage(s string, now time.Time) (DateRange, bool) {
 		if weekday == 0 {
 			weekday = 7
 		}
-		monday := today.AddDate(0, 0, -(weekday-1) + 7)
+		monday := today.AddDate(0, 0, -(weekday-1)+7)
 		return DateRange{Start: monday, End: monday.AddDate(0, 0, 7)}, true
 
 	case "this-month":
