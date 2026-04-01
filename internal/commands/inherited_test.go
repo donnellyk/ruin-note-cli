@@ -205,6 +205,60 @@ Some child content.
 	}
 }
 
+func TestCreateNote_InheritedTags(t *testing.T) {
+	tmpDir := t.TempDir()
+	vlt := vault.New(tmpDir)
+	if _, err := vlt.Initialize(false); err != nil {
+		t.Fatalf("failed to init vault: %v", err)
+	}
+
+	// Create parent note with a global tag
+	parentContent := `---
+uuid: parent-uuid
+created: "2025-01-01T10:00:00-05:00"
+updated: "2025-01-01T10:00:00-05:00"
+tags:
+  - "#project"
+---
+# Parent Note
+#project
+
+Some parent content.
+`
+	parentPath := filepath.Join(tmpDir, "Parent Note.md")
+	if err := os.WriteFile(parentPath, []byte(parentContent), 0644); err != nil {
+		t.Fatalf("failed to write parent: %v", err)
+	}
+
+	// Add parent to titles index so it can be looked up
+	titlesIndex := &vault.TitlesIndex{
+		Titles: map[string]vault.TitleEntry{
+			"parent-uuid": {Title: "Parent Note", Path: parentPath, Parent: ""},
+		},
+	}
+	if err := vlt.SaveTitles(titlesIndex); err != nil {
+		t.Fatalf("failed to save titles: %v", err)
+	}
+
+	// Create a new child note via createNote
+	child := &note.Note{
+		Content: "# Child Note\n\nSome child content.\n",
+		Parent:  "parent-uuid",
+	}
+	if err := createNote(child, vlt, "Child Note", false); err != nil {
+		t.Fatalf("createNote() error = %v", err)
+	}
+
+	// Reload from disk and verify inherited tags
+	reloaded, err := note.Load(child.FilePath)
+	if err != nil {
+		t.Fatalf("failed to reload child: %v", err)
+	}
+	if len(reloaded.InheritedTags) != 1 || reloaded.InheritedTags[0] != "#project" {
+		t.Errorf("child inherited-tags = %v, want [#project]", reloaded.InheritedTags)
+	}
+}
+
 func TestRefreshInheritedTags_NoParent(t *testing.T) {
 	tmpDir := t.TempDir()
 	vlt := vault.New(tmpDir)

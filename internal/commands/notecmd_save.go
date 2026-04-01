@@ -38,16 +38,21 @@ func createNote(n *note.Note, vlt *vault.Vault, titleFlag string, useH1 bool) er
 	n.Content = note.ResolveDateTokens(n.Content)
 	n.RefreshDates()
 
-	if titlesIndex, err := vlt.LoadTitles(); err == nil {
+	titlesIndex, titlesErr := vlt.LoadTitles()
+	if titlesErr == nil {
 		RefreshLinkedCards(n, titlesIndex)
 	} else {
-		fmt.Fprintf(os.Stderr, "warning: failed to load titles index for linked-cards: %v\n", err)
+		fmt.Fprintf(os.Stderr, "warning: failed to load titles index for linked-cards: %v\n", titlesErr)
 	}
 
-	if n.Parent != "" {
-		if _, err := RefreshInheritedTags(n, vlt); err != nil {
-			fmt.Fprintf(os.Stderr, "warning: failed to refresh inherited tags: %v\n", err)
+	if n.Parent != "" && titlesErr == nil {
+		// The note isn't in the titles index yet (CreateNote adds it later),
+		// so add a temporary entry so ComputeInheritedTags can find the parent.
+		titlesIndex.Titles[n.UUID] = vault.TitleEntry{Parent: n.Parent}
+		loader := func(path string) (*note.Note, error) {
+			return note.LoadFrontmatterOnly(path)
 		}
+		n.InheritedTags = ComputeInheritedTags(n.UUID, titlesIndex, loader)
 	}
 
 	filename := determineFilename(n, titleFlag, useH1)
