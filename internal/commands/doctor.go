@@ -184,7 +184,7 @@ func doctorFiles(vlt *vault.Vault, paths []string, dryRun bool, jsonOutput bool)
 
 		// Compute inherited tags
 		var newInherited []string
-		if n.Parent != "" {
+		if vlt.TagInheritanceEnabled() && n.Parent != "" {
 			loader := func(p string) (*note.Note, error) {
 				return note.LoadFrontmatterOnly(p)
 			}
@@ -422,7 +422,7 @@ func doctorFullScan(vlt *vault.Vault, dryRun bool, jsonOutput bool) error {
 
 		var newInherited []string
 		entry := titleEntries[uuid]
-		if entry.Parent != "" {
+		if vlt.TagInheritanceEnabled() && entry.Parent != "" {
 			newInherited = ComputeInheritedTags(uuid, tempIndex, loader)
 		}
 

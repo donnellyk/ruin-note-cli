@@ -255,6 +255,67 @@ func TestConfig_Validate(t *testing.T) {
 	}
 }
 
+func TestConfig_TagInheritanceEnabled(t *testing.T) {
+	t.Run("default is true", func(t *testing.T) {
+		cfg := &Config{}
+		if !cfg.TagInheritanceEnabled() {
+			t.Error("expected default true")
+		}
+	})
+
+	t.Run("explicit false", func(t *testing.T) {
+		f := false
+		cfg := &Config{TagInheritance: &f}
+		if cfg.TagInheritanceEnabled() {
+			t.Error("expected false when explicitly set")
+		}
+	})
+
+	t.Run("explicit true", func(t *testing.T) {
+		tr := true
+		cfg := &Config{TagInheritance: &tr}
+		if !cfg.TagInheritanceEnabled() {
+			t.Error("expected true when explicitly set")
+		}
+	})
+
+	t.Run("env var overrides config", func(t *testing.T) {
+		tr := true
+		cfg := &Config{TagInheritance: &tr}
+		t.Setenv("RUIN_TAG_INHERITANCE", "false")
+		if cfg.TagInheritanceEnabled() {
+			t.Error("env var false should override config true")
+		}
+	})
+
+	t.Run("env var enables when config unset", func(t *testing.T) {
+		cfg := &Config{}
+		t.Setenv("RUIN_TAG_INHERITANCE", "0")
+		if cfg.TagInheritanceEnabled() {
+			t.Error("env var 0 should disable")
+		}
+	})
+
+	t.Run("roundtrip through YAML", func(t *testing.T) {
+		tmpDir := t.TempDir()
+		configPath := filepath.Join(tmpDir, "config.yml")
+
+		f := false
+		cfg := &Config{VaultPath: "/test", TagInheritance: &f}
+		if err := cfg.SaveTo(configPath); err != nil {
+			t.Fatalf("SaveTo() error = %v", err)
+		}
+
+		loaded, err := LoadFrom(configPath)
+		if err != nil {
+			t.Fatalf("LoadFrom() error = %v", err)
+		}
+		if loaded.TagInheritanceEnabled() {
+			t.Error("expected false after roundtrip")
+		}
+	})
+}
+
 func TestConfig_ExpandedVaultPath(t *testing.T) {
 	home, _ := os.UserHomeDir()
 

@@ -259,6 +259,162 @@ Some parent content.
 	}
 }
 
+func TestRefreshInheritedTags_DisabledClearsStale(t *testing.T) {
+	tmpDir := t.TempDir()
+	vlt := vault.New(tmpDir)
+	vlt.SetTagInheritance(false)
+	if _, err := vlt.Initialize(false); err != nil {
+		t.Fatalf("failed to init vault: %v", err)
+	}
+
+	n := &note.Note{UUID: "test", Parent: "some-parent", InheritedTags: []string{"#stale"}}
+
+	changed, err := RefreshInheritedTags(n, vlt)
+	if err != nil {
+		t.Fatalf("RefreshInheritedTags() error = %v", err)
+	}
+	if !changed {
+		t.Error("expected changed=true when clearing stale inherited tags")
+	}
+	if len(n.InheritedTags) != 0 {
+		t.Errorf("expected empty inherited tags, got %v", n.InheritedTags)
+	}
+}
+
+func TestRefreshInheritedTags_DisabledNoOp(t *testing.T) {
+	tmpDir := t.TempDir()
+	vlt := vault.New(tmpDir)
+	vlt.SetTagInheritance(false)
+	if _, err := vlt.Initialize(false); err != nil {
+		t.Fatalf("failed to init vault: %v", err)
+	}
+
+	n := &note.Note{UUID: "test", Parent: "some-parent"}
+
+	changed, err := RefreshInheritedTags(n, vlt)
+	if err != nil {
+		t.Fatalf("RefreshInheritedTags() error = %v", err)
+	}
+	if changed {
+		t.Error("expected changed=false when already empty and disabled")
+	}
+}
+
+func TestCascadeInheritedTags_Disabled(t *testing.T) {
+	tmpDir := t.TempDir()
+	vlt := vault.New(tmpDir)
+	vlt.SetTagInheritance(false)
+	if _, err := vlt.Initialize(false); err != nil {
+		t.Fatalf("failed to init vault: %v", err)
+	}
+
+	// Create parent note with a tag
+	parentContent := `---
+uuid: parent-uuid
+created: "2025-01-01T10:00:00-05:00"
+updated: "2025-01-01T10:00:00-05:00"
+tags:
+  - "#project"
+---
+# Parent
+#project
+`
+	parentPath := filepath.Join(tmpDir, "parent.md")
+	if err := os.WriteFile(parentPath, []byte(parentContent), 0644); err != nil {
+		t.Fatalf("failed to write parent: %v", err)
+	}
+
+	// Create child note without inherited tags
+	childContent := `---
+uuid: child-uuid
+created: "2025-01-01T10:00:00-05:00"
+updated: "2025-01-01T10:00:00-05:00"
+parent: parent-uuid
+---
+# Child
+`
+	childPath := filepath.Join(tmpDir, "child.md")
+	if err := os.WriteFile(childPath, []byte(childContent), 0644); err != nil {
+		t.Fatalf("failed to write child: %v", err)
+	}
+
+	titlesIndex := &vault.TitlesIndex{
+		Titles: map[string]vault.TitleEntry{
+			"parent-uuid": {Title: "Parent", Path: parentPath, Parent: ""},
+			"child-uuid":  {Title: "Child", Path: childPath, Parent: "parent-uuid"},
+		},
+	}
+	if err := vlt.SaveTitles(titlesIndex); err != nil {
+		t.Fatalf("failed to save titles: %v", err)
+	}
+
+	// Cascade should be a no-op
+	if err := CascadeInheritedTags("parent-uuid", vlt, titlesIndex); err != nil {
+		t.Fatalf("CascadeInheritedTags() error = %v", err)
+	}
+
+	// Child should NOT have inherited tags
+	child, err := note.Load(childPath)
+	if err != nil {
+		t.Fatalf("failed to reload child: %v", err)
+	}
+	if len(child.InheritedTags) != 0 {
+		t.Errorf("child.InheritedTags = %v, want empty (inheritance disabled)", child.InheritedTags)
+	}
+}
+
+func TestCreateNote_InheritedTags_Disabled(t *testing.T) {
+	tmpDir := t.TempDir()
+	vlt := vault.New(tmpDir)
+	vlt.SetTagInheritance(false)
+	if _, err := vlt.Initialize(false); err != nil {
+		t.Fatalf("failed to init vault: %v", err)
+	}
+
+	// Create parent note with a global tag
+	parentContent := `---
+uuid: parent-uuid
+created: "2025-01-01T10:00:00-05:00"
+updated: "2025-01-01T10:00:00-05:00"
+tags:
+  - "#project"
+---
+# Parent Note
+#project
+
+Some parent content.
+`
+	parentPath := filepath.Join(tmpDir, "Parent Note.md")
+	if err := os.WriteFile(parentPath, []byte(parentContent), 0644); err != nil {
+		t.Fatalf("failed to write parent: %v", err)
+	}
+
+	titlesIndex := &vault.TitlesIndex{
+		Titles: map[string]vault.TitleEntry{
+			"parent-uuid": {Title: "Parent Note", Path: parentPath, Parent: ""},
+		},
+	}
+	if err := vlt.SaveTitles(titlesIndex); err != nil {
+		t.Fatalf("failed to save titles: %v", err)
+	}
+
+	child := &note.Note{
+		Content: "# Child Note\n\nSome child content.\n",
+		Parent:  "parent-uuid",
+	}
+	if err := createNote(child, vlt, "Child Note Disabled", false); err != nil {
+		t.Fatalf("createNote() error = %v", err)
+	}
+
+	reloaded, err := note.Load(child.FilePath)
+	if err != nil {
+		t.Fatalf("failed to reload child: %v", err)
+	}
+	if len(reloaded.InheritedTags) != 0 {
+		t.Errorf("child inherited-tags = %v, want empty (inheritance disabled)", reloaded.InheritedTags)
+	}
+}
+
 func TestRefreshInheritedTags_NoParent(t *testing.T) {
 	tmpDir := t.TempDir()
 	vlt := vault.New(tmpDir)

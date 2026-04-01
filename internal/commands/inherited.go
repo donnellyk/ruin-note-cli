@@ -60,7 +60,16 @@ func ComputeInheritedTags(noteUUID string, titlesIndex *vault.TitlesIndex, loade
 
 // RefreshInheritedTags computes and sets inherited tags for a single note.
 // Returns true if the inherited tags changed.
+// When tag inheritance is disabled, clears any existing inherited tags.
 func RefreshInheritedTags(n *note.Note, vlt *vault.Vault) (bool, error) {
+	if !vlt.TagInheritanceEnabled() {
+		if len(n.InheritedTags) > 0 {
+			n.InheritedTags = nil
+			return true, nil
+		}
+		return false, nil
+	}
+
 	if n.Parent == "" {
 		if len(n.InheritedTags) > 0 {
 			n.InheritedTags = nil
@@ -89,7 +98,12 @@ func RefreshInheritedTags(n *note.Note, vlt *vault.Vault) (bool, error) {
 
 // CascadeInheritedTags recomputes inherited tags for all descendants of the
 // given parent UUID. It saves any notes whose inherited tags changed.
+// No-op when tag inheritance is disabled.
 func CascadeInheritedTags(parentUUID string, vlt *vault.Vault, titlesIndex *vault.TitlesIndex) error {
+	if !vlt.TagInheritanceEnabled() {
+		return nil
+	}
+
 	children := titlesIndex.ChildrenMap()
 
 	// BFS from parentUUID

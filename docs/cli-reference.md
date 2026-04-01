@@ -18,6 +18,7 @@
 | `RUIN_VAULT` | Override vault path |
 | `RUIN_CONFIG` | Override config file path |
 | `RUIN_VERSIONING` | Set to `false` to disable git auto-versioning |
+| `RUIN_TAG_INHERITANCE` | Set to `false` to disable inherited tags from parent notes |
 | `NO_COLOR` | Disable colored output |
 
 ## Exit Codes
@@ -323,7 +324,9 @@ ruin config [key] [value]
 - One arg: show key value
 - Two args: set key to value
 
-Available keys: `vault_path`
+Available keys: `vault_path`, `versioning`, `tag_inheritance`
+
+See [configuration.md](configuration.md) for details on each key.
 
 ### doctor
 
@@ -675,5 +678,8 @@ Ruin automatically commits note changes to git after each write operation. This 
 Config (`~/.config/ruin/config.yml`):
 ```yaml
 vault_path: ~/notes
-versioning: true   # default if omitted
+versioning: true        # default if omitted
+tag_inheritance: true   # default if omitted
 ```
+
+See [configuration.md](configuration.md) for full configuration reference.

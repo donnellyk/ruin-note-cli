@@ -45,7 +45,7 @@ func createNote(n *note.Note, vlt *vault.Vault, titleFlag string, useH1 bool) er
 		fmt.Fprintf(os.Stderr, "warning: failed to load titles index for linked-cards: %v\n", titlesErr)
 	}
 
-	if n.Parent != "" && titlesErr == nil {
+	if n.Parent != "" && titlesErr == nil && vlt.TagInheritanceEnabled() {
 		// The note isn't in the titles index yet (CreateNote adds it later),
 		// so add a temporary entry so ComputeInheritedTags can find the parent.
 		titlesIndex.Titles[n.UUID] = vault.TitleEntry{Parent: n.Parent}

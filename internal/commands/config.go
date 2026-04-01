@@ -22,7 +22,9 @@ With one argument, displays the value for that key.
 With two arguments, sets the key to the value.
 
 Available keys:
-  vault_path  - Path to the notes vault directory`,
+  vault_path       - Path to the notes vault directory
+  versioning       - Enable/disable git auto-versioning (true/false)
+  tag_inheritance  - Enable/disable inherited tags from parent notes (true/false)`,
 		Example: `  # Show all config
   ruin config
 
@@ -111,8 +113,12 @@ func getConfigValue(cfg *config.Config, key string) (string, error) {
 	switch key {
 	case "vault_path":
 		return cfg.VaultPath, nil
+	case "versioning":
+		return fmt.Sprintf("%t", cfg.VersioningEnabled()), nil
+	case "tag_inheritance":
+		return fmt.Sprintf("%t", cfg.TagInheritanceEnabled()), nil
 	default:
-		return "", fmt.Errorf("unknown config key: %s (available: vault_path)", key)
+		return "", fmt.Errorf("unknown config key: %s (available: vault_path, versioning, tag_inheritance)", key)
 	}
 }
 
@@ -121,8 +127,33 @@ func setConfigValue(cfg *config.Config, key, value string) error {
 	case "vault_path":
 		cfg.VaultPath = value
 		return nil
+	case "versioning":
+		b, err := parseBoolValue(value)
+		if err != nil {
+			return fmt.Errorf("versioning: %w", err)
+		}
+		cfg.Versioning = &b
+		return nil
+	case "tag_inheritance":
+		b, err := parseBoolValue(value)
+		if err != nil {
+			return fmt.Errorf("tag_inheritance: %w", err)
+		}
+		cfg.TagInheritance = &b
+		return nil
 	default:
-		return fmt.Errorf("unknown config key: %s (available: vault_path)", key)
+		return fmt.Errorf("unknown config key: %s (available: vault_path, versioning, tag_inheritance)", key)
+	}
+}
+
+func parseBoolValue(s string) (bool, error) {
+	switch s {
+	case "true", "1":
+		return true, nil
+	case "false", "0":
+		return false, nil
+	default:
+		return false, fmt.Errorf("expected true or false, got %q", s)
 	}
 }
 

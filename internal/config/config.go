@@ -12,8 +12,9 @@ import (
 
 // Config holds the application configuration.
 type Config struct {
-	VaultPath  string `yaml:"vault_path"`
-	Versioning *bool  `yaml:"versioning,omitempty"`
+	VaultPath      string `yaml:"vault_path"`
+	Versioning     *bool  `yaml:"versioning,omitempty"`
+	TagInheritance *bool  `yaml:"tag_inheritance,omitempty"`
 }
 
 // VersioningEnabled returns whether versioning is enabled.
@@ -24,6 +25,18 @@ func (c *Config) VersioningEnabled() bool {
 	}
 	if c.Versioning != nil {
 		return *c.Versioning
+	}
+	return true
+}
+
+// TagInheritanceEnabled returns whether tag inheritance is enabled.
+// Defaults to true if not explicitly set. Respects RUIN_TAG_INHERITANCE env var.
+func (c *Config) TagInheritanceEnabled() bool {
+	if env := os.Getenv("RUIN_TAG_INHERITANCE"); env != "" {
+		return env != "false" && env != "0"
+	}
+	if c.TagInheritance != nil {
+		return *c.TagInheritance
 	}
 	return true
 }

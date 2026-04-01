@@ -22,18 +22,29 @@ const (
 
 // Vault represents a notes vault directory.
 type Vault struct {
-	Path       string
-	versioning *versioning.GitVersioning
+	Path           string
+	versioning     *versioning.GitVersioning
+	tagInheritance bool
 }
 
 // New creates a new Vault instance for the given path.
 func New(path string) *Vault {
-	return &Vault{Path: path}
+	return &Vault{Path: path, tagInheritance: true}
 }
 
 // SetVersioning configures git versioning for the vault.
 func (v *Vault) SetVersioning(g *versioning.GitVersioning) {
 	v.versioning = g
+}
+
+// SetTagInheritance configures whether tag inheritance is enabled.
+func (v *Vault) SetTagInheritance(enabled bool) {
+	v.tagInheritance = enabled
+}
+
+// TagInheritanceEnabled returns whether tag inheritance is enabled.
+func (v *Vault) TagInheritanceEnabled() bool {
+	return v.tagInheritance
 }
 
 // Commit creates a git commit with the given message if versioning is enabled.

@@ -83,6 +83,7 @@ tags, and powerful search capabilities.`,
 			return err
 		}
 		vlt = vault.New(expandedPath)
+		vlt.SetTagInheritance(cfg.TagInheritanceEnabled())
 
 		// Set up versioning if enabled and vault is a git repo
 		if cfg.VersioningEnabled() && versioning.IsAvailable() {
