@@ -4,7 +4,7 @@ A Zettelkasten-ish note-taking CLI written in Go. Don't organize; query and comp
 
 Take small, atomic notes saved as simple markdown files. Later, compose them into different "documents", depending on your needs. This probably has an audience of one (me) or zero (turns out, not me); time will tell.
 
-Eventually, this utility will form the core of a TUI and nice Mac GUI but should be usable* as-is.
+Eventually, this utility will form the core of a TUI and nice Mac GUI but should be usable (& scriptable) as-is.
 
 ## Key Features
 
@@ -12,7 +12,7 @@ Eventually, this utility will form the core of a TUI and nice Mac GUI but should
 Your notes are just plain markdown files on a disk. Ruin vaults should _generally_ be compatible with Obsidian vaults (though extensive testing hasn't happened) and similar markdown tools.
 
 ### Context-Aware Tags
-In Ruin, there are two kinds of tags: inline & global. An inline tag is a tag that is in a line of text. A global tag is a tag thats in the frontmatter, or on its own line, or on a line with only tags (and seperators).
+In Ruin, there are two kinds of tags: inline & global. An inline tag is a tag that is in a line of text. A global tag is a tag that's in the frontmatter, or on its own line, or on a line with only tags (and separators).
 
 In the following example
 ```
@@ -25,7 +25,7 @@ I should follow up with that very important thing #followup
 
 #meeting and #projectA are global tags and #followup in an inline tag. 
 
-`ruin search` to find whole files and `ruin pick` finds specific lines (defaulting to inline tags only).
+`ruin search` to find whole files and `ruin pick` finds & extracts specific lines (based on inline tags).
 
 ### Strong date awareness, but no Today note
 When you have a Today note, everything you add to your vault comes with the question: should this go into the Today note or its own note? If you add it to the Today note, it might be hard to find later. If you add it to a relevant note or its own, you lose the context of the date. If you are like me, in event thinking about that question, you've forgotten what you wanted to write down in the first place.
@@ -40,13 +40,27 @@ Don't think about adding a new section to a larger document, just write down wha
 
 ## Other Questions
 ### Should I Use This Yet?
-Maybe. It's under active-development. Due to it just being a folder on your harddrive, data loss is unlikely but possible (back up your data either way). The CLI contract might have breaking changes until 1.0. I will try to minimize breaking changes and allow for migration via `ruin doctor` in those cases. 
+Maybe. It's under active-development. Due to it just being a folder on your hard drive, data loss is unlikely but possible (back up your data either way). The CLI contract might have breaking changes until 1.0. I will try to minimize breaking changes and allow for migration via `ruin doctor` where I can.
+
+### What's your roadmap?
+I want to use/explore the feature set in the CLI/TUI for now. Some of these ideas might be too abstract/complex for day-to-day use, and significantly changing or removing them will be necessary. That's fastest when there is just a core CLI and TUI to update.
+
+From there, an iOS and Mac app focused on quickly capturing notes will be next, reading and interacting with a full vault after that.
+
+Finally, the intention is to have a polished, native experience on both Mac and iOS, with all the querying and editing capabilities of a modern notes app. We'll see if we get there.
+
+The CLI and TUI will always be free and open-source. The iOS and Mac apps will be closed source and come with a small subscription, offering a limited vault size as a free tier.
+
+Linux, Windows, and Android support are not the focus at this time; the CLI and TUI might work with them, but compatibility has not been rigorously tested.
 
 ### What's With the Name?
-The pretentious answer is it's a reference to _The Waste Land_ by T.S. Eliot (that I'm likely misinterpretting). 
+The pretentious answer is it's a reference to _The Waste Land_ by T.S. Eliot (that I'm likely misinterpreting). 
 > These fragments I have shored against my ruins.
 
 The real answer is it's memorable, short, and aesthetically pleasing.
+
+### Doesn't <Org-Mode|Obsidian|Lotus Notes|etc>  do this already?
+Yes. Nevertheless, here we are. 
 
 ## Installation
 For now, download the repo and `make install`. Eventually, `brew` once I figure out how to do that.
@@ -60,8 +74,7 @@ For now, download the repo and `make install`. Eventually, `brew` once I figure 
 See [reference](docs/cli-reference.md) for more info
 
 ## See Also
-- Raycast Extension (TBD)
-- TUI (TBD)
+- TUI
 - Mac App (TBD)
 
 ## AI
