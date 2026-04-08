@@ -24,7 +24,7 @@ go build -ldflags "-X main.version=$VERSION" -race -o {{vars.binary_name}} {{var
 """
 
 [tasks."build-all"]
-description = "Build for all platforms (darwin, linux, windows)"
+description = "Build for all platforms (darwin, linux)"
 depends = ["clean"]
 run = """
 mkdir -p {{vars.build_dir}}
@@ -34,7 +34,6 @@ GOOS=darwin GOARCH=amd64 go build -ldflags "$LDFLAGS" -o {{vars.build_dir}}/{{va
 GOOS=darwin GOARCH=arm64 go build -ldflags "$LDFLAGS" -o {{vars.build_dir}}/{{vars.binary_name}}-darwin-arm64 {{vars.cmd_path}}
 GOOS=linux GOARCH=amd64 go build -ldflags "$LDFLAGS" -o {{vars.build_dir}}/{{vars.binary_name}}-linux-amd64 {{vars.cmd_path}}
 GOOS=linux GOARCH=arm64 go build -ldflags "$LDFLAGS" -o {{vars.build_dir}}/{{vars.binary_name}}-linux-arm64 {{vars.cmd_path}}
-GOOS=windows GOARCH=amd64 go build -ldflags "$LDFLAGS" -o {{vars.build_dir}}/{{vars.binary_name}}-windows-amd64.exe {{vars.cmd_path}}
 """
 
 [tasks.install]

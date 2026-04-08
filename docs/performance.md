@@ -4,10 +4,10 @@ Track search performance over time as optimizations are made.
 
 ## Benchmark Environment
 
-Document your test environment for reproducible results:
+Document the test environment for reproducible results:
 
 ```
-Machine: [Your machine, e.g., Apple M3 Pro, 18GB RAM]
+Machine: [e.g., Apple M3 Pro, 18GB RAM]
 Go version: [e.g., go1.21.0]
 OS: [e.g., macOS 14.3]
 ```
@@ -107,7 +107,7 @@ make bench-compare
 When making performance-related changes:
 
 1. Run `make bench-save` before changes (baseline)
-2. Make your changes
+2. Make the changes
 3. Run `make bench-save` after changes
 4. Run `make bench-compare` to see diff
 5. Add results to this file with date and description

@@ -1,5 +1,10 @@
 # Ruin Note CLI
 
+[![CI](https://github.com/donnellyk/ruin-note-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/donnellyk/ruin-note-cli/actions/workflows/ci.yml)
+[![Latest release](https://img.shields.io/github/v/release/donnellyk/ruin-note-cli)](https://github.com/donnellyk/ruin-note-cli/releases/latest)
+[![Go version](https://img.shields.io/github/go-mod/go-version/donnellyk/ruin-note-cli)](go.mod)
+[![License](https://img.shields.io/github/license/donnellyk/ruin-note-cli)](LICENSE)
+
 A Zettelkasten-ish note-taking CLI written in Go. Don't organize; query and compose.
 
 Take small, atomic notes saved as simple markdown files. Later, compose them into different "documents", depending on your needs. This probably has an audience of one (me) or zero (turns out, not me); time will tell.
@@ -63,7 +68,32 @@ The real answer is it's memorable, short, and aesthetically pleasing.
 Yes. Nevertheless, here we are. 
 
 ## Installation
-For now, download the repo and `make install`. Eventually, `brew` once I figure out how to do that.
+
+### Homebrew (recommended, macOS and Linux)
+
+```
+brew install donnellyk/ruin/ruin-cli
+```
+
+The installed binary is `ruin` (the formula is named `ruin-cli` to disambiguate the install command; the command stays `ruin`).
+
+### From source with `go install`
+
+Requires Go 1.26+:
+
+```
+go install github.com/donnellyk/ruin-note-cli/cmd/ruin@latest
+```
+
+### From a local checkout
+
+Requires Go 1.26+ and [mise](https://mise.jdx.dev):
+
+```
+git clone https://github.com/donnellyk/ruin-note-cli.git
+cd ruin-note-cli
+mise run install
+```
 
 ## Get Started
 - `ruin help`

@@ -1,0 +1,34 @@
+version: 2
+
+builds:
+  - main: ./cmd/ruin
+    binary: ruin
+    ldflags:
+      - -X main.version={{.Version}}
+    goos:
+      - darwin
+      - linux
+    goarch:
+      - amd64
+      - arm64
+
+archives:
+  - formats: [tar.gz]
+    name_template: "ruin-{{.Os}}-{{.Arch}}"
+
+brews:
+  - name: ruin-cli
+    homepage: https://github.com/donnellyk/ruin-note-cli
+    description: "A Zettelkasten-inspired note-taking CLI"
+    license: MIT
+    repository:
+      owner: donnellyk
+      name: homebrew-ruin
+      token: "{{ .Env.TAP_GITHUB_TOKEN }}"
+    commit_author:
+      name: Kevin Donnelly
+    install: |
+      bin.install "ruin"
+
+changelog:
+  disable: true

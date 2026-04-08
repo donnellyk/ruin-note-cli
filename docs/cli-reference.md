@@ -344,13 +344,13 @@ With no arguments, performs a full vault scan:
 - Generate UUIDs for notes missing one
 - Reindex tags from document content
 - Resolve date tokens and rebuild `dates` frontmatter
-- Resolve [[wiki links]] and rebuild linked-cards
+- Resolve [[wiki links]] and rebuild `linked-cards`
 - Rebuild `.ruin/tags.yml`
 - Rebuild `.ruin/titles.json`
 - Detect orphaned parent references
 
 With file path arguments, reindexes only the specified files:
-- Same per-file operations (UUID, tags, dates, linked-cards)
+- Same per-file operations (UUID, tags, dates, `linked-cards`)
 - Incremental index updates (no full rebuild)
 - Useful after manual edits outside of ruin
 
@@ -666,7 +666,7 @@ Content of second note...
 
 ## Versioning
 
-Ruin automatically commits note changes to git after each write operation. This provides version history for your notes with no manual effort.
+Ruin automatically commits note changes to git after each write operation. This provides version history for notes with no manual effort.
 
 - **Enabled by default** when vault has a `.git/` directory
 - **`ruin init`** creates the git repo automatically (opt out with `--no-git`)

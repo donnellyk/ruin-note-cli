@@ -4,7 +4,7 @@ This document covers three additions to `ruin compose`: YML-based composition fi
 
 ## YML-Based Composition
 
-By default, `ruin compose` walks the parent-child tree stored in note frontmatter. YML composition files let you define a note tree independently, without modifying any note's `parent` field.
+By default, `ruin compose` walks the parent-child tree stored in note frontmatter. YML composition files define a note tree independently, without modifying any note's `parent` field.
 
 ### File Format
 
@@ -44,7 +44,7 @@ Children listed in the YML file retain their declared order. The `--sort` flag o
 
 ### Hybrid Mode: YML + Frontmatter Children
 
-When a node in the YML file has no `children` key, its frontmatter-based children (from `titles.json`) are used automatically. This lets you control top-level structure via YML while subtrees use their existing parent relationships.
+When a node in the YML file has no `children` key, its frontmatter-based children (from `titles.json`) are used automatically. This allows top-level structure to be controlled via YML while subtrees use their existing parent relationships.
 
 ```yaml
 root: "Project Alpha Hub"
@@ -58,7 +58,7 @@ If "Architecture" has frontmatter children "Backend Design" and "Frontend Design
 
 ### Saving YML Files as Bookmarks
 
-You can save a YML composition file as a named bookmark with `parent save`:
+Save a YML composition file as a named bookmark with `parent save`:
 
 ```bash
 ruin parent save alpha --file project.yml
@@ -80,7 +80,7 @@ ruin parent list
 # docs: d4e5f6a7-... "Documentation Root"
 ```
 
-File-based bookmarks only work with `ruin compose`. Other commands that resolve parent bookmarks (e.g., `ruin parent children`, `ruin parent tree`) return an error directing you to use `ruin compose` instead.
+File-based bookmarks only work with `ruin compose`. Other commands that resolve parent bookmarks (e.g., `ruin parent children`, `ruin parent tree`) return an error directing the user to `ruin compose` instead.
 
 ### Unresolvable Notes
 
