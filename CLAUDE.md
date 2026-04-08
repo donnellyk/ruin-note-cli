@@ -4,10 +4,7 @@ A Zettelkasten-inspired note-taking CLI written in Go.
 
 ## Important
 - This is a CLI with downstream dependencies. Avoid breaking changes unless necessary. Highlight breaking changes.
-- Do not edit `Todos` section in "IMPLEMENTATION_PLAN.md`
 - When running `go test` directly, always set `EDITOR=true` to prevent editor popups (or use `mise run test` which sets it automatically).
-- When running the `ruin` binary for manual testing, always use `--vault /tmp/ruin-test-vault` (create it first with `ruin dev seed` if needed). Never run against the user's real vault.
-- Never modify `~/.config/ruin`. Use `--vault`. Do not run `config vault_path ~/path`. Stop before changing vault path.
 
 ## Project Setup
 
@@ -79,8 +76,7 @@ ruin-note-cli/
 ├── go.mod
 ├── go.sum
 ├── mise.toml
-├── CLAUDE.md
-└── IMPLEMENTATION_PLAN.md
+└── CLAUDE.md
 ```
 
 ## Key Dependencies
@@ -151,8 +147,3 @@ Then test commands against it:
 EDITOR=cat ./ruin --vault /tmp/ruin-test-vault search "#daily" --edit
 ```
 
-## Implementation Status
-
-See `IMPLEMENTATION_PLAN.md` for the detailed implementation plan and progress checklist.
-
-**Important**: When completing implementation work, update the progress checklist at the top of `IMPLEMENTATION_PLAN.md` by marking completed items with `[x]`.
