@@ -11,6 +11,38 @@ Take small, atomic notes saved as simple markdown files. Later, compose them int
 
 Eventually, this utility will form the core of a TUI and nice Mac GUI but should be usable (& scriptable) as-is.
 
+## Installation
+
+### Homebrew (recommended)
+
+```
+brew install donnellyk/ruin/ruin-cli
+```
+
+### `go install`
+
+Requires Go 1.26+:
+
+```
+go install github.com/donnellyk/ruin-note-cli/cmd/ruin@latest
+```
+
+### From a local checkout
+
+Requires Go 1.26+ and [mise](https://mise.jdx.dev). After checking out the repo:
+
+```
+mise run install
+```
+
+## Get Started
+- `ruin help`
+- `ruin init`
+- `ruin log "A really important thing to remember"` or `cat note.txt | ruin log`
+- `ruin today --edit`
+
+See [reference](docs/cli-reference.md) for more info
+
 ## Key Features
 
 ### Notes are just markdown files
@@ -67,45 +99,9 @@ The real answer is it's memorable, short, and aesthetically pleasing.
 ### Doesn't <Org-Mode|Obsidian|Lotus Notes|etc>  do this already?
 Yes. Nevertheless, here we are. 
 
-## Installation
-
-### Homebrew (recommended, macOS and Linux)
-
-```
-brew install donnellyk/ruin/ruin-cli
-```
-
-The installed binary is `ruin` (the formula is named `ruin-cli` to disambiguate the install command; the command stays `ruin`).
-
-### From source with `go install`
-
-Requires Go 1.26+:
-
-```
-go install github.com/donnellyk/ruin-note-cli/cmd/ruin@latest
-```
-
-### From a local checkout
-
-Requires Go 1.26+ and [mise](https://mise.jdx.dev):
-
-```
-git clone https://github.com/donnellyk/ruin-note-cli.git
-cd ruin-note-cli
-mise run install
-```
-
-## Get Started
-- `ruin help`
-- `ruin init`
-- `ruin log "A really important thing to remember"` or `cat note.txt | ruin log`
-- `ruin today --edit`
-
-See [reference](docs/cli-reference.md) for more info
-
 ## See Also
 - TUI
 - Mac App (TBD)
 
 ## AI
-Claude Code was used extensively for this project. All code was tested, reviewed, committed by a human.
+Claude Code was used extensively for this project. All code was read, tested, reviewed, and committed by a human.
