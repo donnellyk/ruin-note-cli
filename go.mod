@@ -1,4 +1,4 @@
-module kvnd/ruin-note-cli
+module github.com/donnellyk/ruin-note-cli
 
 go 1.26.1
 

@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"kvnd/ruin-note-cli/internal/note"
-	"kvnd/ruin-note-cli/internal/vault"
+	"github.com/donnellyk/ruin-note-cli/internal/note"
+	"github.com/donnellyk/ruin-note-cli/internal/vault"
 )
 
 // frontmatterLineCount returns the number of lines the frontmatter occupies

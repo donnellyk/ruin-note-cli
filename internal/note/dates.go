@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	"kvnd/ruin-note-cli/internal/dateparse"
+	"github.com/donnellyk/ruin-note-cli/internal/dateparse"
 )
 
 // dateTokenPattern matches @ followed by a potential date token.

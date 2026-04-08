@@ -5,11 +5,11 @@ import (
 	"os"
 	"strings"
 
+	"github.com/donnellyk/ruin-note-cli/internal/commands"
+	"github.com/donnellyk/ruin-note-cli/internal/config"
+	"github.com/donnellyk/ruin-note-cli/internal/vault"
+	"github.com/donnellyk/ruin-note-cli/internal/versioning"
 	"github.com/spf13/cobra"
-	"kvnd/ruin-note-cli/internal/commands"
-	"kvnd/ruin-note-cli/internal/config"
-	"kvnd/ruin-note-cli/internal/vault"
-	"kvnd/ruin-note-cli/internal/versioning"
 )
 
 var (

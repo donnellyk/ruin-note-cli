@@ -7,8 +7,8 @@ import (
 	"os"
 	"strings"
 
+	"github.com/donnellyk/ruin-note-cli/internal/vault"
 	"github.com/spf13/cobra"
-	"kvnd/ruin-note-cli/internal/vault"
 )
 
 // --- note append ---

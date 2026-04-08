@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"kvnd/ruin-note-cli/internal/vault"
+	"github.com/donnellyk/ruin-note-cli/internal/vault"
 )
 
 func setupParentTestVault(t *testing.T) *vault.Vault {

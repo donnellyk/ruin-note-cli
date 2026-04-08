@@ -6,10 +6,10 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/donnellyk/ruin-note-cli/internal/config"
+	"github.com/donnellyk/ruin-note-cli/internal/vault"
+	"github.com/donnellyk/ruin-note-cli/internal/versioning"
 	"github.com/spf13/cobra"
-	"kvnd/ruin-note-cli/internal/config"
-	"kvnd/ruin-note-cli/internal/vault"
-	"kvnd/ruin-note-cli/internal/versioning"
 )
 
 // InitOutput represents the JSON output for the init command.

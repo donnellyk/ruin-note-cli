@@ -6,9 +6,9 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/donnellyk/ruin-note-cli/internal/note"
+	"github.com/donnellyk/ruin-note-cli/internal/vault"
 	"github.com/spf13/cobra"
-	"kvnd/ruin-note-cli/internal/note"
-	"kvnd/ruin-note-cli/internal/vault"
 )
 
 // DoctorOutput represents the JSON output for the doctor command.

@@ -5,8 +5,8 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/donnellyk/ruin-note-cli/internal/vault"
 	"gopkg.in/yaml.v3"
-	"kvnd/ruin-note-cli/internal/vault"
 )
 
 type ComposeSpec struct {

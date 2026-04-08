@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"os"
 
-	"kvnd/ruin-note-cli/internal/note"
-	"kvnd/ruin-note-cli/internal/vault"
+	"github.com/donnellyk/ruin-note-cli/internal/note"
+	"github.com/donnellyk/ruin-note-cli/internal/vault"
 )
 
 // RefreshLinkedCards extracts wiki links from the note's content,

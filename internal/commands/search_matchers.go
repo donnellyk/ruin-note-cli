@@ -5,8 +5,8 @@ import (
 	"slices"
 	"strings"
 
-	"kvnd/ruin-note-cli/internal/dateparse"
-	"kvnd/ruin-note-cli/internal/note"
+	"github.com/donnellyk/ruin-note-cli/internal/dateparse"
+	"github.com/donnellyk/ruin-note-cli/internal/note"
 )
 
 // isDateTerm returns true if the term is a resolved date term (@YYYY-MM-DD).

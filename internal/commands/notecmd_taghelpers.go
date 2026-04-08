@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"kvnd/ruin-note-cli/internal/note"
+	"github.com/donnellyk/ruin-note-cli/internal/note"
 )
 
 // ensureHashPrefix adds # prefix if missing.

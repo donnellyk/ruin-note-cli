@@ -7,8 +7,8 @@ import (
 	"os/exec"
 	"strings"
 
-	"kvnd/ruin-note-cli/internal/note"
-	"kvnd/ruin-note-cli/internal/vault"
+	"github.com/donnellyk/ruin-note-cli/internal/note"
+	"github.com/donnellyk/ruin-note-cli/internal/vault"
 )
 
 // handleEdit opens results in $EDITOR and saves changes.

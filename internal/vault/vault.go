@@ -8,9 +8,9 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/donnellyk/ruin-note-cli/internal/note"
+	"github.com/donnellyk/ruin-note-cli/internal/versioning"
 	"gopkg.in/yaml.v3"
-	"kvnd/ruin-note-cli/internal/note"
-	"kvnd/ruin-note-cli/internal/versioning"
 )
 
 const (

@@ -3,10 +3,10 @@ package commands
 import (
 	"fmt"
 
+	"github.com/donnellyk/ruin-note-cli/internal/dateparse"
+	"github.com/donnellyk/ruin-note-cli/internal/note"
+	"github.com/donnellyk/ruin-note-cli/internal/vault"
 	"github.com/spf13/cobra"
-	"kvnd/ruin-note-cli/internal/dateparse"
-	"kvnd/ruin-note-cli/internal/note"
-	"kvnd/ruin-note-cli/internal/vault"
 )
 
 // DateFilterMode specifies which timestamp(s) to match.

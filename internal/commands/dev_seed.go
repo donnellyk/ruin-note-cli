@@ -7,9 +7,9 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/donnellyk/ruin-note-cli/internal/note"
+	"github.com/donnellyk/ruin-note-cli/internal/vault"
 	"github.com/spf13/cobra"
-	"kvnd/ruin-note-cli/internal/note"
-	"kvnd/ruin-note-cli/internal/vault"
 )
 
 const defaultSeedPath = "/tmp/ruin-test-vault"

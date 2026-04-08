@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"kvnd/ruin-note-cli/internal/note"
+	"github.com/donnellyk/ruin-note-cli/internal/note"
 )
 
 // QueryMatcher is a function that tests if a note matches the query.

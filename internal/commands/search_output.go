@@ -6,7 +6,7 @@ import (
 	"os"
 	"strings"
 
-	"kvnd/ruin-note-cli/internal/note"
+	"github.com/donnellyk/ruin-note-cli/internal/note"
 )
 
 // FrontmatterMode controls how frontmatter is included in output.

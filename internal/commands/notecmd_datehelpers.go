@@ -5,8 +5,8 @@ import (
 	"regexp"
 	"strings"
 
-	"kvnd/ruin-note-cli/internal/dateparse"
-	"kvnd/ruin-note-cli/internal/note"
+	"github.com/donnellyk/ruin-note-cli/internal/dateparse"
+	"github.com/donnellyk/ruin-note-cli/internal/note"
 )
 
 // resolveDateArg takes a user-provided date argument (with or without @),
