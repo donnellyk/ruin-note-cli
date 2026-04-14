@@ -43,8 +43,8 @@ type composeWalker struct {
 	stripGlobalTags  bool
 	normalizeHeaders bool
 	expandEmbeds     bool
-	expandDynamic    bool                            // enable dynamic embed expansion (![[search: ...]] etc.)
-	rootUUID         string                          // UUID of the compose root (excluded from dynamic search/pick results)
+	expandDynamic    bool                              // enable dynamic embed expansion (![[search: ...]] etc.)
+	rootUUID         string                            // UUID of the compose root (excluded from dynamic search/pick results)
 	ymlDynamic       map[string][]note.DynamicEmbedRef // parent UUID -> dynamic entries from YAML
 }
 
@@ -234,7 +234,7 @@ func (w *composeWalker) expandEmbedsInTree(tree *composeTree, content string, de
 
 // dynamicResult holds the output of a dynamic embed expansion.
 type dynamicResult struct {
-	segments     []composeSegment
+	segments      []composeSegment
 	embeddedUUIDs []string
 }
 
