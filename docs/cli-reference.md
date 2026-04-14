@@ -107,6 +107,32 @@ Date tokens in queries are resolved dynamically. In note content, they are resol
 - `todo:done` — notes with checked checkboxes (`- [x]`)
 - `todo:any` — notes with any checkboxes
 
+#### Negation
+
+Prefix any search term with `!` to exclude matching notes.
+
+```bash
+ruin search "#project !#archived"      # #project but not #archived
+ruin search "#followup !#done"         # open follow-ups
+ruin search "meeting !title:draft"     # "meeting" but not drafts
+ruin search "#daily !created:today"    # past daily notes, not today's
+```
+
+Negation works with all term types: tags, text, dates, title/path filters,
+parent filters, and todo filters.
+
+Multiple negations combine with AND — all exclusions must hold:
+
+```bash
+ruin search "#project !#archived !#draft"   # exclude both archived and draft
+```
+
+Negation-only queries are valid. `ruin search "!#archived"` returns every note
+in the vault that is not tagged `#archived`.
+
+The `--global-tags` and `--inline-tags` flags apply to negated tag terms the
+same way they apply to positive terms.
+
 | Flag | Short | Description |
 |------|-------|-------------|
 | `--bulk` | `-b` | Output with `%%%% <uuid> %%%%` separators |
@@ -147,6 +173,15 @@ ruin pick [inline-tags...] [@date...] [flags]
 | `--sort` | `-s` | Sort order for notes (default `created:desc`). Fields: `created`, `updated`, `title`, `order` |
 
 By default, multiple tags are combined with AND (lines must contain all tags).
+
+Tags can be negated with `!` to exclude lines:
+
+```bash
+ruin pick "#followup" "!#done"         # open follow-ups, excluding #done lines
+ruin pick "#task" "!#done" "!#deferred"  # exclude both #done and #deferred
+```
+
+Exclusions always apply as AND regardless of `--any`.
 
 Tags are optional when `@date` is provided — `ruin pick @today` returns all lines with today's date annotation. Use `--todo` to also match markdown checkbox lines. When `--todo` or `@date` is provided, tags become optional. If tags are also provided, checkbox lines must contain those tags. The done filter applies uniformly: checked checkboxes (`[x]`) and `#done` lines are both treated as "done".
 

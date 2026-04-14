@@ -86,6 +86,15 @@ They can be combined:
 ruin search "created:today @tomorrow"
 ```
 
+### Negation
+
+Date tokens can be negated with `!` to exclude matching notes:
+
+```bash
+ruin search "!@today"       # exclude notes dated today
+ruin search "!@yesterday"   # exclude notes dated yesterday
+```
+
 ## Supported Commands
 
 Date tokens are resolved during:

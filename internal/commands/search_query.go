@@ -97,7 +97,7 @@ func splitTerms(part string) []string {
 			}
 
 			// Potential start of tag
-			if current.Len() > 0 {
+			if current.Len() > 0 && current.String() != "!" {
 				terms = append(terms, current.String())
 				current.Reset()
 			}
@@ -149,11 +149,31 @@ func splitTerms(part string) []string {
 	return terms
 }
 
+// negateMatcher wraps a matcher to invert its result.
+func negateMatcher(inner QueryMatcher) QueryMatcher {
+	return func(n *note.Note) bool {
+		return !inner(n)
+	}
+}
+
 // parseTermMatcher creates a matcher for a single search term.
 func parseTermMatcher(term string, tagScope TagScope) (QueryMatcher, MatcherInfo, error) {
 	term = strings.TrimSpace(term)
 	if term == "" {
 		return nil, MatcherInfo{}, fmt.Errorf("empty term")
+	}
+
+	// Negation: !term excludes matching notes
+	if strings.HasPrefix(term, "!") {
+		inner := term[1:]
+		if inner == "" {
+			return nil, MatcherInfo{}, fmt.Errorf("empty negation term")
+		}
+		matcher, info, err := parseTermMatcher(inner, tagScope)
+		if err != nil {
+			return nil, MatcherInfo{}, err
+		}
+		return negateMatcher(matcher), info, nil
 	}
 
 	fmOnly := MatcherInfo{NeedsBody: false}

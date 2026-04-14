@@ -901,3 +901,90 @@ func TestSearchOptions_EarlyTermination(t *testing.T) {
 		t.Errorf("with limit=1, found %d results, want 1", len(lines))
 	}
 }
+
+func TestSearchCmd_NegateTag(t *testing.T) {
+	vlt := setupTestVault(t)
+
+	jsonOut := true
+	cmd := NewSearchCmd(func() *vault.Vault { return vlt }, &jsonOut)
+
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	// Search for #project but NOT #work — should match uuid-4 (has #project only)
+	// but not uuid-3 (has #project AND #work)
+	cmd.SetArgs([]string{"#project", "!#work"})
+	err := cmd.Execute()
+
+	w.Close()
+	os.Stdout = oldStdout
+
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+
+	var buf bytes.Buffer
+	buf.ReadFrom(r)
+
+	var results []struct {
+		UUID string   `json:"uuid"`
+		Tags []string `json:"tags"`
+	}
+
+	if err := json.Unmarshal(buf.Bytes(), &results); err != nil {
+		t.Fatalf("failed to parse JSON: %v", err)
+	}
+
+	if len(results) != 1 {
+		t.Fatalf("found %d results, want 1", len(results))
+	}
+
+	if results[0].UUID != "uuid-4" {
+		t.Errorf("UUID = %q, want uuid-4", results[0].UUID)
+	}
+}
+
+func TestSearchCmd_NegateFilter(t *testing.T) {
+	vlt := setupTestVault(t)
+
+	jsonOut := true
+	cmd := NewSearchCmd(func() *vault.Vault { return vlt }, &jsonOut)
+
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	// Exclude notes created on 2025-01-01 (uuid-1)
+	cmd.SetArgs([]string{"--everything", "!created:2025-01-01"})
+	err := cmd.Execute()
+
+	w.Close()
+	os.Stdout = oldStdout
+
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+
+	var buf bytes.Buffer
+	buf.ReadFrom(r)
+
+	var results []struct {
+		UUID string `json:"uuid"`
+	}
+
+	if err := json.Unmarshal(buf.Bytes(), &results); err != nil {
+		t.Fatalf("failed to parse JSON: %v", err)
+	}
+
+	// uuid-1 was created on 2025-01-01 and should be excluded, leaving 4 notes
+	if len(results) != 4 {
+		t.Errorf("found %d results, want 4 (excluding uuid-1)", len(results))
+	}
+
+	for _, r := range results {
+		if r.UUID == "uuid-1" {
+			t.Error("uuid-1 should be excluded by !created:2025-01-01")
+		}
+	}
+}

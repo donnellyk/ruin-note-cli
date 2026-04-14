@@ -110,7 +110,7 @@ Review the budget.  #todo
 	n.RefreshTags()
 
 	queryTags := []string{"#followup"}
-	matches := pickLinesFromNote(n, queryTags, nil, false, doneExclude, false)
+	matches := pickLinesFromNote(n, pickTagFilter{include: queryTags}, nil, false, doneExclude, false)
 
 	if len(matches) != 1 {
 		t.Fatalf("got %d matches, want 1", len(matches))
@@ -138,7 +138,7 @@ Added unit tests. #followup`,
 	n.RefreshTags()
 
 	queryTags := []string{"#followup", "#urgent"}
-	matches := pickLinesFromNote(n, queryTags, nil, false, doneExclude, false)
+	matches := pickLinesFromNote(n, pickTagFilter{include: queryTags}, nil, false, doneExclude, false)
 
 	if len(matches) != 1 {
 		t.Fatalf("got %d matches, want 1 (AND mode)", len(matches))
@@ -162,7 +162,7 @@ Added unit tests. #todo`,
 	n.RefreshTags()
 
 	queryTags := []string{"#followup", "#todo"}
-	matches := pickLinesFromNote(n, queryTags, nil, true, doneExclude, false)
+	matches := pickLinesFromNote(n, pickTagFilter{include: queryTags}, nil, true, doneExclude, false)
 
 	if len(matches) != 2 {
 		t.Fatalf("got %d matches, want 2 (OR mode)", len(matches))
@@ -180,7 +180,7 @@ Just a regular day.`,
 	n.RefreshTags()
 
 	queryTags := []string{"#followup"}
-	matches := pickLinesFromNote(n, queryTags, nil, false, doneExclude, false)
+	matches := pickLinesFromNote(n, pickTagFilter{include: queryTags}, nil, false, doneExclude, false)
 
 	if len(matches) != 0 {
 		t.Errorf("got %d matches, want 0", len(matches))
@@ -201,7 +201,7 @@ Content here.
 
 	// #meeting is a global tag (after H1), should not be picked
 	queryTags := []string{"#meeting"}
-	matches := pickLinesFromNote(n, queryTags, nil, false, doneExclude, false)
+	matches := pickLinesFromNote(n, pickTagFilter{include: queryTags}, nil, false, doneExclude, false)
 
 	if len(matches) != 0 {
 		t.Errorf("got %d matches, want 0 (global tags excluded)", len(matches))
@@ -209,7 +209,7 @@ Content here.
 
 	// #done is a trailing global tag, should not be picked
 	queryTags = []string{"#done"}
-	matches = pickLinesFromNote(n, queryTags, nil, false, doneExclude, false)
+	matches = pickLinesFromNote(n, pickTagFilter{include: queryTags}, nil, false, doneExclude, false)
 
 	if len(matches) != 0 {
 		t.Errorf("got %d matches, want 0 (trailing global tags excluded)", len(matches))
@@ -232,7 +232,7 @@ More content. #followup`,
 
 	// #wip appears on a tag-only line in the inline zone -- should be excluded
 	queryTags := []string{"#wip"}
-	matches := pickLinesFromNote(n, queryTags, nil, false, doneExclude, false)
+	matches := pickLinesFromNote(n, pickTagFilter{include: queryTags}, nil, false, doneExclude, false)
 
 	if len(matches) != 0 {
 		t.Errorf("got %d matches, want 0 (tag-only lines in content should be excluded)", len(matches))
@@ -240,7 +240,7 @@ More content. #followup`,
 
 	// #followup on a content line should still match
 	queryTags = []string{"#followup"}
-	matches = pickLinesFromNote(n, queryTags, nil, false, doneExclude, false)
+	matches = pickLinesFromNote(n, pickTagFilter{include: queryTags}, nil, false, doneExclude, false)
 
 	if len(matches) != 1 {
 		t.Errorf("got %d matches, want 1", len(matches))
@@ -258,7 +258,7 @@ Fix bug. #followup #urgent #p1`,
 	n.RefreshTags()
 
 	queryTags := []string{"#followup"}
-	matches := pickLinesFromNote(n, queryTags, nil, false, doneExclude, false)
+	matches := pickLinesFromNote(n, pickTagFilter{include: queryTags}, nil, false, doneExclude, false)
 
 	if len(matches) != 1 {
 		t.Fatalf("got %d matches, want 1", len(matches))
@@ -326,7 +326,7 @@ Fix the bug. #followup`,
 	n.RefreshTags()
 
 	queryTags := []string{"#followup"}
-	matches := pickLinesFromNote(n, queryTags, nil, false, doneExclude, false)
+	matches := pickLinesFromNote(n, pickTagFilter{include: queryTags}, nil, false, doneExclude, false)
 
 	if len(matches) != 2 {
 		t.Fatalf("got %d matches, want 2 (done excluded)", len(matches))
@@ -355,7 +355,7 @@ Fix the bug. #followup`,
 	n.RefreshTags()
 
 	queryTags := []string{"#followup"}
-	matches := pickLinesFromNote(n, queryTags, nil, false, doneInclude, false)
+	matches := pickLinesFromNote(n, pickTagFilter{include: queryTags}, nil, false, doneInclude, false)
 
 	if len(matches) != 3 {
 		t.Fatalf("got %d matches, want 3 (all included)", len(matches))
@@ -390,7 +390,7 @@ Fix the bug. #followup`,
 	n.RefreshTags()
 
 	queryTags := []string{"#followup"}
-	matches := pickLinesFromNote(n, queryTags, nil, false, doneOnly, false)
+	matches := pickLinesFromNote(n, pickTagFilter{include: queryTags}, nil, false, doneOnly, false)
 
 	if len(matches) != 1 {
 		t.Fatalf("got %d matches, want 1 (done only)", len(matches))
@@ -418,7 +418,7 @@ Done item. #followup #done`,
 	n.RefreshTags()
 
 	queryTags := []string{"#followup"}
-	matches := pickLinesFromNote(n, queryTags, nil, false, doneInclude, false)
+	matches := pickLinesFromNote(n, pickTagFilter{include: queryTags}, nil, false, doneInclude, false)
 
 	if len(matches) != 2 {
 		t.Fatalf("got %d matches, want 2", len(matches))
@@ -456,7 +456,7 @@ Review contract @2026-03-15. #followup #urgent`,
 			Start: time.Date(2026, 3, 15, 0, 0, 0, 0, time.Local),
 			End:   time.Date(2026, 3, 16, 0, 0, 0, 0, time.Local),
 		}
-		matches := pickLinesFromNote(n, queryTags, []dateparse.DateRange{dr}, false, doneExclude, false)
+		matches := pickLinesFromNote(n, pickTagFilter{include: queryTags}, []dateparse.DateRange{dr}, false, doneExclude, false)
 		if len(matches) != 2 {
 			t.Fatalf("got %d matches, want 2", len(matches))
 		}
@@ -469,7 +469,7 @@ Review contract @2026-03-15. #followup #urgent`,
 	})
 
 	t.Run("no date filter returns all", func(t *testing.T) {
-		matches := pickLinesFromNote(n, queryTags, nil, false, doneExclude, false)
+		matches := pickLinesFromNote(n, pickTagFilter{include: queryTags}, nil, false, doneExclude, false)
 		if len(matches) != 3 {
 			t.Fatalf("got %d matches, want 3", len(matches))
 		}
@@ -480,7 +480,7 @@ Review contract @2026-03-15. #followup #urgent`,
 			Start: time.Date(2099, 1, 1, 0, 0, 0, 0, time.Local),
 			End:   time.Date(2099, 1, 2, 0, 0, 0, 0, time.Local),
 		}
-		matches := pickLinesFromNote(n, queryTags, []dateparse.DateRange{dr}, false, doneExclude, false)
+		matches := pickLinesFromNote(n, pickTagFilter{include: queryTags}, []dateparse.DateRange{dr}, false, doneExclude, false)
 		if len(matches) != 0 {
 			t.Errorf("got %d matches, want 0", len(matches))
 		}
@@ -492,7 +492,7 @@ Review contract @2026-03-15. #followup #urgent`,
 			Start: time.Date(2026, 3, 1, 0, 0, 0, 0, time.Local),
 			End:   time.Date(2026, 4, 1, 0, 0, 0, 0, time.Local),
 		}
-		matches := pickLinesFromNote(n, queryTags, []dateparse.DateRange{dr}, false, doneExclude, false)
+		matches := pickLinesFromNote(n, pickTagFilter{include: queryTags}, []dateparse.DateRange{dr}, false, doneExclude, false)
 		if len(matches) != 2 {
 			t.Fatalf("got %d matches, want 2 (month range)", len(matches))
 		}
@@ -504,7 +504,7 @@ Review contract @2026-03-15. #followup #urgent`,
 			Start: time.Date(2026, 1, 1, 0, 0, 0, 0, time.Local),
 			End:   time.Date(2027, 1, 1, 0, 0, 0, 0, time.Local),
 		}
-		matches := pickLinesFromNote(n, queryTags, []dateparse.DateRange{dr}, false, doneExclude, false)
+		matches := pickLinesFromNote(n, pickTagFilter{include: queryTags}, []dateparse.DateRange{dr}, false, doneExclude, false)
 		if len(matches) != 2 {
 			t.Fatalf("got %d matches, want 2 (year range)", len(matches))
 		}
@@ -903,7 +903,7 @@ Regular content line.`,
 	n.RefreshTags()
 
 	t.Run("finds all open checkboxes", func(t *testing.T) {
-		matches := pickLinesFromNote(n, nil, nil, false, doneExclude, true)
+		matches := pickLinesFromNote(n, pickTagFilter{}, nil, false, doneExclude, true)
 		if len(matches) != 2 {
 			t.Fatalf("got %d matches, want 2 (open checkboxes)", len(matches))
 		}
@@ -916,7 +916,7 @@ Regular content line.`,
 	})
 
 	t.Run("--done shows only checked", func(t *testing.T) {
-		matches := pickLinesFromNote(n, nil, nil, false, doneOnly, true)
+		matches := pickLinesFromNote(n, pickTagFilter{}, nil, false, doneOnly, true)
 		if len(matches) != 1 {
 			t.Fatalf("got %d matches, want 1 (checked only)", len(matches))
 		}
@@ -929,7 +929,7 @@ Regular content line.`,
 	})
 
 	t.Run("--all shows everything", func(t *testing.T) {
-		matches := pickLinesFromNote(n, nil, nil, false, doneInclude, true)
+		matches := pickLinesFromNote(n, pickTagFilter{}, nil, false, doneInclude, true)
 		if len(matches) != 3 {
 			t.Fatalf("got %d matches, want 3 (all checkboxes)", len(matches))
 		}
@@ -950,7 +950,7 @@ func TestPick_TodoMode_WithTags(t *testing.T) {
 
 	t.Run("checkboxes filtered by tag", func(t *testing.T) {
 		queryTags := []string{"#followup"}
-		matches := pickLinesFromNote(n, queryTags, nil, false, doneExclude, true)
+		matches := pickLinesFromNote(n, pickTagFilter{include: queryTags}, nil, false, doneExclude, true)
 		if len(matches) != 1 {
 			t.Fatalf("got %d matches, want 1 (checkbox with #followup, excluding done)", len(matches))
 		}
@@ -971,7 +971,7 @@ Call Bob about contract. #followup`,
 		}
 		n2.RefreshTags()
 		queryTags := []string{"#followup"}
-		matches := pickLinesFromNote(n2, queryTags, nil, false, doneExclude, true)
+		matches := pickLinesFromNote(n2, pickTagFilter{include: queryTags}, nil, false, doneExclude, true)
 		// Should match both the checkbox (without tag filter) and the tagged line
 		// Actually, with tags provided, checkbox must ALSO have the tag. So only the tagged line matches.
 		if len(matches) != 1 {
@@ -1552,7 +1552,7 @@ Deploy the fix @2026-04-01.`,
 	}
 
 	// No tags, no todo — just date ranges
-	matches := pickLinesFromNote(n, nil, []dateparse.DateRange{dr}, false, doneExclude, false)
+	matches := pickLinesFromNote(n, pickTagFilter{}, []dateparse.DateRange{dr}, false, doneExclude, false)
 
 	if len(matches) != 2 {
 		t.Fatalf("got %d matches, want 2", len(matches))
@@ -1952,4 +1952,216 @@ Regular line @2026-03-15
 			t.Errorf("match 1 = %q", results[0].Matches[1].Content)
 		}
 	})
+}
+
+func TestPickNegateTag(t *testing.T) {
+	n := &note.Note{
+		Content: `# Tasks
+#work
+
+Chat with Bob. #followup
+Review the budget. #followup #done
+Fix the bug. #followup`,
+		Title: "Tasks",
+	}
+	n.RefreshTags()
+
+	tags := pickTagFilter{
+		include: []string{note.NormalizeTag("#followup")},
+		exclude: []string{note.NormalizeTag("#done")},
+	}
+	matches := pickLinesFromNote(n, tags, nil, false, doneInclude, false)
+
+	// #done lines should be excluded by the tag filter, not the done filter
+	// (we pass doneInclude to isolate the tag negation behavior)
+	if len(matches) != 2 {
+		t.Fatalf("got %d matches, want 2", len(matches))
+	}
+	for _, m := range matches {
+		if strings.Contains(m.Content, "#done") {
+			t.Errorf("match %q should have been excluded by !#done", m.Content)
+		}
+	}
+}
+
+func TestPickNegateMultiple(t *testing.T) {
+	n := &note.Note{
+		Content: `# Tasks
+#work
+
+Open item. #task
+Deferred item. #task #deferred
+Done item. #task #done
+Active item. #task #active`,
+		Title: "Tasks",
+	}
+	n.RefreshTags()
+
+	tags := pickTagFilter{
+		include: []string{note.NormalizeTag("#task")},
+		exclude: []string{note.NormalizeTag("#done"), note.NormalizeTag("#deferred")},
+	}
+	matches := pickLinesFromNote(n, tags, nil, false, doneInclude, false)
+
+	if len(matches) != 2 {
+		t.Fatalf("got %d matches, want 2", len(matches))
+	}
+
+	// Should only get "Open item" and "Active item"
+	contents := make(map[string]bool)
+	for _, m := range matches {
+		contents[m.Content] = true
+	}
+	if !contents["Open item. #task"] {
+		t.Error("expected 'Open item. #task' to be matched")
+	}
+	if !contents["Active item. #task #active"] {
+		t.Error("expected 'Active item. #task #active' to be matched")
+	}
+}
+
+func TestPickNegateAnyMode(t *testing.T) {
+	n := &note.Note{
+		Content: `# Tasks
+#work
+
+Call Bob. #followup
+Fix bug. #todo
+Review code. #followup #archived
+Send report. #todo #archived`,
+		Title: "Tasks",
+	}
+	n.RefreshTags()
+
+	tags := pickTagFilter{
+		include: []string{note.NormalizeTag("#followup"), note.NormalizeTag("#todo")},
+		exclude: []string{note.NormalizeTag("#archived")},
+	}
+	// anyMode=true: match lines with ANY include tag, but no exclude tags
+	matches := pickLinesFromNote(n, tags, nil, true, doneExclude, false)
+
+	if len(matches) != 2 {
+		t.Fatalf("got %d matches, want 2", len(matches))
+	}
+
+	contents := make(map[string]bool)
+	for _, m := range matches {
+		contents[m.Content] = true
+	}
+	if !contents["Call Bob. #followup"] {
+		t.Error("expected 'Call Bob. #followup' to match")
+	}
+	if !contents["Fix bug. #todo"] {
+		t.Error("expected 'Fix bug. #todo' to match")
+	}
+}
+
+func TestPickNegateOnlyExclude(t *testing.T) {
+	n := &note.Note{
+		Content: `# Tasks
+#work
+
+- [ ] Open item
+- [x] Done checkbox
+- [ ] Another open #done`,
+		Title: "Tasks",
+	}
+	n.RefreshTags()
+
+	// todoMode=true with only exclude tags (no include tags)
+	tags := pickTagFilter{
+		include: nil,
+		exclude: []string{note.NormalizeTag("#done")},
+	}
+	matches := pickLinesFromNote(n, tags, nil, false, doneExclude, true)
+
+	// Should match "Open item" checkbox only:
+	// "Done checkbox" is excluded by doneExclude (checked)
+	// "Another open #done" is excluded by the exclude tag filter
+	if len(matches) != 1 {
+		t.Fatalf("got %d matches, want 1", len(matches))
+	}
+	if !strings.Contains(matches[0].Content, "Open item") {
+		t.Errorf("expected 'Open item', got %q", matches[0].Content)
+	}
+}
+
+func TestPickFilterNegate(t *testing.T) {
+	tmpDir := t.TempDir()
+	vlt := vault.New(tmpDir)
+	if _, err := vlt.Initialize(false); err != nil {
+		t.Fatalf("failed to initialize vault: %v", err)
+	}
+
+	// Note with #archived tag and inline #followup
+	archived := `---
+uuid: uuid-archived
+created: "2025-01-01T10:00:00-05:00"
+updated: "2025-01-01T10:00:00-05:00"
+tags:
+  - "#archived"
+inline-tags:
+  - "#followup"
+---
+# Archived Note
+#archived
+
+Call client. #followup
+`
+	// Note without #archived, with inline #followup
+	active := `---
+uuid: uuid-active
+created: "2025-01-02T10:00:00-05:00"
+updated: "2025-01-02T10:00:00-05:00"
+tags:
+  - "#work"
+inline-tags:
+  - "#followup"
+---
+# Active Note
+#work
+
+Send report. #followup
+`
+	for name, content := range map[string]string{
+		"archived.md": archived,
+		"active.md":   active,
+	} {
+		path := filepath.Join(tmpDir, name)
+		if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+			t.Fatalf("failed to write test note: %v", err)
+		}
+	}
+
+	jsonOut := true
+	cmd := NewPickCmd(func() *vault.Vault { return vlt }, &jsonOut)
+
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	cmd.SetArgs([]string{"#followup", "--filter", "!#archived"})
+	err := cmd.Execute()
+
+	w.Close()
+	os.Stdout = oldStdout
+
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+
+	var buf bytes.Buffer
+	buf.ReadFrom(r)
+
+	var results []PickResult
+	if err := json.Unmarshal(buf.Bytes(), &results); err != nil {
+		t.Fatalf("failed to parse JSON: %v", err)
+	}
+
+	if len(results) != 1 {
+		t.Fatalf("got %d results, want 1", len(results))
+	}
+	if results[0].UUID != "uuid-active" {
+		t.Errorf("UUID = %q, want uuid-active", results[0].UUID)
+	}
 }

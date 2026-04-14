@@ -19,6 +19,12 @@ import (
 // doneTag is the special tag that marks a line as resolved/completed.
 const doneTag = "#done"
 
+// pickTagFilter separates tags into include and exclude sets for pick matching.
+type pickTagFilter struct {
+	include []string // tags that must be present
+	exclude []string // tags that must NOT be present
+}
+
 // doneFilter controls how #done lines are handled.
 type doneFilter int
 
@@ -211,7 +217,7 @@ fast lookups, then extracts matching lines from the content body.`,
 			var dateRanges []dateparse.DateRange
 			for _, arg := range args {
 				switch {
-				case strings.HasPrefix(arg, "#"):
+				case strings.HasPrefix(arg, "#"), strings.HasPrefix(arg, "!#"):
 					tagArgs = append(tagArgs, arg)
 				case strings.HasPrefix(arg, "@"):
 					token := arg[1:] // strip @
@@ -224,7 +230,18 @@ fast lookups, then extracts matching lines from the content body.`,
 					return fmt.Errorf("invalid argument %q: must start with # or @", arg)
 				}
 			}
-			if len(tagArgs) == 0 && !todoMode && len(dateRanges) == 0 {
+
+			// Split tags into include/exclude sets
+			var tagFilter pickTagFilter
+			for _, arg := range tagArgs {
+				if strings.HasPrefix(arg, "!") {
+					tagFilter.exclude = append(tagFilter.exclude, note.NormalizeTag(arg[1:]))
+				} else {
+					tagFilter.include = append(tagFilter.include, note.NormalizeTag(arg))
+				}
+			}
+
+			if len(tagFilter.include) == 0 && !todoMode && len(dateRanges) == 0 {
 				return fmt.Errorf("at least one inline tag, @date, or --todo required")
 			}
 
@@ -252,12 +269,6 @@ fast lookups, then extracts matching lines from the content body.`,
 				df = doneOnly
 			}
 
-			// Normalize query tags
-			queryTags := make([]string, len(tagArgs))
-			for i, arg := range tagArgs {
-				queryTags[i] = note.NormalizeTag(arg)
-			}
-
 			// Load all notes
 			notePaths, err := vlt.ListNotes()
 			if err != nil {
@@ -277,9 +288,9 @@ fast lookups, then extracts matching lines from the content body.`,
 					continue
 				}
 
-				// Pre-filter: note must have at least one queried tag as inline
+				// Pre-filter: note must have at least one queried include tag as inline
 				// Skip when --todo without tags (match all notes with checkboxes)
-				if len(queryTags) > 0 && !noteHasInlineTag(fast, queryTags) {
+				if len(tagFilter.include) > 0 && !noteHasInlineTag(fast, tagFilter.include) {
 					continue
 				}
 
@@ -295,7 +306,7 @@ fast lookups, then extracts matching lines from the content body.`,
 				}
 
 				// Extract matching lines from inline zone
-				matches := pickLinesFromNote(n, queryTags, dateRanges, anyMode, df, todoMode)
+				matches := pickLinesFromNote(n, tagFilter, dateRanges, anyMode, df, todoMode)
 				if len(matches) == 0 {
 					continue
 				}
@@ -357,7 +368,7 @@ func noteHasInlineTag(n *note.Note, queryTags []string) bool {
 // If dateRanges is non-empty, lines must contain at least one @YYYY-MM-DD date
 // that falls within every specified date range.
 // When todoMode is true, checkbox lines (- [ ] / - [x]) are also matched.
-func pickLinesFromNote(n *note.Note, queryTags []string, dateRanges []dateparse.DateRange, anyMode bool, df doneFilter, todoMode bool) []PickMatch {
+func pickLinesFromNote(n *note.Note, tags pickTagFilter, dateRanges []dateparse.DateRange, anyMode bool, df doneFilter, todoMode bool) []PickMatch {
 	lines := strings.Split(n.Content, "\n")
 
 	var matches []PickMatch
@@ -393,24 +404,34 @@ func pickLinesFromNote(n *note.Note, queryTags []string, dateRanges []dateparse.
 		lineMatched := false
 
 		if todoMode && isCheckbox {
-			if len(queryTags) == 0 {
+			if len(tags.include) == 0 {
 				// --todo without tags: match all checkbox lines
 				lineMatched = true
 			} else {
 				// --todo with tags: checkbox must also have the tags
-				lineMatched = matchesTags(lineTagsNorm, queryTags, anyMode)
+				lineMatched = matchesTags(lineTagsNorm, tags.include, anyMode)
 			}
 		}
 
 		// Also check tag-based matching (non-todo or todo+tags)
-		if !lineMatched && len(lineTags) > 0 && len(queryTags) > 0 {
-			lineMatched = matchesTags(lineTagsNorm, queryTags, anyMode)
+		if !lineMatched && len(lineTags) > 0 && len(tags.include) > 0 {
+			lineMatched = matchesTags(lineTagsNorm, tags.include, anyMode)
 		}
 
 		// Date-only mode: any content line can potentially match if it contains matching dates.
 		// The date filter below will do the actual date check.
-		if !lineMatched && len(queryTags) == 0 && !todoMode && len(dateRanges) > 0 {
+		if !lineMatched && len(tags.include) == 0 && !todoMode && len(dateRanges) > 0 {
 			lineMatched = true
+		}
+
+		// Check exclude tags: line must not have any excluded tag
+		if lineMatched && len(tags.exclude) > 0 {
+			for _, et := range tags.exclude {
+				if lineTagsNorm[et] {
+					lineMatched = false
+					break
+				}
+			}
 		}
 
 		if !lineMatched {
