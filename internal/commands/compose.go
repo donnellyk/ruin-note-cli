@@ -116,6 +116,7 @@ Children are sorted by title by default.`,
 
 			var rootUUID string
 			var ymlParents map[string]bool
+			var ymlDynamic map[string][]note.DynamicEmbedRef
 			childrenMap := index.ChildrenMap()
 
 			if composeFile != "" {
@@ -129,6 +130,7 @@ Children are sorted by title by default.`,
 				}
 				rootUUID = result.RootUUID
 				ymlParents = result.YMLParents
+				ymlDynamic = result.DynamicEntries
 				// Merge: YML children override frontmatter children for YML parents
 				maps.Copy(childrenMap, result.ChildrenMap)
 				// For nodes without YML children, frontmatter children are already in childrenMap
@@ -150,6 +152,9 @@ Children are sorted by title by default.`,
 
 			walker := newComposeWalker(vlt, index, childrenMap, maxDepth, stripTitle, stripGlobalTag, normalizeHeaders)
 			walker.expandEmbeds = expandEmbeds
+			walker.expandDynamic = expandEmbeds
+			walker.rootUUID = rootUUID
+			walker.ymlDynamic = ymlDynamic
 			tree := walker.Walk(rootUUID, 0)
 			if tree == nil {
 				return fmt.Errorf("no notes found in tree")
@@ -502,6 +507,7 @@ type composeNode struct {
 	Title           string        `json:"title"`
 	Path            string        `json:"path"`
 	Embedded        bool          `json:"embedded,omitempty"`
+	Dynamic         *dynamicInfo  `json:"dynamic,omitempty"`
 	Content         string        `json:"content,omitempty"`
 	Children        []composeNode `json:"children,omitempty"`
 	ComposedContent string        `json:"composed_content,omitempty"`

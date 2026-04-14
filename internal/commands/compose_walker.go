@@ -18,6 +18,14 @@ type composeTree struct {
 	Embedded bool
 	Segments []composeSegment
 	Children []*composeTree
+	Dynamic  *dynamicInfo // non-nil for dynamic embed nodes
+}
+
+type dynamicInfo struct {
+	Type        string            `json:"type"`
+	Query       string            `json:"query"`
+	Options     map[string]string `json:"options,omitempty"`
+	ResultCount int               `json:"result_count"`
 }
 
 type composeSegment struct {
@@ -35,6 +43,9 @@ type composeWalker struct {
 	stripGlobalTags  bool
 	normalizeHeaders bool
 	expandEmbeds     bool
+	expandDynamic    bool                            // enable dynamic embed expansion (![[search: ...]] etc.)
+	rootUUID         string                          // UUID of the compose root (excluded from dynamic search/pick results)
+	ymlDynamic       map[string][]note.DynamicEmbedRef // parent UUID -> dynamic entries from YAML
 }
 
 func newComposeWalker(vlt *vault.Vault, index *vault.TitlesIndex, childrenMap map[string][]string, maxDepth int, stripTitle, stripGlobalTags, normalizeHeaders bool) *composeWalker {
@@ -106,12 +117,33 @@ func (w *composeWalker) Walk(uuid string, depth int) *composeTree {
 		}
 	}
 
+	// Process YAML dynamic entries (search/pick) after note children
+	w.expandYMLDynamic(tree, depth)
+
 	return tree
 }
 
 func (w *composeWalker) expandEmbedsInTree(tree *composeTree, content string, depth int) {
-	embeds := note.FindEmbeds(content)
-	if len(embeds) == 0 {
+	// Find dynamic embeds first (if enabled), then static embeds
+	var dynEmbeds []note.DynamicEmbedRef
+	if w.expandDynamic {
+		dynEmbeds = note.FindDynamicEmbeds(content)
+	}
+	staticEmbeds := note.FindEmbeds(content)
+
+	// Build a set of dynamic embed line numbers so static detection skips them
+	dynLines := make(map[int]bool)
+	for _, de := range dynEmbeds {
+		dynLines[de.Line] = true
+	}
+	var filteredStatic []note.EmbedRef
+	for _, se := range staticEmbeds {
+		if !dynLines[se.Line] {
+			filteredStatic = append(filteredStatic, se)
+		}
+	}
+
+	if len(dynEmbeds) == 0 && len(filteredStatic) == 0 {
 		for _, childUUID := range w.childrenMap[tree.UUID] {
 			child := w.Walk(childUUID, depth+1)
 			if child != nil {
@@ -121,50 +153,72 @@ func (w *composeWalker) expandEmbedsInTree(tree *composeTree, content string, de
 		return
 	}
 
+	// Merge all embed lines into a sorted list for segmentation
+	var allEmbeds []embedLine
+	for i, se := range filteredStatic {
+		allEmbeds = append(allEmbeds, embedLine{line: se.Line, staticIdx: i})
+	}
+	for i, de := range dynEmbeds {
+		allEmbeds = append(allEmbeds, embedLine{line: de.Line, isDynamic: true, dynIdx: i})
+	}
+	// Sort by line number
+	sortEmbedLines(allEmbeds)
+
 	embeddedUUIDs := make(map[string]bool)
 	lines := strings.Split(content, "\n")
 
-	type resolvedEmbed struct {
-		ref  note.EmbedRef
-		uuid string
+	// Split content at all embed lines
+	embedLineNums := make([]int, len(allEmbeds))
+	for i, el := range allEmbeds {
+		embedLineNums[i] = el.line
 	}
-	var resolved []resolvedEmbed
-	for _, embed := range embeds {
-		uuid := w.resolveEmbedRef(embed.NoteRef)
-		if uuid != "" {
-			embeddedUUIDs[uuid] = true
-		}
-		resolved = append(resolved, resolvedEmbed{ref: embed, uuid: uuid})
-	}
-
-	segments := splitByEmbedLines(lines, embeds)
+	segments := splitByLines(lines, embedLineNums)
 	tree.Content = ""
 
-	embedIdx := 0
 	for i, seg := range segments {
 		segText := seg
-		var embedTree *composeTree
 
-		if i < len(resolved) {
-			re := resolved[embedIdx]
-			embedIdx++
+		if i < len(allEmbeds) {
+			el := allEmbeds[i]
 
-			if re.uuid == "" || w.visited[re.uuid] {
-				if re.uuid != "" {
-					fmt.Fprintf(os.Stderr, "warning: skipping circular embed of %q\n", re.ref.NoteRef)
-				} else {
-					fmt.Fprintf(os.Stderr, "warning: ![[%s]] could not resolve, left unexpanded\n", re.ref.NoteRef)
+			if el.isDynamic {
+				dynRef := dynEmbeds[el.dynIdx]
+				result := w.expandDynamicEmbed(dynRef, depth, tree.UUID)
+				if result != nil {
+					tree.Segments = append(tree.Segments, composeSegment{Text: segText})
+					tree.Segments = append(tree.Segments, result.segments...)
+					for _, uuid := range result.embeddedUUIDs {
+						embeddedUUIDs[uuid] = true
+					}
+					continue
 				}
-				segText = segText + "\n" + lines[re.ref.Line]
+				// Dynamic embed failed — leave line unexpanded
+				segText = segText + "\n" + lines[el.line]
 			} else {
-				embedTree = w.buildEmbedTree(re.uuid, re.ref.Header, depth+1)
+				se := filteredStatic[el.staticIdx]
+				uuid := w.resolveEmbedRef(se.NoteRef)
+				if uuid != "" {
+					embeddedUUIDs[uuid] = true
+				}
+				if uuid == "" || w.visited[uuid] {
+					if uuid != "" {
+						fmt.Fprintf(os.Stderr, "warning: skipping circular embed of %q\n", se.NoteRef)
+					} else {
+						fmt.Fprintf(os.Stderr, "warning: ![[%s]] could not resolve, left unexpanded\n", se.NoteRef)
+					}
+					segText = segText + "\n" + lines[se.Line]
+				} else {
+					embedTree := w.buildEmbedTree(uuid, se.Header, depth+1)
+					tree.Segments = append(tree.Segments, composeSegment{
+						Text:  segText,
+						Embed: embedTree,
+					})
+					continue
+				}
 			}
 		}
 
-		tree.Segments = append(tree.Segments, composeSegment{
-			Text:  segText,
-			Embed: embedTree,
-		})
+		tree.Segments = append(tree.Segments, composeSegment{Text: segText})
 	}
 
 	for _, childUUID := range w.childrenMap[tree.UUID] {
@@ -176,6 +230,42 @@ func (w *composeWalker) expandEmbedsInTree(tree *composeTree, content string, de
 			tree.Children = append(tree.Children, child)
 		}
 	}
+}
+
+// dynamicResult holds the output of a dynamic embed expansion.
+type dynamicResult struct {
+	segments     []composeSegment
+	embeddedUUIDs []string
+}
+
+type embedLine struct {
+	line      int
+	isDynamic bool
+	staticIdx int
+	dynIdx    int
+}
+
+func sortEmbedLines(lines []embedLine) {
+	for i := 1; i < len(lines); i++ {
+		for j := i; j > 0 && lines[j].line < lines[j-1].line; j-- {
+			lines[j], lines[j-1] = lines[j-1], lines[j]
+		}
+	}
+}
+
+// splitByLines splits content at specified line numbers, returning len(lineNums)+1 segments.
+func splitByLines(lines []string, lineNums []int) []string {
+	if len(lineNums) == 0 {
+		return []string{strings.Join(lines, "\n")}
+	}
+	var segments []string
+	prev := 0
+	for _, ln := range lineNums {
+		segments = append(segments, strings.Join(lines[prev:ln], "\n"))
+		prev = ln + 1
+	}
+	segments = append(segments, strings.Join(lines[prev:], "\n"))
+	return segments
 }
 
 func (w *composeWalker) resolveEmbedRef(ref string) string {
@@ -265,6 +355,30 @@ func splitByEmbedLines(lines []string, embeds []note.EmbedRef) []string {
 	return segments
 }
 
+// expandYMLDynamic processes YAML-declared dynamic entries (search/pick) for a node.
+// These are appended after note children. Only runs when expandDynamic is enabled
+// and the ymlDynamic map contains entries for this node's UUID.
+func (w *composeWalker) expandYMLDynamic(tree *composeTree, depth int) {
+	if !w.expandDynamic || len(w.ymlDynamic) == 0 {
+		return
+	}
+	dynRefs := w.ymlDynamic[tree.UUID]
+	if len(dynRefs) == 0 {
+		return
+	}
+	for _, dynRef := range dynRefs {
+		result := w.expandDynamicEmbed(dynRef, depth, tree.UUID)
+		if result == nil {
+			continue
+		}
+		for _, seg := range result.segments {
+			if seg.Embed != nil {
+				tree.Children = append(tree.Children, seg.Embed)
+			}
+		}
+	}
+}
+
 func renderText(tree *composeTree) (string, []sourceEntry) {
 	var b strings.Builder
 	var sourceMap []sourceEntry
@@ -304,6 +418,17 @@ func renderText(tree *composeTree) (string, []sourceEntry) {
 
 	var walk func(node *composeTree)
 	walk = func(node *composeTree) {
+		// Edit fencing: wrap dynamic embed output in comment markers
+		if node.Dynamic != nil {
+			if b.Len() > 0 {
+				b.WriteString("\n\n")
+				nextLine++
+			}
+			fence := fmt.Sprintf("<!-- ruin:dynamic %s: %s -->", node.Dynamic.Type, node.Dynamic.Query)
+			b.WriteString(fence)
+			nextLine++
+		}
+
 		if len(node.Segments) > 0 {
 			for _, seg := range node.Segments {
 				if strings.TrimSpace(seg.Text) != "" {
@@ -316,12 +441,17 @@ func renderText(tree *composeTree) (string, []sourceEntry) {
 					}
 				}
 			}
-		} else {
+		} else if strings.TrimSpace(node.Content) != "" {
 			writeContent(node.UUID, node.Path, node.Title, node.Content, node.Depth)
 		}
 
 		for _, child := range node.Children {
 			walk(child)
+		}
+
+		if node.Dynamic != nil {
+			b.WriteString("\n<!-- /ruin:dynamic -->")
+			nextLine++
 		}
 	}
 
@@ -335,6 +465,7 @@ func renderJSON(tree *composeTree, includeContent bool) composeNode {
 		Title:    tree.Title,
 		Path:     tree.Path,
 		Embedded: tree.Embedded,
+		Dynamic:  tree.Dynamic,
 	}
 
 	if includeContent {
@@ -370,21 +501,26 @@ func renderJSON(tree *composeTree, includeContent bool) composeNode {
 
 func renderEditList(tree *composeTree) []SearchResult {
 	var results []SearchResult
+	seen := make(map[string]bool)
 
 	var walk func(node *composeTree)
 	walk = func(node *composeTree) {
-		n, err := note.Load(node.Path)
-		if err != nil {
-			return
+		// Add real notes to the edit list; skip dynamic containers (no path)
+		if node.Path != "" && !seen[node.UUID] {
+			n, err := note.Load(node.Path)
+			if err == nil {
+				seen[node.UUID] = true
+				results = append(results, SearchResult{
+					Path:   node.Path,
+					UUID:   node.UUID,
+					Title:  node.Title,
+					Tags:   n.Tags,
+					Parent: n.Parent,
+					note:   n,
+				})
+			}
 		}
-		results = append(results, SearchResult{
-			Path:   node.Path,
-			UUID:   node.UUID,
-			Title:  node.Title,
-			Tags:   n.Tags,
-			Parent: n.Parent,
-			note:   n,
-		})
+		// Always walk children and segments, even for dynamic containers
 		if len(node.Segments) > 0 {
 			for _, seg := range node.Segments {
 				if seg.Embed != nil {

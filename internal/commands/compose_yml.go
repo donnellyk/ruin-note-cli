@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 
+	"github.com/donnellyk/ruin-note-cli/internal/note"
 	"github.com/donnellyk/ruin-note-cli/internal/vault"
 	"gopkg.in/yaml.v3"
 )
@@ -16,6 +18,12 @@ type ComposeSpec struct {
 
 type ComposeSpecEntry struct {
 	Note     string             `yaml:"note"`
+	Search   string             `yaml:"search,omitempty"`
+	Pick     string             `yaml:"pick,omitempty"`
+	Format   string             `yaml:"format,omitempty"`
+	Sort     string             `yaml:"sort,omitempty"`
+	Limit    int                `yaml:"limit,omitempty"`
+	Filter   string             `yaml:"filter,omitempty"`
 	Children []ComposeSpecEntry `yaml:"children"`
 }
 
@@ -38,9 +46,10 @@ func ParseComposeFile(path string) (*ComposeSpec, error) {
 }
 
 type ComposeSpecResult struct {
-	RootUUID    string
-	ChildrenMap map[string][]string
-	YMLParents  map[string]bool
+	RootUUID       string
+	ChildrenMap    map[string][]string
+	YMLParents     map[string]bool
+	DynamicEntries map[string][]note.DynamicEmbedRef
 }
 
 func BuildChildrenMapFromSpec(spec *ComposeSpec, vlt *vault.Vault, index *vault.TitlesIndex) (*ComposeSpecResult, error) {
@@ -51,9 +60,10 @@ func BuildChildrenMapFromSpec(spec *ComposeSpec, vlt *vault.Vault, index *vault.
 
 	childrenMap := make(map[string][]string)
 	ymlParents := make(map[string]bool)
+	dynamicEntries := make(map[string][]note.DynamicEmbedRef)
 
 	if len(spec.Children) > 0 {
-		childUUIDs, err := resolveSpecChildren(spec.Children, vlt, childrenMap, ymlParents)
+		childUUIDs, err := resolveSpecChildren(spec.Children, vlt, childrenMap, ymlParents, dynamicEntries, rootNote.UUID)
 		if err != nil {
 			return nil, err
 		}
@@ -62,15 +72,30 @@ func BuildChildrenMapFromSpec(spec *ComposeSpec, vlt *vault.Vault, index *vault.
 	}
 
 	return &ComposeSpecResult{
-		RootUUID:    rootNote.UUID,
-		ChildrenMap: childrenMap,
-		YMLParents:  ymlParents,
+		RootUUID:       rootNote.UUID,
+		ChildrenMap:    childrenMap,
+		YMLParents:     ymlParents,
+		DynamicEntries: dynamicEntries,
 	}, nil
 }
 
-func resolveSpecChildren(entries []ComposeSpecEntry, vlt *vault.Vault, childrenMap map[string][]string, ymlParents map[string]bool) ([]string, error) {
+func resolveSpecChildren(entries []ComposeSpecEntry, vlt *vault.Vault, childrenMap map[string][]string, ymlParents map[string]bool, dynamicEntries map[string][]note.DynamicEmbedRef, parentUUID string) ([]string, error) {
 	var uuids []string
 	for _, entry := range entries {
+		// Handle dynamic search entries
+		if entry.Search != "" {
+			ref := buildDynamicRef("search", entry.Search, entry)
+			dynamicEntries[parentUUID] = append(dynamicEntries[parentUUID], ref)
+			continue
+		}
+
+		// Handle dynamic pick entries
+		if entry.Pick != "" {
+			ref := buildDynamicRef("pick", entry.Pick, entry)
+			dynamicEntries[parentUUID] = append(dynamicEntries[parentUUID], ref)
+			continue
+		}
+
 		n, err := ResolveNote(vlt, entry.Note)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "warning: skipping unresolvable note %q in compose file: %v\n", entry.Note, err)
@@ -79,7 +104,7 @@ func resolveSpecChildren(entries []ComposeSpecEntry, vlt *vault.Vault, childrenM
 		uuids = append(uuids, n.UUID)
 
 		if len(entry.Children) > 0 {
-			childUUIDs, err := resolveSpecChildren(entry.Children, vlt, childrenMap, ymlParents)
+			childUUIDs, err := resolveSpecChildren(entry.Children, vlt, childrenMap, ymlParents, dynamicEntries, n.UUID)
 			if err != nil {
 				return nil, err
 			}
@@ -88,6 +113,31 @@ func resolveSpecChildren(entries []ComposeSpecEntry, vlt *vault.Vault, childrenM
 		}
 	}
 	return uuids, nil
+}
+
+// buildDynamicRef creates a DynamicEmbedRef from a YAML spec entry.
+func buildDynamicRef(embedType, query string, entry ComposeSpecEntry) note.DynamicEmbedRef {
+	opts := make(map[string]string)
+	if entry.Format != "" {
+		opts["format"] = entry.Format
+	}
+	if entry.Sort != "" {
+		opts["sort"] = entry.Sort
+	}
+	if entry.Limit > 0 {
+		opts["limit"] = strconv.Itoa(entry.Limit)
+	}
+	if entry.Filter != "" {
+		opts["filter"] = entry.Filter
+	}
+	if len(opts) == 0 {
+		opts = nil
+	}
+	return note.DynamicEmbedRef{
+		Type:    embedType,
+		Query:   query,
+		Options: opts,
+	}
 }
 
 func ResolveComposeFilePath(filePath string, vaultPath string) (string, error) {

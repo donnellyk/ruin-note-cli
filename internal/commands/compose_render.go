@@ -8,14 +8,15 @@ import (
 )
 
 type explainDecision struct {
-	Type       string `json:"type"`
-	Note       string `json:"note,omitempty"`
-	UUID       string `json:"uuid,omitempty"`
-	Path       string `json:"path,omitempty"`
-	Depth      int    `json:"depth,omitempty"`
-	Source     string `json:"source,omitempty"`
-	SourceNote string `json:"source_note,omitempty"`
-	Reason     string `json:"reason,omitempty"`
+	Type        string       `json:"type"`
+	Note        string       `json:"note,omitempty"`
+	UUID        string       `json:"uuid,omitempty"`
+	Path        string       `json:"path,omitempty"`
+	Depth       int          `json:"depth,omitempty"`
+	Source      string       `json:"source,omitempty"`
+	SourceNote  string       `json:"source_note,omitempty"`
+	Reason      string       `json:"reason,omitempty"`
+	DynamicInfo *dynamicInfo `json:"dynamic,omitempty"`
 }
 
 func renderExplain(tree *composeTree, ymlParents map[string]bool, jsonOut bool) error {
@@ -46,22 +47,52 @@ func renderExplain(tree *composeTree, ymlParents map[string]bool, jsonOut bool) 
 		if len(node.Segments) > 0 {
 			for _, seg := range node.Segments {
 				if seg.Embed != nil {
-					decisions = append(decisions, explainDecision{
-						Type:       "embed",
-						Note:       seg.Embed.Title,
-						UUID:       seg.Embed.UUID,
-						Depth:      seg.Embed.Depth,
-						SourceNote: node.Title,
-					})
-					lines = append(lines, fmt.Sprintf("%sEMBED: %q (uuid: %s) -- from ![[...]] in %q, depth %d",
-						prefix, seg.Embed.Title, seg.Embed.UUID, node.Title, seg.Embed.Depth))
-					walk(seg.Embed, indent+1, node.Title)
+					if seg.Embed.Dynamic != nil {
+						decisions = append(decisions, explainDecision{
+							Type:        "dynamic",
+							Note:        seg.Embed.Title,
+							UUID:        seg.Embed.UUID,
+							Depth:       seg.Embed.Depth,
+							SourceNote:  node.Title,
+							DynamicInfo: seg.Embed.Dynamic,
+						})
+						lines = append(lines, fmt.Sprintf("%sDYNAMIC(%s): %q -- %d results, in %q, depth %d",
+							prefix, seg.Embed.Dynamic.Type, seg.Embed.Dynamic.Query,
+							seg.Embed.Dynamic.ResultCount, node.Title, seg.Embed.Depth))
+						walk(seg.Embed, indent+1, node.Title)
+					} else {
+						decisions = append(decisions, explainDecision{
+							Type:       "embed",
+							Note:       seg.Embed.Title,
+							UUID:       seg.Embed.UUID,
+							Depth:      seg.Embed.Depth,
+							SourceNote: node.Title,
+						})
+						lines = append(lines, fmt.Sprintf("%sEMBED: %q (uuid: %s) -- from ![[...]] in %q, depth %d",
+							prefix, seg.Embed.Title, seg.Embed.UUID, node.Title, seg.Embed.Depth))
+						walk(seg.Embed, indent+1, node.Title)
+					}
 				}
 			}
 		}
 
 		for _, child := range node.Children {
-			walkChild(child, indent, node.Title, &decisions, &lines, walk)
+			if child.Dynamic != nil {
+				decisions = append(decisions, explainDecision{
+					Type:        "dynamic",
+					Note:        child.Title,
+					UUID:        child.UUID,
+					Depth:       child.Depth,
+					SourceNote:  node.Title,
+					DynamicInfo: child.Dynamic,
+				})
+				lines = append(lines, fmt.Sprintf("%sDYNAMIC(%s): %q -- %d results, in %q, depth %d",
+					prefix, child.Dynamic.Type, child.Dynamic.Query,
+					child.Dynamic.ResultCount, node.Title, child.Depth))
+				walk(child, indent+1, node.Title)
+			} else {
+				walkChild(child, indent, node.Title, &decisions, &lines, walk)
+			}
 		}
 	}
 

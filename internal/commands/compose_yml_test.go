@@ -61,6 +61,54 @@ children:
 			},
 		},
 		{
+			name: "search entry",
+			content: `root: "Project"
+children:
+  - note: "Intro"
+  - search: "#daily"
+    format: list
+    limit: 5
+  - note: "Conclusion"
+`,
+			check: func(t *testing.T, spec *ComposeSpec) {
+				if len(spec.Children) != 3 {
+					t.Fatalf("len(Children) = %d, want 3", len(spec.Children))
+				}
+				if spec.Children[1].Search != "#daily" {
+					t.Errorf("Children[1].Search = %q, want %q", spec.Children[1].Search, "#daily")
+				}
+				if spec.Children[1].Format != "list" {
+					t.Errorf("Children[1].Format = %q, want %q", spec.Children[1].Format, "list")
+				}
+				if spec.Children[1].Limit != 5 {
+					t.Errorf("Children[1].Limit = %d, want 5", spec.Children[1].Limit)
+				}
+			},
+		},
+		{
+			name: "pick entry",
+			content: `root: "Project"
+children:
+  - pick: "#followup"
+    format: flat
+    sort: "created:desc"
+`,
+			check: func(t *testing.T, spec *ComposeSpec) {
+				if len(spec.Children) != 1 {
+					t.Fatalf("len(Children) = %d, want 1", len(spec.Children))
+				}
+				if spec.Children[0].Pick != "#followup" {
+					t.Errorf("Children[0].Pick = %q, want %q", spec.Children[0].Pick, "#followup")
+				}
+				if spec.Children[0].Format != "flat" {
+					t.Errorf("Children[0].Format = %q, want %q", spec.Children[0].Format, "flat")
+				}
+				if spec.Children[0].Sort != "created:desc" {
+					t.Errorf("Children[0].Sort = %q, want %q", spec.Children[0].Sort, "created:desc")
+				}
+			},
+		},
+		{
 			name:    "missing root",
 			content: `children:\n  - note: "orphan"`,
 			wantErr: true,
@@ -191,6 +239,100 @@ func TestBuildChildrenMapFromSpec_Nested(t *testing.T) {
 	}
 	if !result.YMLParents["ch-1"] {
 		t.Error("ch-1 should be in YMLParents")
+	}
+}
+
+func TestBuildChildrenMapFromSpec_DynamicSearch(t *testing.T) {
+	vlt, index, _ := setupComposeTestVault(t, []testNote{
+		{
+			uuid: "root-1", title: "Root", filename: "Root.md",
+			raw: "---\nuuid: root-1\ncreated: \"2025-01-01T10:00:00-05:00\"\nupdated: \"2025-01-01T10:00:00-05:00\"\n---\n# Root\n\nRoot body",
+		},
+		{
+			uuid: "child-a", title: "Alpha", filename: "Alpha.md",
+			raw: "---\nuuid: child-a\ncreated: \"2025-01-02T10:00:00-05:00\"\nupdated: \"2025-01-02T10:00:00-05:00\"\n---\n# Alpha\n\nAlpha body",
+		},
+	})
+	_ = index
+
+	spec := &ComposeSpec{
+		Root: "Root",
+		Children: []ComposeSpecEntry{
+			{Note: "Alpha"},
+			{Search: "#daily", Format: "list", Limit: 3},
+		},
+	}
+
+	result, err := BuildChildrenMapFromSpec(spec, vlt, index)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Note children should only include Alpha
+	children := result.ChildrenMap["root-1"]
+	if len(children) != 1 {
+		t.Fatalf("children count = %d, want 1 (search not a child)", len(children))
+	}
+	if children[0] != "child-a" {
+		t.Errorf("children[0] = %q, want child-a", children[0])
+	}
+
+	// Dynamic entries should have the search
+	dynEntries := result.DynamicEntries["root-1"]
+	if len(dynEntries) != 1 {
+		t.Fatalf("dynamic entries count = %d, want 1", len(dynEntries))
+	}
+	if dynEntries[0].Type != "search" {
+		t.Errorf("dynamic type = %q, want search", dynEntries[0].Type)
+	}
+	if dynEntries[0].Query != "#daily" {
+		t.Errorf("dynamic query = %q, want #daily", dynEntries[0].Query)
+	}
+	if dynEntries[0].Options["format"] != "list" {
+		t.Errorf("dynamic format = %q, want list", dynEntries[0].Options["format"])
+	}
+	if dynEntries[0].Options["limit"] != "3" {
+		t.Errorf("dynamic limit = %q, want 3", dynEntries[0].Options["limit"])
+	}
+}
+
+func TestBuildChildrenMapFromSpec_DynamicPick(t *testing.T) {
+	vlt, index, _ := setupComposeTestVault(t, []testNote{
+		{
+			uuid: "root-1", title: "Root", filename: "Root.md",
+			raw: "---\nuuid: root-1\ncreated: \"2025-01-01T10:00:00-05:00\"\nupdated: \"2025-01-01T10:00:00-05:00\"\n---\n# Root\n\nRoot body",
+		},
+	})
+	_ = index
+
+	spec := &ComposeSpec{
+		Root: "Root",
+		Children: []ComposeSpecEntry{
+			{Pick: "#followup", Format: "flat", Sort: "title"},
+		},
+	}
+
+	result, err := BuildChildrenMapFromSpec(spec, vlt, index)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// No note children
+	children := result.ChildrenMap["root-1"]
+	if len(children) != 0 {
+		t.Fatalf("children count = %d, want 0", len(children))
+	}
+
+	// Dynamic entries should have the pick
+	dynEntries := result.DynamicEntries["root-1"]
+	if len(dynEntries) != 1 {
+		t.Fatalf("dynamic entries count = %d, want 1", len(dynEntries))
+	}
+	if dynEntries[0].Type != "pick" {
+		t.Errorf("dynamic type = %q, want pick", dynEntries[0].Type)
+	}
+	if dynEntries[0].Query != "#followup" {
+		t.Errorf("dynamic query = %q, want #followup", dynEntries[0].Query)
 	}
 }
 

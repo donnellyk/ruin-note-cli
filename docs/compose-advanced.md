@@ -23,10 +23,35 @@ children:
 |-------|------|----------|-------------|
 | `root` | string | Yes | Root note reference (title, UUID, or path) |
 | `children` | list | No | Ordered list of child entries |
-| `children[].note` | string | Yes | Child note reference (title, UUID, or path) |
-| `children[].children` | list | No | Nested children (recursive) |
+| `children[].note` | string | Cond. | Child note reference (title, UUID, or path). Required unless `search` or `pick` is set. |
+| `children[].search` | string | Cond. | Dynamic search query (e.g., `"#daily"`). Requires `--expand-embeds`. |
+| `children[].pick` | string | Cond. | Dynamic pick tags (e.g., `"#followup"`). Requires `--expand-embeds`. |
+| `children[].format` | string | No | Output format for search (`content`, `list`, `summary`) or pick (`grouped`, `flat`) |
+| `children[].sort` | string | No | Sort order (e.g., `created:desc`) |
+| `children[].limit` | int | No | Maximum number of results |
+| `children[].filter` | string | No | Note-level filter query (for pick entries) |
+| `children[].children` | list | No | Nested children (recursive, only for `note` entries) |
 
 Note references use the same resolution as elsewhere in the CLI: titles, UUIDs, and vault-relative paths all work.
+
+### Dynamic Entries in YML
+
+In addition to `note` entries, YML files support `search` and `pick` entries that produce dynamic content. These require `--expand-embeds` to be active.
+
+```yaml
+root: "Weekly Review"
+children:
+  - note: "Introduction"
+  - search: "#daily"
+    format: list
+    sort: "created:desc"
+    limit: 7
+  - pick: "#followup"
+    format: grouped
+  - note: "Conclusion"
+```
+
+Dynamic entries are processed after all note children for their parent. The search and pick entries use the same query syntax as `ruin search` and `ruin pick` respectively. Without `--expand-embeds`, dynamic entries are silently ignored.
 
 ### Usage
 
@@ -88,7 +113,7 @@ If a note reference in the YML file cannot be resolved, a warning is printed to 
 
 ## Embed Expansion
 
-The `--expand-embeds` flag expands `![[Note Title]]` syntax inline, replacing the embed line with the referenced note's content.
+The `--expand-embeds` flag expands `![[Note Title]]` syntax inline, replacing the embed line with the referenced note's content. It also enables dynamic embeds.
 
 ### Syntax
 
@@ -110,6 +135,49 @@ Two forms are supported:
 |--------|----------|
 | `![[Note Title]]` | Embed the full content of the referenced note |
 | `![[Note Title#Header]]` | Embed only the section under the specified header |
+
+### Dynamic Embeds
+
+Dynamic embeds run queries at compose time and inline the results. They use `![[type: query | options]]` syntax on standalone lines:
+
+```markdown
+# Weekly Review
+
+## Recent Daily Notes
+![[search: #daily | format=list, limit=7, sort=created:desc]]
+
+## Open Follow-ups
+![[pick: #followup | format=grouped]]
+
+## Saved Query Results
+![[query: my-saved-query | format=summary]]
+
+## Sub-Project
+![[compose: "Project Alpha"]]
+```
+
+| Type | Description |
+|------|-------------|
+| `search` | Run a search query and inline results |
+| `pick` | Extract tagged lines from notes |
+| `query` | Run a saved query (resolves to search) |
+| `compose` | Inline a full sub-compose tree |
+
+#### Common Options
+
+| Option | Applies to | Description |
+|--------|-----------|-------------|
+| `format` | search, pick | Output format. Search: `content` (default), `list`, `summary`. Pick: `grouped` (default), `flat`. |
+| `sort` | search, pick | Sort order (e.g., `created:desc`, `title:asc`) |
+| `limit` | search, pick | Maximum results |
+| `filter` | pick | Note-level filter using search query syntax |
+| `empty` | search, pick | Set to `hide` to suppress "No results" message |
+| `depth` | compose | Max depth for sub-compose (e.g., `depth=2`) |
+| `tag-scope` | search | Tag matching scope: `global`, `inline`, or omit for all |
+
+The compose root note and the parent note containing the dynamic embed are excluded from search/pick results to avoid self-referential output.
+
+Dynamic embeds that fail to resolve are left unexpanded in the output with a stderr warning.
 
 Header matching is case-insensitive. A section includes the matched heading and all content up to the next heading of equal or higher level.
 
@@ -278,7 +346,10 @@ Decision types:
 | `root` | The root note of the composition |
 | `child` | A note included as a child of another note |
 | `embed` | A note expanded from a `![[...]]` embed |
+| `dynamic` | A dynamic embed result (`![[search: ...]]`, `![[pick: ...]]`, etc.) |
 | `yml_source` | Children for this node came from the YML composition file |
+
+Dynamic decisions include an additional `dynamic` field with type, query, options, and result count.
 
 ### Flag Interactions
 
@@ -299,6 +370,21 @@ The JSON output from `ruin compose --json` includes a new field on nodes that we
 ```
 
 The `embedded` field is `true` for nodes that were expanded from `![[...]]` syntax. It is omitted (not `false`) for regular children.
+
+Nodes produced by dynamic embeds also include a `dynamic` field:
+
+```json
+{
+  "embedded": true,
+  "dynamic": {
+    "type": "search",
+    "query": "#daily",
+    "options": {"format": "list", "limit": "5"},
+    "result_count": 3
+  },
+  "children": [...]
+}
+```
 
 ## Source Map with Embeds
 

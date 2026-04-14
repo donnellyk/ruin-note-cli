@@ -455,3 +455,204 @@ func TestWalkerYMLComposition_HybridFallback(t *testing.T) {
 		t.Error("frontmatter child (Section) should appear via hybrid fallback")
 	}
 }
+
+func TestWalkerYMLDynamic_Search(t *testing.T) {
+	notes := []testNote{
+		{
+			uuid: "root-1", title: "Root", filename: "Root.md",
+			raw: "---\nuuid: root-1\ncreated: \"2025-01-01T10:00:00-05:00\"\nupdated: \"2025-01-01T10:00:00-05:00\"\n---\n# Root\n\nRoot body",
+		},
+		{
+			uuid: "child-a", title: "Alpha", filename: "Alpha.md",
+			raw: "---\nuuid: child-a\ncreated: \"2025-01-02T10:00:00-05:00\"\nupdated: \"2025-01-02T10:00:00-05:00\"\n---\n# Alpha\n\nAlpha body",
+		},
+		{
+			uuid: "daily-1", title: "Day One", filename: "Day One.md",
+			raw: "---\nuuid: daily-1\ncreated: \"2025-01-03T10:00:00-05:00\"\nupdated: \"2025-01-03T10:00:00-05:00\"\ntags:\n  - \"#daily\"\n---\n# Day One\n#daily\n\nDay one content",
+		},
+	}
+
+	vlt, index, _ := setupComposeTestVault(t, notes)
+
+	spec := &ComposeSpec{
+		Root: "Root",
+		Children: []ComposeSpecEntry{
+			{Note: "Alpha"},
+			{Search: "#daily", Format: "list"},
+		},
+	}
+
+	result, err := BuildChildrenMapFromSpec(spec, vlt, index)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	childrenMap := index.ChildrenMap()
+	maps.Copy(childrenMap, result.ChildrenMap)
+
+	walker := newComposeWalker(vlt, index, childrenMap, 0, false, false, false)
+	walker.expandEmbeds = true
+	walker.expandDynamic = true
+	walker.rootUUID = result.RootUUID
+	walker.ymlDynamic = result.DynamicEntries
+	tree := walker.Walk(result.RootUUID, 0)
+	if tree == nil {
+		t.Fatal("tree is nil")
+	}
+
+	text, _ := renderText(tree)
+	if !strings.Contains(text, "Alpha body") {
+		t.Error("expected Alpha note content")
+	}
+	if !strings.Contains(text, "- [[Day One]]") {
+		t.Errorf("expected dynamic search results in list format, got:\n%s", text)
+	}
+}
+
+func TestWalkerYMLDynamic_NoExpandFlag(t *testing.T) {
+	notes := []testNote{
+		{
+			uuid: "root-1", title: "Root", filename: "Root.md",
+			raw: "---\nuuid: root-1\ncreated: \"2025-01-01T10:00:00-05:00\"\nupdated: \"2025-01-01T10:00:00-05:00\"\n---\n# Root\n\nRoot body",
+		},
+		{
+			uuid: "daily-1", title: "Day One", filename: "Day One.md",
+			raw: "---\nuuid: daily-1\ncreated: \"2025-01-03T10:00:00-05:00\"\nupdated: \"2025-01-03T10:00:00-05:00\"\ntags:\n  - \"#daily\"\n---\n# Day One\n#daily\n\nDay one content",
+		},
+	}
+
+	vlt, index, _ := setupComposeTestVault(t, notes)
+
+	spec := &ComposeSpec{
+		Root: "Root",
+		Children: []ComposeSpecEntry{
+			{Search: "#daily", Format: "list"},
+		},
+	}
+
+	result, err := BuildChildrenMapFromSpec(spec, vlt, index)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	childrenMap := index.ChildrenMap()
+	maps.Copy(childrenMap, result.ChildrenMap)
+
+	// expandDynamic is false: YAML dynamic entries should NOT be processed
+	walker := newComposeWalker(vlt, index, childrenMap, 0, false, false, false)
+	walker.expandEmbeds = false
+	walker.expandDynamic = false
+	walker.rootUUID = result.RootUUID
+	walker.ymlDynamic = result.DynamicEntries
+	tree := walker.Walk(result.RootUUID, 0)
+	if tree == nil {
+		t.Fatal("tree is nil")
+	}
+
+	text, _ := renderText(tree)
+	if strings.Contains(text, "Day One") {
+		t.Error("without expandDynamic, YAML dynamic entries should not be expanded")
+	}
+}
+
+func TestWalkerDynamic_RenderJSON_DynamicField(t *testing.T) {
+	notes := []testNote{
+		{
+			uuid: "root-1", title: "Hub", filename: "Hub.md",
+			raw: "---\nuuid: root-1\ncreated: \"2025-01-01T10:00:00-05:00\"\nupdated: \"2025-01-01T10:00:00-05:00\"\n---\n# Hub\n\n![[search: #daily | format=list]]",
+		},
+		{
+			uuid: "note-a", title: "Day One", filename: "Day One.md",
+			raw: "---\nuuid: note-a\ncreated: \"2025-01-02T10:00:00-05:00\"\nupdated: \"2025-01-02T10:00:00-05:00\"\ntags:\n  - \"#daily\"\n---\n# Day One\n#daily\n\nContent.",
+		},
+	}
+
+	vlt, index, childrenMap := setupComposeTestVault(t, notes)
+	tree := walkDynamic(vlt, index, childrenMap, "root-1")
+	if tree == nil {
+		t.Fatal("tree is nil")
+	}
+
+	jsonTree := renderJSON(tree, false)
+
+	// The dynamic container should have a Dynamic field
+	var foundDynamic bool
+	for _, child := range jsonTree.Children {
+		if child.Dynamic != nil {
+			foundDynamic = true
+			if child.Dynamic.Type != "search" {
+				t.Errorf("Dynamic.Type = %q, want search", child.Dynamic.Type)
+			}
+			if child.Dynamic.Query != "#daily" {
+				t.Errorf("Dynamic.Query = %q, want #daily", child.Dynamic.Query)
+			}
+			if child.Dynamic.ResultCount != 1 {
+				t.Errorf("Dynamic.ResultCount = %d, want 1", child.Dynamic.ResultCount)
+			}
+		}
+	}
+	if !foundDynamic {
+		t.Error("expected at least one child with Dynamic field set")
+	}
+}
+
+func TestWalkerDynamic_EditListSkipsDynamicContainers(t *testing.T) {
+	notes := []testNote{
+		{
+			uuid: "root-1", title: "Hub", filename: "Hub.md",
+			raw: "---\nuuid: root-1\ncreated: \"2025-01-01T10:00:00-05:00\"\nupdated: \"2025-01-01T10:00:00-05:00\"\n---\n# Hub\n\n![[search: #daily]]",
+		},
+		{
+			uuid: "note-a", title: "Day One", filename: "Day One.md",
+			raw: "---\nuuid: note-a\ncreated: \"2025-01-02T10:00:00-05:00\"\nupdated: \"2025-01-02T10:00:00-05:00\"\ntags:\n  - \"#daily\"\n---\n# Day One\n#daily\n\nDay one content.",
+		},
+	}
+
+	vlt, index, childrenMap := setupComposeTestVault(t, notes)
+	tree := walkDynamic(vlt, index, childrenMap, "root-1")
+	if tree == nil {
+		t.Fatal("tree is nil")
+	}
+
+	results := renderEditList(tree)
+	// Should include Hub and Day One (the real notes), but not any dynamic containers
+	for _, r := range results {
+		if r.Path == "" {
+			t.Error("edit list should not contain entries with empty path (dynamic containers)")
+		}
+	}
+	if len(results) != 2 {
+		t.Errorf("expected 2 edit results (Hub + Day One), got %d", len(results))
+	}
+}
+
+func TestWalkerDynamic_EditListDeduplicates(t *testing.T) {
+	notes := []testNote{
+		{
+			uuid: "root-1", title: "Hub", filename: "Hub.md",
+			raw: "---\nuuid: root-1\ncreated: \"2025-01-01T10:00:00-05:00\"\nupdated: \"2025-01-01T10:00:00-05:00\"\n---\n# Hub\n\n![[search: #daily]]\n\n![[search: #daily]]",
+		},
+		{
+			uuid: "note-a", title: "Day One", filename: "Day One.md",
+			raw: "---\nuuid: note-a\ncreated: \"2025-01-02T10:00:00-05:00\"\nupdated: \"2025-01-02T10:00:00-05:00\"\ntags:\n  - \"#daily\"\n---\n# Day One\n#daily\n\nDay one content.",
+		},
+	}
+
+	vlt, index, childrenMap := setupComposeTestVault(t, notes)
+	tree := walkDynamic(vlt, index, childrenMap, "root-1")
+	if tree == nil {
+		t.Fatal("tree is nil")
+	}
+
+	results := renderEditList(tree)
+	// Even with two dynamic searches returning the same note, each note should appear only once
+	uuidCount := make(map[string]int)
+	for _, r := range results {
+		uuidCount[r.UUID]++
+	}
+	for uuid, count := range uuidCount {
+		if count > 1 {
+			t.Errorf("note %q appeared %d times in edit list, want 1", uuid, count)
+		}
+	}
+}
