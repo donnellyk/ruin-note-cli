@@ -88,9 +88,9 @@ func TestResolveDateTokens(t *testing.T) {
 			absent:  "@20",
 		},
 		{
-			name:    "resolve @today outside embed but skip inside",
-			input:   "meeting @today\n![[pick: #followup @today]]",
-			absent:  "meeting @today",
+			name:   "resolve @today outside embed but skip inside",
+			input:  "meeting @today\n![[pick: #followup @today]]",
+			absent: "meeting @today",
 		},
 	}
 
