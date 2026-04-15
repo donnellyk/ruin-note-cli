@@ -41,6 +41,7 @@ description = "Install to $GOPATH/bin"
 run = """
 VERSION=$(git describe --tags --always --dirty 2>/dev/null || echo "dev")
 go build -ldflags "-X main.version=$VERSION" -o "$(go env GOPATH)/bin/{{vars.binary_name}}" {{vars.cmd_path}}
+echo $VERSION
 """
 
 # Test
