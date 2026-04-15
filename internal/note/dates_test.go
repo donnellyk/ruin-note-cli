@@ -75,6 +75,23 @@ func TestResolveDateTokens(t *testing.T) {
 			input:   "var_@today",
 			contain: "var_@today",
 		},
+		{
+			name:    "skip @today inside static embed",
+			input:   "![[pick: #followup @today]]",
+			contain: "@today",
+			absent:  "@20",
+		},
+		{
+			name:    "skip @tomorrow inside dynamic embed",
+			input:   "![[search: #daily @tomorrow | limit=5]]",
+			contain: "@tomorrow",
+			absent:  "@20",
+		},
+		{
+			name:    "resolve @today outside embed but skip inside",
+			input:   "meeting @today\n![[pick: #followup @today]]",
+			absent:  "meeting @today",
+		},
 	}
 
 	for _, tt := range tests {
