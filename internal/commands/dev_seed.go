@@ -20,11 +20,12 @@ func newSeedCmd(jsonOutput *bool) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "seed [path]",
 		Short: "Create a test vault with sample notes",
-		Long: `Create a test vault with 110 sample notes for development and testing.
+		Long: `Create a test vault with 113 sample notes for development and testing.
 
 Generates 5 hub notes, 100 regular notes (daily logs, code notes,
-meeting notes, ideas, and task lists), and 5 link notes with realistic
-content, tags, parent relationships, and wiki links.`,
+meeting notes, ideas, and task lists), 5 link notes, and 3 embed notes
+with realistic content, tags, parent relationships, wiki links, static
+embeds, and dynamic embeds.`,
 		Example: `  ruin dev seed                          # Create at /tmp/ruin-test-vault
   ruin dev seed ~/my-test-vault          # Create at custom path
   ruin dev seed --clean                  # Remove test vault
@@ -676,19 +677,101 @@ Official API docs for the v2 platform endpoints.
 		fmt.Fprintf(os.Stderr, "    %s (%s)\n", ln.filename, n.UUID)
 	}
 
+	// --- Create notes with embeds ---
+	fmt.Fprintln(os.Stderr, "  Creating 3 embed notes...")
+	embedNotes := []struct {
+		uuid, filename, content string
+		parent                  string
+	}{
+		{
+			uuid:     "test-uuid-embed-001",
+			filename: "Dashboard.md",
+			content: `# Dashboard
+
+#project
+
+## Open Follow-ups
+
+![[pick: #followup !#done | group=parent]]
+
+## Recent Daily Logs
+
+![[search: #daily | format=list, limit=5, sort=created:desc]]
+
+## Project Alpha Overview
+
+![[compose: Project Alpha Hub]]
+`,
+		},
+		{
+			uuid:     "test-uuid-embed-002",
+			filename: "Weekly Review.md",
+			content: `# Weekly Review
+
+#review
+
+## This Week's Meetings
+
+![[search: #meeting | format=summary, limit=5]]
+
+## Open Tasks
+
+![[pick: #todo !#done]]
+
+## Saved Query: Open Follow-ups
+
+![[query: open-followups]]
+`,
+		},
+		{
+			uuid:     "test-uuid-embed-003",
+			filename: "Alpha Compose.md",
+			parent:   "test-uuid-hub-alpha",
+			content: `# Alpha Compose
+
+#alpha
+
+Overview of Project Alpha work.
+
+![[Project Alpha Hub]]
+
+## Related Code
+
+![[search: #code #alpha | format=list]]
+`,
+		},
+	}
+
+	for _, en := range embedNotes {
+		created := baseTime.Add(120 * time.Hour)
+		n := &note.Note{
+			UUID:     en.uuid,
+			Created:  created,
+			Updated:  created,
+			Parent:   en.parent,
+			FilePath: filepath.Join(path, en.filename),
+			Content:  en.content,
+		}
+		n.RefreshTags()
+		if err := n.Save(); err != nil {
+			return fmt.Errorf("failed to save embed note %s: %w", en.filename, err)
+		}
+		fmt.Fprintf(os.Stderr, "    %s (%s)\n", en.filename, n.UUID)
+	}
+
 	// --- Write queries.yml ---
 	fmt.Fprintln(os.Stderr, "  Writing saved queries...")
 	queriesYML := `queries:
     - name: daily-work
-      query: '#daily && #work'
+      query: '#daily #work'
     - name: active-bugs
-      query: '#bug && !#done'
+      query: '#bug !#done'
     - name: project-alpha
       query: '#alpha'
-    - name: urgent-items
-      query: '#urgent || #blocked'
-    - name: meeting-notes
-      query: '#meeting'
+    - name: recent-meetings
+      query: '#meeting created:this-month'
+    - name: open-followups
+      query: '#followup !#done'
 `
 	if err := os.WriteFile(filepath.Join(path, ".ruin", "queries.yml"), []byte(queriesYML), 0644); err != nil {
 		return fmt.Errorf("failed to write queries.yml: %w", err)
@@ -726,7 +809,7 @@ Official API docs for the v2 platform endpoints.
 	}
 
 	fmt.Fprintln(os.Stderr, "")
-	fmt.Fprintf(os.Stderr, "Done. Created 110 notes (5 hubs + 100 regular + 5 link) at: %s\n", path)
+	fmt.Fprintf(os.Stderr, "Done. Created 113 notes at: %s\n", path)
 	fmt.Fprintln(os.Stderr, "  - 25 daily logs")
 	fmt.Fprintln(os.Stderr, "  - 25 code notes")
 	fmt.Fprintln(os.Stderr, "  - 20 meeting notes")
@@ -734,16 +817,18 @@ Official API docs for the v2 platform endpoints.
 	fmt.Fprintln(os.Stderr, "  - 15 task lists")
 	fmt.Fprintln(os.Stderr, "  - 5 hub (project) notes")
 	fmt.Fprintln(os.Stderr, "  - 5 link notes")
+	fmt.Fprintln(os.Stderr, "  - 3 embed notes (Dashboard, Weekly Review, Alpha Compose)")
 	fmt.Fprintln(os.Stderr, "  - 3 notes with orphaned parent references")
-	fmt.Fprintln(os.Stderr, "  - Wiki links ([[Title]]) in code and idea notes")
+	fmt.Fprintln(os.Stderr, "  - Wiki links, static embeds, and dynamic embeds")
 	fmt.Fprintln(os.Stderr, "  - 5 saved queries in queries.yml")
 	fmt.Fprintln(os.Stderr, "  - 5 saved parent bookmarks (alpha, beta, infra, docs, platform)")
 	fmt.Fprintln(os.Stderr, "")
 	fmt.Fprintf(os.Stderr, "Test with:\n")
 	fmt.Fprintf(os.Stderr, "  ruin --vault %s log\n", path)
 	fmt.Fprintf(os.Stderr, "  ruin --vault %s search \"#daily\"\n", path)
-	fmt.Fprintf(os.Stderr, "  ruin --vault %s query list\n", path)
-	fmt.Fprintf(os.Stderr, "  ruin --vault %s doctor --json\n", path)
+	fmt.Fprintf(os.Stderr, "  ruin --vault %s compose Dashboard --expand-embeds\n", path)
+	fmt.Fprintf(os.Stderr, "  ruin --vault %s pick \"#followup\" \"!#done\"\n", path)
+	fmt.Fprintf(os.Stderr, "  ruin --vault %s query run open-followups\n", path)
 
 	return nil
 }
