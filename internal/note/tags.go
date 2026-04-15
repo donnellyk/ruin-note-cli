@@ -45,7 +45,9 @@ func findAllTags(content string) []TagMatch {
 	// Find regions to exclude from tag extraction
 	linkRanges := findMarkdownLinkRanges(content)
 	embedRanges := FindEmbedRanges(content)
+	codeRanges := findCodeRanges(content)
 	excludedRanges := append(linkRanges, embedRanges...)
+	excludedRanges = append(excludedRanges, codeRanges...)
 
 	// Find spaced tags first (they take precedence)
 	// A spaced tag: #content with space#
@@ -103,6 +105,57 @@ func findMarkdownLinkRanges(content string) [][2]int {
 	ranges := make([][2]int, len(locs))
 	for i, loc := range locs {
 		ranges[i] = [2]int{loc[0], loc[1]}
+	}
+	return ranges
+}
+
+// findCodeRanges returns byte ranges for inline code (`...`) and fenced code blocks (```...```).
+func findCodeRanges(content string) [][2]int {
+	var ranges [][2]int
+	i := 0
+	for i < len(content) {
+		if content[i] == '`' {
+			// Check for fenced code block (``` at start of line)
+			if i+2 < len(content) && content[i+1] == '`' && content[i+2] == '`' {
+				// Find closing ```
+				start := i
+				// Skip the opening ``` and any language identifier on the same line
+				j := i + 3
+				for j < len(content) && content[j] != '\n' {
+					j++
+				}
+				// Search for closing ``` on its own line
+				for j < len(content) {
+					if content[j] == '\n' && j+3 < len(content) && content[j+1] == '`' && content[j+2] == '`' && content[j+3] == '`' {
+						end := j + 4
+						ranges = append(ranges, [2]int{start, end})
+						i = end
+						break
+					}
+					j++
+				}
+				if j >= len(content) {
+					// Unclosed fenced block — treat rest as code
+					ranges = append(ranges, [2]int{start, len(content)})
+					break
+				}
+			} else {
+				// Inline code: find matching closing backtick
+				start := i
+				j := i + 1
+				for j < len(content) && content[j] != '`' && content[j] != '\n' {
+					j++
+				}
+				if j < len(content) && content[j] == '`' {
+					ranges = append(ranges, [2]int{start, j + 1})
+					i = j + 1
+				} else {
+					i++
+				}
+			}
+		} else {
+			i++
+		}
 	}
 	return ranges
 }

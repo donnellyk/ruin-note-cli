@@ -5,6 +5,7 @@
 ### Fixed
 - Omit dynamic embed fencing unless using `--edit`
 - Empty headers are omitted during dynamic embed
+- Tags inside inline code and fenced code blocks are no longer extracted
 
 ### Added
 - `group` options in dynamic embeds
