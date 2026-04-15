@@ -5,11 +5,11 @@
 [![Go version](https://img.shields.io/github/go-mod/go-version/donnellyk/ruin-note-cli)](go.mod)
 [![License](https://img.shields.io/github/license/donnellyk/ruin-note-cli)](LICENSE)
 
-A Zettelkasten-ish note-taking CLI written in Go. Don't organize; query and compose.
+A Zettelkasten-ish note-taking CLI written in Go. Don't organize; compose.
 
 Take small, atomic notes saved as simple markdown files. Later, compose them into different "documents", depending on your needs. This probably has an audience of one (me) or zero (turns out, not me); time will tell.
 
-Eventually, this utility will form the core of a TUI and nice Mac GUI but should be usable (& scriptable) as-is.
+This CLI powers [lazyruin](https://github.com/donnellyk/lazyruin) and be the core of a Mac/iOS app but should be usable as-is.
 
 ## Installation
 
@@ -62,12 +62,12 @@ I should follow up with that very important thing #followup
 
 #meeting and #projectA are global tags and #followup in an inline tag. 
 
-`ruin search` to find whole files and `ruin pick` finds & extracts specific lines (based on inline tags).
+Use `ruin search` to find whole files and `ruin pick` finds & extracts specific lines (based on inline tags and other parameters).
 
-### Strong date awareness, but no Today note
-When you have a Today note, everything you add to your vault comes with the question: should this go into the Today note or its own note? If you add it to the Today note, it might be hard to find later. If you add it to a relevant note or its own, you lose the context of the date. If you are like me, in event thinking about that question, you've forgotten what you wanted to write down in the first place.
+### Strong date awareness, but no daily note
+When you have a daily note, everything you add to your vault comes with the question: should this go into the daily note or its own note? If you add it to the Today note, it might be hard to find later. If you add it to a relevant note or its own, you lose the context of the date. If you are like me, in event thinking about that question, you've forgotten what you wanted to write down in the first place.
 
-Ruin tries to fix this with strong date awareness, date querying, and `ruin today`. This gets even more useful in the TUI, with a dynamically generated Today view (plus Tomorrow, and any other date).
+Ruin tries to fix this with strong date awareness, date querying, and `ruin today`. This gets even more useful in the [TUI](https://github.com/donnellyk/lazyruin), with a dynamically generated Today view (plus Tomorrow, and any other date).
 
 ### Zettelkasten-ish atomic notes, composed into larger documents as needed
 Don't think about adding a new section to a larger document, just write down what you want to capture and give the note a parent. From there `ruin compose` can build an entire document for easy reading and editing*
@@ -96,11 +96,11 @@ The pretentious answer is it's a reference to _The Waste Land_ by T.S. Eliot (th
 
 The real answer is it's memorable, short, and aesthetically pleasing.
 
-### Doesn't <Org-Mode|Obsidian|Lotus Notes|etc>  do this already?
+### Doesn't <OrgMode|Obsidian|Lotus Notes|Notion>  do this already?
 Yes. Nevertheless, here we are. 
 
 ## See Also
-- TUI
+- [TUI](https://github.com/donnellyk/lazyruin)
 - Mac App (TBD)
 
 ## AI
