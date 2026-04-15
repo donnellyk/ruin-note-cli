@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.2.1] - 2026-04-14
+
+### Fixed
+- `@today` and other date tokens inside `![[]]` embeds no longer resolve on save
+- `![[pick:]]` embeds now handle `@date` tokens as line-level date filters
+
 ## [0.2.0] - 2026-04-14
 
 ### Added
