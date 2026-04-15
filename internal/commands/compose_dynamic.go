@@ -528,7 +528,9 @@ func renderPickGrouped(results []pickNoteResult, depth int) string {
 	headingPrefix := strings.Repeat("#", min(depth+2, 6))
 	for _, r := range results {
 		var lines []string
-		lines = append(lines, fmt.Sprintf("%s %s", headingPrefix, r.title))
+		if r.title != "" {
+			lines = append(lines, fmt.Sprintf("%s %s", headingPrefix, r.title))
+		}
 		for _, m := range r.matches {
 			content := m.Content
 			if !strings.HasPrefix(content, "- ") && !strings.HasPrefix(content, "* ") {
@@ -549,7 +551,11 @@ func renderPickFlat(results []pickNoteResult, _ int) string {
 			if !strings.HasPrefix(content, "- ") && !strings.HasPrefix(content, "* ") {
 				content = "- " + content
 			}
-			lines = append(lines, fmt.Sprintf("%s (%s)", content, r.title))
+			if r.title != "" {
+				lines = append(lines, fmt.Sprintf("%s (%s)", content, r.title))
+			} else {
+				lines = append(lines, content)
+			}
 		}
 	}
 	return strings.Join(lines, "\n")

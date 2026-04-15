@@ -4,6 +4,7 @@
 
 ### Fixed
 - Omit dynamic embed fencing unless using `--edit`
+- Empty headers are omitted during dynamic embed
 
 ## [0.2.1] - 2026-04-14
 
