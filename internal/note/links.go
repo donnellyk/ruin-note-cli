@@ -17,16 +17,21 @@ type WikiLink struct {
 // ExtractWikiLinks finds all wiki-style links in the given content.
 // Returns deduplicated links by lowercase title, keeping first occurrence.
 func ExtractWikiLinks(content string) []WikiLink {
-	matches := wikiLinkPattern.FindAllStringSubmatch(content, -1)
-	if len(matches) == 0 {
+	locs := wikiLinkPattern.FindAllStringSubmatchIndex(content, -1)
+	if len(locs) == 0 {
 		return nil
 	}
 
 	seen := make(map[string]bool)
 	var result []WikiLink
 
-	for _, m := range matches {
-		title := strings.TrimSpace(m[1])
+	for _, loc := range locs {
+		// Skip embeds: ![[...]] — check character before [[
+		if loc[0] > 0 && content[loc[0]-1] == '!' {
+			continue
+		}
+
+		title := strings.TrimSpace(content[loc[2]:loc[3]])
 		if title == "" {
 			continue
 		}
@@ -38,8 +43,8 @@ func ExtractWikiLinks(content string) []WikiLink {
 		seen[titleLower] = true
 
 		link := WikiLink{Title: title}
-		if len(m) > 2 {
-			link.Display = strings.TrimSpace(m[2])
+		if loc[4] >= 0 && loc[5] >= 0 {
+			link.Display = strings.TrimSpace(content[loc[4]:loc[5]])
 		}
 		result = append(result, link)
 	}
