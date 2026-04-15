@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/donnellyk/ruin-note-cli/internal/dateparse"
 	"github.com/donnellyk/ruin-note-cli/internal/note"
 )
 
@@ -98,19 +99,32 @@ func (w *composeWalker) expandDynamicSearch(ref note.DynamicEmbedRef, depth int,
 
 // expandDynamicPick handles ![[pick: tags | options]].
 func (w *composeWalker) expandDynamicPick(ref note.DynamicEmbedRef, depth int, parentUUID string) *dynamicResult {
-	// Parse tags from query (space-separated, may include negation)
-	tagArgs := strings.Fields(ref.Query)
+	// Parse tags and date tokens from query (space-separated, may include negation)
+	resolved := note.ResolveDateTokensInQuery(ref.Query)
+	tagArgs := strings.Fields(resolved)
 	var filter pickTagFilter
+	var dateRanges []dateparse.DateRange
 	for _, arg := range tagArgs {
-		if strings.HasPrefix(arg, "!") {
+		switch {
+		case strings.HasPrefix(arg, "!#"):
 			filter.exclude = append(filter.exclude, note.NormalizeTag(arg[1:]))
-		} else {
+		case strings.HasPrefix(arg, "#"):
+			filter.include = append(filter.include, note.NormalizeTag(arg))
+		case strings.HasPrefix(arg, "@"):
+			token := arg[1:]
+			dr, err := dateparse.ParseWithReference(token, time.Now())
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "warning: dynamic pick: unrecognized date %s\n", arg)
+				continue
+			}
+			dateRanges = append(dateRanges, dr)
+		default:
 			filter.include = append(filter.include, note.NormalizeTag(arg))
 		}
 	}
 
-	if len(filter.include) == 0 {
-		fmt.Fprintf(os.Stderr, "warning: dynamic pick %q: at least one positive tag required\n", ref.Query)
+	if len(filter.include) == 0 && len(dateRanges) == 0 {
+		fmt.Fprintf(os.Stderr, "warning: dynamic pick %q: at least one positive tag or @date required\n", ref.Query)
 		return nil
 	}
 
@@ -154,7 +168,7 @@ func (w *composeWalker) expandDynamicPick(ref note.DynamicEmbedRef, depth int, p
 		}
 
 		// Pre-filter: must have at least one include tag as inline
-		if !noteHasInlineTag(fast, filter.include) {
+		if len(filter.include) > 0 && !noteHasInlineTag(fast, filter.include) {
 			continue
 		}
 
@@ -167,7 +181,7 @@ func (w *composeWalker) expandDynamicPick(ref note.DynamicEmbedRef, depth int, p
 			continue
 		}
 
-		matches := pickLinesFromNote(n, filter, nil, anyMode, df, false)
+		matches := pickLinesFromNote(n, filter, dateRanges, anyMode, df, false)
 		if len(matches) == 0 {
 			continue
 		}
