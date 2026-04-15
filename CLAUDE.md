@@ -50,7 +50,7 @@ ruin-note-cli/
 │   │   ├── note.go           # Note struct and operations
 │   │   ├── frontmatter.go    # YAML frontmatter parsing/writing
 │   │   ├── bulk.go           # Bulk export/import format
-│   │   ├── tags.go           # Tag extraction logic
+│   │   ├── tags.go           # Tag extraction (wrappers delegating to pkg/notetext)
 │   │   ├── links.go          # Wiki link extraction ([[title]])
 │   │   └── url.go            # URL note detection, extraction, auto-tagging
 │   ├── urlresolve/
@@ -71,6 +71,10 @@ ruin-note-cli/
 │       ├── link.go           # link command (new, resolve, list)
 │       ├── resolve.go        # Note resolution (UUID, title, path lookup)
 │       └── links.go          # Wiki link resolution (RefreshLinkedCards)
+├── pkg/
+│   └── notetext/
+│       ├── tags.go           # Tag extraction (public, importable by external tools)
+│       └── ranges.go         # Embed/code/link range detection
 ├── scripts/
 │   └── create-benchmark-vault.sh  # Benchmark vault generator
 ├── go.mod

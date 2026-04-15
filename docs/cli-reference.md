@@ -66,6 +66,33 @@ ruin log [content]
 
 Content can be provided as argument, via stdin, or piped.
 
+#### log extract
+
+Extract and classify tags from content without creating a note.
+
+```
+ruin log extract [content]
+```
+
+| Flag | Short | Description |
+|------|-------|-------------|
+| `--title` | `-t` | Title for tag classification context |
+
+Tags are classified as **global** (on tag-only lines) or **inline** (on lines with other content).
+
+```
+$ ruin log extract "#project #idea
+
+Some thoughts here #wip"
+global:
+  #project
+  #idea
+inline:
+  #wip
+```
+
+Supports `--json` for structured output with `global` and `inline` arrays.
+
 ### search
 
 Search for notes.

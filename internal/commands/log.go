@@ -66,6 +66,7 @@ Details here..."
 
   # JSON output for scripting
   echo "content" | ruin log --json`,
+		Args: cobra.ArbitraryArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			vlt := getVault()
 			if vlt == nil {
@@ -145,6 +146,8 @@ Details here..."
 	cmd.Flags().StringVar(&parentRef, "parent", "", "set parent note (UUID, title, or path substring)")
 	cmd.Flags().IntVar(&orderVal, "order", 0, "set manual sort order")
 	cmd.Flags().BoolVar(&noFetch, "no-fetch", false, "skip URL title resolution for link notes")
+
+	cmd.AddCommand(newLogExtractCmd(jsonOutput))
 
 	return cmd
 }
