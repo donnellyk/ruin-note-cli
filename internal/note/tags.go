@@ -38,22 +38,14 @@ func ExtractTagMatches(content string) []TagMatch {
 	return findAllTags(content)
 }
 
-// insideLinkRanges returns true if position pos falls within any of the excluded ranges.
-func insideLinkRanges(pos int, ranges [][2]int) bool {
-	for _, r := range ranges {
-		if pos >= r[0] && pos < r[1] {
-			return true
-		}
-	}
-	return false
-}
-
 func findAllTags(content string) []TagMatch {
 	var matches []TagMatch
 	seen := make(map[int]bool) // Track start positions to avoid overlaps
 
-	// Find markdown link regions [text](url) to exclude from tag extraction
+	// Find regions to exclude from tag extraction
 	linkRanges := findMarkdownLinkRanges(content)
+	embedRanges := FindEmbedRanges(content)
+	excludedRanges := append(linkRanges, embedRanges...)
 
 	// Find spaced tags first (they take precedence)
 	// A spaced tag: #content with space#
@@ -66,8 +58,8 @@ func findAllTags(content string) []TagMatch {
 			continue
 		}
 
-		// Skip if inside a markdown link
-		if insideLinkRanges(i, linkRanges) {
+		// Skip if inside an excluded range (markdown link or embed)
+		if InsideRanges(i, excludedRanges) {
 			continue
 		}
 
@@ -87,11 +79,11 @@ func findAllTags(content string) []TagMatch {
 		}
 	}
 
-	// Find simple tags, skip if overlapping with spaced tags or inside links
+	// Find simple tags, skip if overlapping with spaced tags or inside excluded ranges
 	simpleMatches := simpleTagPattern.FindAllStringIndex(content, -1)
 	for _, loc := range simpleMatches {
 		start, end := loc[0], loc[1]
-		if seen[start] || insideLinkRanges(start, linkRanges) {
+		if seen[start] || InsideRanges(start, excludedRanges) {
 			continue
 		}
 		tag := content[start:end]

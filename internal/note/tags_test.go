@@ -373,3 +373,91 @@ func TestStripInheritedTagsFromContent(t *testing.T) {
 		})
 	}
 }
+
+func TestExtractTags_Embeds(t *testing.T) {
+	tests := []struct {
+		name    string
+		content string
+		want    []string
+	}{
+		{
+			name:    "tags inside static embed ignored",
+			content: "![[Note Title]]\n#real",
+			want:    []string{"#real"},
+		},
+		{
+			name:    "tags inside dynamic search embed ignored",
+			content: "![[search: #daily @today | limit=5]]\n#actual",
+			want:    []string{"#actual"},
+		},
+		{
+			name:    "tags inside dynamic pick embed ignored",
+			content: "![[pick: #followup !#done]]",
+			want:    nil,
+		},
+		{
+			name:    "tags inside dynamic query embed ignored",
+			content: "text #before\n![[query: weekly-review]]\n#after",
+			want:    []string{"#before", "#after"},
+		},
+		{
+			name:    "tags inside compose embed ignored",
+			content: "![[compose: project-alpha]]",
+			want:    nil,
+		},
+		{
+			name:    "tag outside embed is kept",
+			content: "Some text #tag\n![[search: #daily]]\nMore #other",
+			want:    []string{"#tag", "#other"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := ExtractTags(tt.content)
+			if len(got) != len(tt.want) {
+				t.Errorf("ExtractTags() = %v, want %v", got, tt.want)
+				return
+			}
+			for i := range got {
+				if NormalizeTag(got[i]) != NormalizeTag(tt.want[i]) {
+					t.Errorf("ExtractTags()[%d] = %q, want %q", i, got[i], tt.want[i])
+				}
+			}
+		})
+	}
+}
+
+func TestClassifyTags_Embeds(t *testing.T) {
+	content := "# Title\n#global\n\nSome text #inline\n![[pick: #followup !#done]]\n#another-global"
+	global, inline := ClassifyTags(content, "Title")
+
+	// #followup and #done inside the embed should not appear
+	for _, tag := range append(global, inline...) {
+		norm := NormalizeTag(tag)
+		if norm == "#followup" || norm == "#done" {
+			t.Errorf("tag %q inside embed should not be classified, got global=%v inline=%v", tag, global, inline)
+		}
+	}
+
+	// #global and #another-global should be global, #inline should be inline
+	hasGlobal := false
+	for _, tag := range global {
+		if NormalizeTag(tag) == "#global" {
+			hasGlobal = true
+		}
+	}
+	if !hasGlobal {
+		t.Errorf("expected #global in global tags, got %v", global)
+	}
+
+	hasInline := false
+	for _, tag := range inline {
+		if NormalizeTag(tag) == "#inline" {
+			hasInline = true
+		}
+	}
+	if !hasInline {
+		t.Errorf("expected #inline in inline tags, got %v", inline)
+	}
+}

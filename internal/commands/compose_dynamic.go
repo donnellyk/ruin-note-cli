@@ -592,7 +592,7 @@ func (w *composeWalker) resolveParentKey(uuid string, walkToRoot bool) struct{ u
 
 	parentUUID := entry.Parent
 	if walkToRoot {
-		for {
+		for range 100 {
 			pe, ok := w.index.Titles[parentUUID]
 			if !ok || pe.Parent == "" {
 				break

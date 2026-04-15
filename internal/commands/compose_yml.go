@@ -24,6 +24,7 @@ type ComposeSpecEntry struct {
 	Sort     string             `yaml:"sort,omitempty"`
 	Limit    int                `yaml:"limit,omitempty"`
 	Filter   string             `yaml:"filter,omitempty"`
+	Group    string             `yaml:"group,omitempty"`
 	Children []ComposeSpecEntry `yaml:"children"`
 }
 
@@ -129,6 +130,9 @@ func buildDynamicRef(embedType, query string, entry ComposeSpecEntry) note.Dynam
 	}
 	if entry.Filter != "" {
 		opts["filter"] = entry.Filter
+	}
+	if entry.Group != "" {
+		opts["group"] = entry.Group
 	}
 	if len(opts) == 0 {
 		opts = nil

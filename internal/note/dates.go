@@ -30,7 +30,7 @@ func ResolveDateTokens(content string) string {
 	// Find all ![[...]] ranges so we can skip @tokens inside dynamic embeds.
 	// Without this, ![[pick: #followup @today]] would resolve @today on save,
 	// turning the dynamic embed into a fixed date.
-	embedRanges := findEmbedRanges(content)
+	embedRanges := FindEmbedRanges(content)
 
 	var b strings.Builder
 	b.Grow(len(content))
@@ -45,7 +45,7 @@ func ResolveDateTokens(content string) string {
 		}
 
 		// Skip tokens inside ![[...]] embeds
-		if isInsideRange(start, embedRanges) {
+		if InsideRanges(start, embedRanges) {
 			continue
 		}
 
@@ -69,27 +69,6 @@ func ResolveDateTokens(content string) string {
 
 	b.WriteString(content[last:])
 	return b.String()
-}
-
-var embedBlockPattern = regexp.MustCompile(`!\[\[.+?\]\]`)
-
-// findEmbedRanges returns the [start, end) byte positions of all ![[...]] blocks.
-func findEmbedRanges(content string) [][2]int {
-	locs := embedBlockPattern.FindAllStringIndex(content, -1)
-	ranges := make([][2]int, len(locs))
-	for i, loc := range locs {
-		ranges[i] = [2]int{loc[0], loc[1]}
-	}
-	return ranges
-}
-
-func isInsideRange(pos int, ranges [][2]int) bool {
-	for _, r := range ranges {
-		if pos >= r[0] && pos < r[1] {
-			return true
-		}
-	}
-	return false
 }
 
 // ResolveDateTokensInQuery resolves @<token> patterns in a search query string.

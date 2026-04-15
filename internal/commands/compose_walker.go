@@ -379,8 +379,7 @@ func (w *composeWalker) expandYMLDynamic(tree *composeTree, depth int) {
 	}
 }
 
-func renderText(tree *composeTree, editFencing ...bool) (string, []sourceEntry) {
-	fencing := len(editFencing) > 0 && editFencing[0]
+func renderText(tree *composeTree) (string, []sourceEntry) {
 	var b strings.Builder
 	var sourceMap []sourceEntry
 	nextLine := 1
@@ -419,17 +418,6 @@ func renderText(tree *composeTree, editFencing ...bool) (string, []sourceEntry) 
 
 	var walk func(node *composeTree)
 	walk = func(node *composeTree) {
-		// Edit fencing: wrap dynamic embed output in comment markers
-		if fencing && node.Dynamic != nil {
-			if b.Len() > 0 {
-				b.WriteString("\n\n")
-				nextLine++
-			}
-			fence := fmt.Sprintf("<!-- ruin:dynamic %s: %s -->", node.Dynamic.Type, node.Dynamic.Query)
-			b.WriteString(fence)
-			nextLine++
-		}
-
 		if len(node.Segments) > 0 {
 			for _, seg := range node.Segments {
 				if strings.TrimSpace(seg.Text) != "" {
@@ -450,10 +438,6 @@ func renderText(tree *composeTree, editFencing ...bool) (string, []sourceEntry) 
 			walk(child)
 		}
 
-		if fencing && node.Dynamic != nil {
-			b.WriteString("\n<!-- /ruin:dynamic -->")
-			nextLine++
-		}
 	}
 
 	walk(tree)
