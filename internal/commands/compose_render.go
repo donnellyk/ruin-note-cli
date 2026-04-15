@@ -19,7 +19,7 @@ type explainDecision struct {
 	DynamicInfo *dynamicInfo `json:"dynamic,omitempty"`
 }
 
-func renderExplain(tree *composeTree, ymlParents map[string]bool, jsonOut bool) error {
+func renderExplain(tree *composeTree, jsonOut bool) error {
 	var decisions []explainDecision
 	var lines []string
 
@@ -34,15 +34,6 @@ func renderExplain(tree *composeTree, ymlParents map[string]bool, jsonOut bool) 
 	var walk func(node *composeTree, indent int, parentTitle string)
 	walk = func(node *composeTree, indent int, parentTitle string) {
 		prefix := strings.Repeat("  ", indent)
-
-		if ymlParents != nil && ymlParents[node.UUID] {
-			decisions = append(decisions, explainDecision{
-				Type: "yml_source",
-				Note: node.Title,
-				UUID: node.UUID,
-			})
-			lines = append(lines, fmt.Sprintf("%sSOURCE: children of %q from compose file", prefix, node.Title))
-		}
 
 		if len(node.Segments) > 0 {
 			for _, seg := range node.Segments {

@@ -321,7 +321,7 @@ func TestParentEntry_OmitEmpty(t *testing.T) {
 	parents := &ParentsIndex{
 		Parents: []ParentEntry{
 			{Name: "note-bm", UUID: "uuid-123"},
-			{Name: "file-bm", File: "compose.yml"},
+			{Name: "other-bm", UUID: "uuid-456"},
 		},
 	}
 	if err := v.SaveParents(parents); err != nil {
@@ -336,53 +336,10 @@ func TestParentEntry_OmitEmpty(t *testing.T) {
 		t.Fatalf("got %d parents, want 2", len(loaded.Parents))
 	}
 
-	// Note bookmark: UUID set, File empty
-	if loaded.Parents[0].UUID != "uuid-123" || loaded.Parents[0].File != "" {
-		t.Errorf("note bookmark = %+v, want UUID=uuid-123 File=empty", loaded.Parents[0])
+	if loaded.Parents[0].UUID != "uuid-123" {
+		t.Errorf("bookmark[0] = %+v, want UUID=uuid-123", loaded.Parents[0])
 	}
-	// File bookmark: File set, UUID empty
-	if loaded.Parents[1].File != "compose.yml" || loaded.Parents[1].UUID != "" {
-		t.Errorf("file bookmark = %+v, want File=compose.yml UUID=empty", loaded.Parents[1])
-	}
-}
-
-func TestVault_LookupParent_File(t *testing.T) {
-	tmpDir := t.TempDir()
-	v := New(tmpDir)
-
-	if _, err := v.Initialize(false); err != nil {
-		t.Fatalf("Initialize() error = %v", err)
-	}
-
-	parents := &ParentsIndex{
-		Parents: []ParentEntry{
-			{Name: "project", File: "project.yml"},
-			{Name: "alpha", UUID: "uuid-alpha"},
-		},
-	}
-	v.SaveParents(parents)
-
-	// File-based bookmark
-	bookmark, ok := v.LookupParent("project")
-	if !ok {
-		t.Fatal("LookupParent(project) = false, want true")
-	}
-	if bookmark.File != "project.yml" {
-		t.Errorf("File = %q, want %q", bookmark.File, "project.yml")
-	}
-	if bookmark.UUID != "" {
-		t.Errorf("UUID = %q, want empty", bookmark.UUID)
-	}
-
-	// UUID-based bookmark
-	bookmark, ok = v.LookupParent("alpha")
-	if !ok {
-		t.Fatal("LookupParent(alpha) = false, want true")
-	}
-	if bookmark.UUID != "uuid-alpha" {
-		t.Errorf("UUID = %q, want %q", bookmark.UUID, "uuid-alpha")
-	}
-	if bookmark.File != "" {
-		t.Errorf("File = %q, want empty", bookmark.File)
+	if loaded.Parents[1].UUID != "uuid-456" {
+		t.Errorf("bookmark[1] = %+v, want UUID=uuid-456", loaded.Parents[1])
 	}
 }

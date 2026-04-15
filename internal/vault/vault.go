@@ -503,11 +503,10 @@ func (v *Vault) SaveQueries(index *QueriesIndex) error {
 	return nil
 }
 
-// ParentEntry represents a saved parent bookmark (name -> UUID or file).
+// ParentEntry represents a saved parent bookmark (name -> UUID).
 type ParentEntry struct {
 	Name string `yaml:"name" json:"name"`
 	UUID string `yaml:"uuid,omitempty" json:"uuid,omitempty"`
-	File string `yaml:"file,omitempty" json:"file,omitempty"`
 }
 
 // ParentsIndex represents the contents of parents.yml.
@@ -550,7 +549,6 @@ func (v *Vault) SaveParents(index *ParentsIndex) error {
 type ParentBookmark struct {
 	Name string
 	UUID string
-	File string
 }
 
 // LookupParent finds a saved parent by name and returns its bookmark.
@@ -565,7 +563,6 @@ func (v *Vault) LookupParent(name string) (ParentBookmark, bool) {
 			return ParentBookmark{
 				Name: p.Name,
 				UUID: p.UUID,
-				File: p.File,
 			}, true
 		}
 	}

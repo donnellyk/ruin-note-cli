@@ -3,7 +3,6 @@ package commands
 import (
 	"encoding/json"
 	"fmt"
-	"maps"
 	"os"
 	"regexp"
 	"sort"
@@ -45,7 +44,6 @@ func NewComposeCmd(getVault func() *vault.Vault, jsonOutput *bool) *cobra.Comman
 		force            bool
 		content          bool
 		normalizeHeaders bool
-		composeFile      string
 		expandEmbeds     bool
 		explain          bool
 	)
@@ -66,29 +64,13 @@ Children are sorted by title by default.`,
   ruin compose <uuid> --sort created:desc
   ruin compose <uuid> --json
   ruin compose <uuid> --edit
-  ruin compose --file compose-spec.yml
   ruin compose <note> --expand-embeds
   ruin compose <note> --explain`,
-		Args: cobra.MaximumNArgs(1),
+		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			vlt := getVault()
 			if vlt == nil {
 				return fmt.Errorf("vault not configured")
-			}
-
-			// Check for file-based bookmark
-			if len(args) == 1 && composeFile == "" {
-				if bookmark, ok := vlt.LookupParent(args[0]); ok && bookmark.File != "" {
-					composeFile = LoadComposeFilePath(bookmark.File, vlt.Path)
-					args = nil
-				}
-			}
-
-			if composeFile != "" && len(args) > 0 {
-				return fmt.Errorf("provide a note argument or --file, not both")
-			}
-			if composeFile == "" && len(args) == 0 {
-				return fmt.Errorf("provide a note or --file")
 			}
 
 			if edit && *jsonOutput {
@@ -114,38 +96,14 @@ Children are sorted by title by default.`,
 				return fmt.Errorf("failed to load titles index: %w", err)
 			}
 
-			var rootUUID string
-			var ymlParents map[string]bool
-			var ymlDynamic map[string][]note.DynamicEmbedRef
-			childrenMap := index.ChildrenMap()
-
-			if composeFile != "" {
-				spec, err := ParseComposeFile(composeFile)
-				if err != nil {
-					return err
-				}
-				result, err := BuildChildrenMapFromSpec(spec, vlt, index)
-				if err != nil {
-					return err
-				}
-				rootUUID = result.RootUUID
-				ymlParents = result.YMLParents
-				ymlDynamic = result.DynamicEntries
-				// Merge: YML children override frontmatter children for YML parents
-				maps.Copy(childrenMap, result.ChildrenMap)
-				// For nodes without YML children, frontmatter children are already in childrenMap
-			} else {
-				root, err := ResolveNote(vlt, args[0])
-				if err != nil {
-					return err
-				}
-				rootUUID = root.UUID
+			root, err := ResolveNote(vlt, args[0])
+			if err != nil {
+				return err
 			}
+			rootUUID := root.UUID
 
+			childrenMap := index.ChildrenMap()
 			for parent := range childrenMap {
-				if ymlParents != nil && ymlParents[parent] {
-					continue
-				}
 				uuids := childrenMap[parent]
 				sortChildUUIDs(vlt, index, uuids, sortField)
 			}
@@ -154,14 +112,13 @@ Children are sorted by title by default.`,
 			walker.expandEmbeds = expandEmbeds
 			walker.expandDynamic = expandEmbeds
 			walker.rootUUID = rootUUID
-			walker.ymlDynamic = ymlDynamic
 			tree := walker.Walk(rootUUID, 0)
 			if tree == nil {
 				return fmt.Errorf("no notes found in tree")
 			}
 
 			if explain {
-				return renderExplain(tree, ymlParents, *jsonOutput)
+				return renderExplain(tree, *jsonOutput)
 			}
 
 			if edit {
@@ -196,7 +153,6 @@ Children are sorted by title by default.`,
 	cmd.Flags().BoolVarP(&force, "force", "f", false, "skip confirmation for deletions in edit mode")
 	cmd.Flags().BoolVar(&content, "content", false, "include per-node content in JSON output")
 	cmd.Flags().BoolVar(&normalizeHeaders, "normalize-headers", false, "normalize child headings so siblings share the same top-level")
-	cmd.Flags().StringVarP(&composeFile, "file", "F", "", "path to a YML composition file")
 	cmd.Flags().BoolVar(&expandEmbeds, "expand-embeds", false, "expand ![[note]] embeds inline")
 	cmd.Flags().BoolVar(&explain, "explain", false, "print a decision log instead of composed content")
 	return cmd

@@ -323,24 +323,7 @@ func (w *composeWalker) expandDynamicCompose(ref note.DynamicEmbedRef, depth int
 		}
 	}
 
-	// Check for compose file bookmark
-	var subChildrenMap map[string][]string
-	var subYMLParents map[string]bool
-	if bookmark, ok := w.vault.LookupParent(ref.Query); ok && bookmark.File != "" {
-		composeFile := LoadComposeFilePath(bookmark.File, w.vault.Path)
-		spec, err := ParseComposeFile(composeFile)
-		if err == nil {
-			result, err := BuildChildrenMapFromSpec(spec, w.vault, w.index)
-			if err == nil {
-				subChildrenMap = result.ChildrenMap
-				subYMLParents = result.YMLParents
-			}
-		}
-	}
-
-	if subChildrenMap == nil {
-		subChildrenMap = w.index.ChildrenMap()
-	}
+	subChildrenMap := w.index.ChildrenMap()
 
 	// Create a sub-walker with its own depth budget and visited set,
 	// but sharing the parent's visited set for circular detection
@@ -383,8 +366,6 @@ func (w *composeWalker) expandDynamicCompose(ref note.DynamicEmbedRef, depth int
 	}
 	subTree.Dynamic = dynInfo
 	subTree.Embedded = true
-
-	_ = subYMLParents // used during sub-compose construction
 
 	return &dynamicResult{
 		segments:      []composeSegment{{Embed: subTree}},

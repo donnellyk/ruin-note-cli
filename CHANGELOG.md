@@ -1,6 +1,6 @@
 # Changelog
 
-## [0.2.2] - 2026-04-15
+## [0.3.0] - 2026-04-15
 
 ### Fixed
 - Omit dynamic embed fencing unless using `--edit`
@@ -9,6 +9,12 @@
 ### Added
 - `group` options in dynamic embeds
   - group by `parent`, `tag`, `root`, `note` (default). See [`compose-advanced.md`](docs/compose-advanced.md) for more information.
+  
+### Removed
+- **Breaking**: YML compose files and file-based bookmarks removed
+  - `ruin compose --file` / `-F` flag removed
+  - `ruin parent save --file` flag removed
+  - `![[]]` embeds and dynamic embeds cover the same use cases more naturally
 
 ## [0.2.1] - 2026-04-14
 

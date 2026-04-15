@@ -1,115 +1,6 @@
 # Compose: Advanced Features
 
-This document covers three additions to `ruin compose`: YML-based composition files, inline embed expansion, and explain mode.
-
-## YML-Based Composition
-
-By default, `ruin compose` walks the parent-child tree stored in note frontmatter. YML composition files define a note tree independently, without modifying any note's `parent` field.
-
-### File Format
-
-```yaml
-root: "Project Alpha Hub"
-children:
-  - note: "Introduction"
-  - note: "Architecture"
-    children:
-      - note: "Backend Design"
-      - note: "Frontend Design"
-  - note: "Roadmap"
-```
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `root` | string | Yes | Root note reference (title, UUID, or path) |
-| `children` | list | No | Ordered list of child entries |
-| `children[].note` | string | Cond. | Child note reference (title, UUID, or path). Required unless `search` or `pick` is set. |
-| `children[].search` | string | Cond. | Dynamic search query (e.g., `"#daily"`). Requires `--expand-embeds`. |
-| `children[].pick` | string | Cond. | Dynamic pick tags (e.g., `"#followup"`). Requires `--expand-embeds`. |
-| `children[].format` | string | No | Output format for search (`content`, `list`, `summary`) or pick (`grouped`, `flat`) |
-| `children[].sort` | string | No | Sort order (e.g., `created:desc`) |
-| `children[].limit` | int | No | Maximum number of results |
-| `children[].filter` | string | No | Note-level filter query (for pick entries) |
-| `children[].children` | list | No | Nested children (recursive, only for `note` entries) |
-
-Note references use the same resolution as elsewhere in the CLI: titles, UUIDs, and vault-relative paths all work.
-
-### Dynamic Entries in YML
-
-In addition to `note` entries, YML files support `search` and `pick` entries that produce dynamic content. These require `--expand-embeds` to be active.
-
-```yaml
-root: "Weekly Review"
-children:
-  - note: "Introduction"
-  - search: "#daily"
-    format: list
-    sort: "created:desc"
-    limit: 7
-  - pick: "#followup"
-    format: grouped
-  - note: "Conclusion"
-```
-
-Dynamic entries are processed after all note children for their parent. The search and pick entries use the same query syntax as `ruin search` and `ruin pick` respectively. Without `--expand-embeds`, dynamic entries are silently ignored.
-
-### Usage
-
-```bash
-ruin compose --file project.yml
-ruin compose -F project.yml --strip-title --strip-global-tags
-ruin compose -F project.yml --json --content
-```
-
-When `--file` is provided, no positional `<note>` argument is needed. Providing both is an error.
-
-### Ordering
-
-Children listed in the YML file retain their declared order. The `--sort` flag only applies to children sourced from frontmatter fallback (see below).
-
-### Hybrid Mode: YML + Frontmatter Children
-
-When a node in the YML file has no `children` key, its frontmatter-based children (from `titles.json`) are used automatically. This allows top-level structure to be controlled via YML while subtrees use their existing parent relationships.
-
-```yaml
-root: "Project Alpha Hub"
-children:
-  - note: "Introduction"
-  - note: "Architecture"    # Its frontmatter children appear beneath it
-  - note: "Roadmap"
-```
-
-If "Architecture" has frontmatter children "Backend Design" and "Frontend Design", they are included in the compose output beneath "Architecture" and sorted by the `--sort` flag.
-
-### Saving YML Files as Bookmarks
-
-Save a YML composition file as a named bookmark with `parent save`:
-
-```bash
-ruin parent save alpha --file project.yml
-```
-
-Then compose using just the bookmark name:
-
-```bash
-ruin compose alpha
-```
-
-This is equivalent to `ruin compose --file project.yml`. The file path is stored relative to the vault root when possible, or as an absolute path otherwise.
-
-Listing bookmarks shows file-based entries:
-
-```bash
-ruin parent list
-# alpha: project.yml (file)
-# docs: d4e5f6a7-... "Documentation Root"
-```
-
-File-based bookmarks only work with `ruin compose`. Other commands that resolve parent bookmarks (e.g., `ruin parent children`, `ruin parent tree`) return an error directing the user to `ruin compose` instead.
-
-### Unresolvable Notes
-
-If a note reference in the YML file cannot be resolved, a warning is printed to stderr and that entry is skipped. Composition continues with the remaining notes.
+This document covers embed expansion, dynamic embeds, and explain mode for `ruin compose`.
 
 ## Embed Expansion
 
@@ -266,7 +157,6 @@ Header matching is case-insensitive. A section includes the matched heading and 
 ```bash
 ruin compose "Project Hub" --expand-embeds
 ruin compose "Project Hub" --expand-embeds --normalize-headers
-ruin compose -F project.yml --expand-embeds
 ```
 
 Without `--expand-embeds`, `![[...]]` lines pass through unchanged in the output.
@@ -374,7 +264,6 @@ The `--explain` flag prints a decision log showing how compose resolves the note
 ```bash
 ruin compose "Project Hub" --explain
 ruin compose "Project Hub" --explain --expand-embeds
-ruin compose -F project.yml --explain
 ruin compose "Project Hub" --explain --json
 ```
 
@@ -382,7 +271,6 @@ ruin compose "Project Hub" --explain --json
 
 ```
 ROOT: "Project Hub" (uuid: abc-123)
-  SOURCE: children of "Project Hub" from compose file
   EMBED: "Architecture" (uuid: def-456) -- from ![[...]] in "Project Hub", depth 1
     CHILD: "Architecture Details" (uuid: mno-345) -- child of "Architecture", depth 2
   CHILD: "Roadmap" (uuid: ghi-789) -- child of "Project Hub", depth 1
@@ -427,13 +315,12 @@ Decision types:
 | `child` | A note included as a child of another note |
 | `embed` | A note expanded from a `![[...]]` embed |
 | `dynamic` | A dynamic embed result (`![[search: ...]]`, `![[pick: ...]]`, etc.) |
-| `yml_source` | Children for this node came from the YML composition file |
 
 Dynamic decisions include an additional `dynamic` field with type, query, options, and result count.
 
 ### Flag Interactions
 
-`--explain` is mutually exclusive with `--edit` and `--content`. It works with all other compose flags: `--file`, `--expand-embeds`, `--depth`, `--sort`, `--strip-title`, `--strip-global-tags`, `--normalize-headers`, and `--json`.
+`--explain` is mutually exclusive with `--edit` and `--content`. It works with all other compose flags: `--expand-embeds`, `--depth`, `--sort`, `--strip-title`, `--strip-global-tags`, `--normalize-headers`, and `--json`.
 
 ## JSON Output Changes
 
@@ -486,7 +373,6 @@ The source map remains a flat list of `{uuid, path, title, start_line, end_line}
 
 | Flag | Short | Description |
 |------|-------|-------------|
-| `--file` | `-F` | Path to a YML composition file |
 | `--expand-embeds` | | Expand `![[note]]` embeds inline |
 | `--explain` | | Print a decision log instead of content |
 | `--depth` | | Max recursion depth (0 = unlimited) |

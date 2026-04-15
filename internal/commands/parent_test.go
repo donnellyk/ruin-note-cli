@@ -539,63 +539,6 @@ func TestParentDelete_NotFound(t *testing.T) {
 	}
 }
 
-func TestParentList_FileBookmarkTitle(t *testing.T) {
-	vlt := setupParentTestVault(t)
-	jsonOut := true
-
-	// Create a compose YML file that references uuid-root as its root
-	ymlContent := "root: uuid-root\nchildren:\n  - note: uuid-child\n"
-	ymlPath := filepath.Join(vlt.Path, "compose.yml")
-	if err := os.WriteFile(ymlPath, []byte(ymlContent), 0644); err != nil {
-		t.Fatalf("failed to write compose file: %v", err)
-	}
-
-	// Save a file-based bookmark
-	cmd := NewParentCmd(func() *vault.Vault { return vlt }, &jsonOut)
-	cmd.SetArgs([]string{"save", "mycomp", "--file", ymlPath, "--force"})
-	if err := cmd.Execute(); err != nil {
-		t.Fatalf("parent save error = %v", err)
-	}
-
-	// List bookmarks
-	cmd2 := NewParentCmd(func() *vault.Vault { return vlt }, &jsonOut)
-	oldStdout := os.Stdout
-	r, w, _ := os.Pipe()
-	os.Stdout = w
-
-	cmd2.SetArgs([]string{"list"})
-	err := cmd2.Execute()
-
-	w.Close()
-	os.Stdout = oldStdout
-
-	if err != nil {
-		t.Fatalf("parent list error = %v", err)
-	}
-
-	var buf bytes.Buffer
-	buf.ReadFrom(r)
-
-	var entries []struct {
-		Name  string `json:"name"`
-		UUID  string `json:"uuid"`
-		Title string `json:"title"`
-		File  string `json:"file"`
-	}
-	if err := json.Unmarshal(buf.Bytes(), &entries); err != nil {
-		t.Fatalf("failed to parse JSON: %v\noutput: %s", err, buf.String())
-	}
-	if len(entries) != 1 {
-		t.Fatalf("got %d entries, want 1", len(entries))
-	}
-	if entries[0].Title != "Root Note" {
-		t.Errorf("got title %q, want %q", entries[0].Title, "Root Note")
-	}
-	if entries[0].File == "" {
-		t.Error("expected file field to be set")
-	}
-}
-
 func TestDetectCycle(t *testing.T) {
 	index := &vault.TitlesIndex{
 		Titles: map[string]vault.TitleEntry{

@@ -20,25 +20,7 @@ func TestRenderExplain_BasicTree(t *testing.T) {
 		},
 	}
 
-	err := renderExplain(tree, nil, false)
-	if err != nil {
-		t.Fatal(err)
-	}
-}
-
-func TestRenderExplain_WithYMLSource(t *testing.T) {
-	tree := &composeTree{
-		UUID:  "root-1",
-		Title: "Root",
-		Path:  "Root.md",
-		Depth: 0,
-		Children: []*composeTree{
-			{UUID: "ch-1", Title: "Chapter 1", Path: "ch1.md", Depth: 1},
-		},
-	}
-
-	ymlParents := map[string]bool{"root-1": true}
-	err := renderExplain(tree, ymlParents, false)
+	err := renderExplain(tree, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -65,7 +47,7 @@ func TestRenderExplain_WithEmbeds(t *testing.T) {
 		},
 	}
 
-	err := renderExplain(tree, nil, false)
+	err := renderExplain(tree, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -96,14 +78,13 @@ func TestRenderExplain_WithDynamicEmbed(t *testing.T) {
 		},
 	}
 
-	err := renderExplain(tree, nil, false)
+	err := renderExplain(tree, false)
 	if err != nil {
 		t.Fatal(err)
 	}
 }
 
 func TestRenderExplain_WithDynamicChild(t *testing.T) {
-	// Test dynamic nodes that appear as children (from YAML dynamic entries)
 	tree := &composeTree{
 		UUID:  "root-1",
 		Title: "Root",
@@ -123,7 +104,7 @@ func TestRenderExplain_WithDynamicChild(t *testing.T) {
 		},
 	}
 
-	err := renderExplain(tree, nil, false)
+	err := renderExplain(tree, false)
 	if err != nil {
 		t.Fatal(err)
 	}

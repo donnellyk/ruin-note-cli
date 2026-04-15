@@ -43,9 +43,8 @@ type composeWalker struct {
 	stripGlobalTags  bool
 	normalizeHeaders bool
 	expandEmbeds     bool
-	expandDynamic    bool                              // enable dynamic embed expansion (![[search: ...]] etc.)
-	rootUUID         string                            // UUID of the compose root (excluded from dynamic search/pick results)
-	ymlDynamic       map[string][]note.DynamicEmbedRef // parent UUID -> dynamic entries from YAML
+	expandDynamic    bool   // enable dynamic embed expansion (![[search: ...]] etc.)
+	rootUUID         string // UUID of the compose root (excluded from dynamic search/pick results)
 }
 
 func newComposeWalker(vlt *vault.Vault, index *vault.TitlesIndex, childrenMap map[string][]string, maxDepth int, stripTitle, stripGlobalTags, normalizeHeaders bool) *composeWalker {
@@ -116,9 +115,6 @@ func (w *composeWalker) Walk(uuid string, depth int) *composeTree {
 			}
 		}
 	}
-
-	// Process YAML dynamic entries (search/pick) after note children
-	w.expandYMLDynamic(tree, depth)
 
 	return tree
 }
@@ -353,30 +349,6 @@ func splitByEmbedLines(lines []string, embeds []note.EmbedRef) []string {
 	}
 	segments = append(segments, strings.Join(lines[prev:], "\n"))
 	return segments
-}
-
-// expandYMLDynamic processes YAML-declared dynamic entries (search/pick) for a node.
-// These are appended after note children. Only runs when expandDynamic is enabled
-// and the ymlDynamic map contains entries for this node's UUID.
-func (w *composeWalker) expandYMLDynamic(tree *composeTree, depth int) {
-	if !w.expandDynamic || len(w.ymlDynamic) == 0 {
-		return
-	}
-	dynRefs := w.ymlDynamic[tree.UUID]
-	if len(dynRefs) == 0 {
-		return
-	}
-	for _, dynRef := range dynRefs {
-		result := w.expandDynamicEmbed(dynRef, depth, tree.UUID)
-		if result == nil {
-			continue
-		}
-		for _, seg := range result.segments {
-			if seg.Embed != nil {
-				tree.Children = append(tree.Children, seg.Embed)
-			}
-		}
-	}
 }
 
 func renderText(tree *composeTree) (string, []sourceEntry) {

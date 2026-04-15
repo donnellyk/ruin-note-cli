@@ -13,9 +13,6 @@ import (
 func ResolveNote(vlt *vault.Vault, identifier string) (*note.Note, error) {
 	// 0. Saved parent bookmark lookup (exact name match)
 	if bookmark, ok := vlt.LookupParent(identifier); ok {
-		if bookmark.File != "" {
-			return nil, fmt.Errorf("bookmark %q is a composition file — use \"ruin compose %s\"", identifier, identifier)
-		}
 		index, err := vlt.LoadTitles()
 		if err == nil {
 			if entry, ok := index.Titles[bookmark.UUID]; ok {
@@ -25,7 +22,6 @@ func ResolveNote(vlt *vault.Vault, identifier string) (*note.Note, error) {
 				}
 			}
 		}
-		// Bookmark exists but UUID not resolvable -- fall through to normal resolution
 	}
 
 	index, err := vlt.LoadTitles()

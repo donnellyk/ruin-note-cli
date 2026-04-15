@@ -362,24 +362,18 @@ func printTreeNodes(index *vault.TitlesIndex, childrenMap map[string][]string, u
 }
 
 func newParentSaveCmd(getVault func() *vault.Vault, jsonOutput *bool) *cobra.Command {
-	var (
-		force bool
-		file  string
-	)
+	var force bool
 
 	cmd := &cobra.Command{
-		Use:   "save <name> [note]",
+		Use:   "save <name> <note>",
 		Short: "Save a named parent bookmark",
-		Long: `Save a named bookmark that maps a short name to a note UUID or composition file.
+		Long: `Save a named bookmark that maps a short name to a note UUID.
 
 The bookmark can then be used anywhere a note reference is accepted
-(e.g., --parent, compose, parent set/get/remove/children/tree).
-
-Use --file to bookmark a YML composition file instead of a note.`,
+(e.g., --parent, compose, parent set/get/remove/children/tree).`,
 		Example: `  ruin parent save alpha "Project Alpha Hub"
-  ruin parent save docs "Documentation Root" --force
-  ruin parent save project --file project.yml`,
-		Args: cobra.RangeArgs(1, 2),
+  ruin parent save docs "Documentation Root" --force`,
+		Args: cobra.ExactArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			vlt := getVault()
 			if vlt == nil {
@@ -388,19 +382,11 @@ Use --file to bookmark a YML composition file instead of a note.`,
 
 			name := args[0]
 
-			if file != "" && len(args) > 1 {
-				return fmt.Errorf("provide either a note argument or --file, not both")
-			}
-			if file == "" && len(args) < 2 {
-				return fmt.Errorf("provide a note argument or --file")
-			}
-
 			index, err := vlt.LoadParents()
 			if err != nil {
 				return fmt.Errorf("failed to load parents: %w", err)
 			}
 
-			// Check for existing entry
 			existingIdx := -1
 			for i, p := range index.Parents {
 				if p.Name == name {
@@ -415,11 +401,7 @@ Use --file to bookmark a YML composition file instead of a note.`,
 				}
 
 				existing := index.Parents[existingIdx]
-				if existing.File != "" {
-					fmt.Fprintf(os.Stderr, "Bookmark %q already exists (file: %s). Overwrite? [y/N] ", name, existing.File)
-				} else {
-					fmt.Fprintf(os.Stderr, "Bookmark %q already exists (UUID: %s). Overwrite? [y/N] ", name, existing.UUID)
-				}
+				fmt.Fprintf(os.Stderr, "Bookmark %q already exists (UUID: %s). Overwrite? [y/N] ", name, existing.UUID)
 				reader := bufio.NewReader(os.Stdin)
 				response, err := reader.ReadString('\n')
 				if err != nil {
@@ -431,47 +413,6 @@ Use --file to bookmark a YML composition file instead of a note.`,
 				}
 			}
 
-			if file != "" {
-				if _, err := os.Stat(file); err != nil {
-					return fmt.Errorf("file not found: %s", file)
-				}
-
-				storedPath, err := ResolveComposeFilePath(file, vlt.Path)
-				if err != nil {
-					return fmt.Errorf("failed to resolve file path: %w", err)
-				}
-
-				if existingIdx >= 0 {
-					index.Parents[existingIdx].UUID = ""
-					index.Parents[existingIdx].File = storedPath
-				} else {
-					index.Parents = append(index.Parents, vault.ParentEntry{
-						Name: name,
-						File: storedPath,
-					})
-				}
-
-				if err := vlt.SaveParents(index); err != nil {
-					return fmt.Errorf("failed to save parents: %w", err)
-				}
-
-				if *jsonOutput {
-					output := struct {
-						Name string `json:"name"`
-						File string `json:"file"`
-					}{
-						Name: name,
-						File: storedPath,
-					}
-					enc := json.NewEncoder(os.Stdout)
-					enc.SetIndent("", "  ")
-					return enc.Encode(output)
-				}
-
-				fmt.Fprintf(os.Stderr, "Saved parent %q -> %s\n", name, storedPath)
-				return nil
-			}
-
 			n, err := ResolveNote(vlt, args[1])
 			if err != nil {
 				return fmt.Errorf("note: %w", err)
@@ -479,7 +420,6 @@ Use --file to bookmark a YML composition file instead of a note.`,
 
 			if existingIdx >= 0 {
 				index.Parents[existingIdx].UUID = n.UUID
-				index.Parents[existingIdx].File = ""
 			} else {
 				index.Parents = append(index.Parents, vault.ParentEntry{
 					Name: name,
@@ -512,7 +452,6 @@ Use --file to bookmark a YML composition file instead of a note.`,
 	}
 
 	cmd.Flags().BoolVarP(&force, "force", "f", false, "skip confirmation when overwriting")
-	cmd.Flags().StringVarP(&file, "file", "F", "", "path to a YML composition file")
 	return cmd
 }
 
@@ -541,35 +480,20 @@ func newParentListCmd(getVault func() *vault.Vault, jsonOutput *bool) *cobra.Com
 					Name  string `json:"name"`
 					UUID  string `json:"uuid,omitempty"`
 					Title string `json:"title,omitempty"`
-					File  string `json:"file,omitempty"`
 				}
 				var entries []listEntry
 				for _, p := range index.Parents {
-					if p.File != "" {
-						entry := listEntry{
-							Name: p.Name,
-							File: p.File,
+					title := ""
+					if titles != nil {
+						if te, ok := titles.Titles[p.UUID]; ok {
+							title = te.Title
 						}
-						absPath := LoadComposeFilePath(p.File, vlt.Path)
-						if spec, err := ParseComposeFile(absPath); err == nil {
-							if rootNote, err := ResolveNote(vlt, spec.Root); err == nil {
-								entry.Title = rootNote.Title
-							}
-						}
-						entries = append(entries, entry)
-					} else {
-						title := ""
-						if titles != nil {
-							if te, ok := titles.Titles[p.UUID]; ok {
-								title = te.Title
-							}
-						}
-						entries = append(entries, listEntry{
-							Name:  p.Name,
-							UUID:  p.UUID,
-							Title: title,
-						})
 					}
+					entries = append(entries, listEntry{
+						Name:  p.Name,
+						UUID:  p.UUID,
+						Title: title,
+					})
 				}
 				enc := json.NewEncoder(os.Stdout)
 				enc.SetIndent("", "  ")
@@ -582,24 +506,13 @@ func newParentListCmd(getVault func() *vault.Vault, jsonOutput *bool) *cobra.Com
 			}
 
 			for _, p := range index.Parents {
-				if p.File != "" {
-					label := p.File
-					absPath := LoadComposeFilePath(p.File, vlt.Path)
-					if spec, err := ParseComposeFile(absPath); err == nil {
-						if rootNote, err := ResolveNote(vlt, spec.Root); err == nil {
-							label = rootNote.Title
-						}
+				title := p.UUID
+				if titles != nil {
+					if te, ok := titles.Titles[p.UUID]; ok {
+						title = te.Title
 					}
-					fmt.Printf("%s: %s (file)\n", p.Name, label)
-				} else {
-					title := p.UUID
-					if titles != nil {
-						if te, ok := titles.Titles[p.UUID]; ok {
-							title = te.Title
-						}
-					}
-					fmt.Printf("%s: %s (%s)\n", p.Name, title, p.UUID)
 				}
+				fmt.Printf("%s: %s (%s)\n", p.Name, title, p.UUID)
 			}
 			return nil
 		},
