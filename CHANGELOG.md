@@ -6,6 +6,10 @@
 - Omit dynamic embed fencing unless using `--edit`
 - Empty headers are omitted during dynamic embed
 
+### Added
+- `group` options in dynamic embeds
+  - group by `parent`, `tag`, `root`, `note` (default). See [`compose-advanced.md`](docs/compose-advanced.md) for more information.
+
 ## [0.2.1] - 2026-04-14
 
 ### Fixed

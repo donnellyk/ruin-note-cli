@@ -536,3 +536,129 @@ func createPickTestNote(t *testing.T, dir string, uuid, title, filename string, 
 		t.Fatalf("failed to write %s: %v", filename, err)
 	}
 }
+
+func TestDynamicPick_GroupByParent(t *testing.T) {
+	notes := []testNote{
+		{
+			uuid: "root-1", title: "Hub", filename: "Hub.md",
+			raw: "---\nuuid: root-1\ncreated: \"2025-01-01T10:00:00-05:00\"\nupdated: \"2025-01-01T10:00:00-05:00\"\n---\n# Hub\n\n![[pick: #followup | group=parent]]",
+		},
+		{
+			uuid: "parent-a", title: "Project Alpha", filename: "Project Alpha.md",
+			raw: "---\nuuid: parent-a\ncreated: \"2025-01-01T10:00:00-05:00\"\nupdated: \"2025-01-01T10:00:00-05:00\"\n---\n# Project Alpha\n\nOverview.",
+		},
+		{
+			uuid: "child-a1", title: "Alpha Task 1", filename: "Alpha Task 1.md", parent: "parent-a",
+			raw: "---\nuuid: child-a1\ncreated: \"2025-01-02T10:00:00-05:00\"\nupdated: \"2025-01-02T10:00:00-05:00\"\nparent: parent-a\ninline-tags:\n  - \"#followup\"\n---\n# Alpha Task 1\n\n- Fix the build #followup",
+		},
+		{
+			uuid: "child-a2", title: "Alpha Task 2", filename: "Alpha Task 2.md", parent: "parent-a",
+			raw: "---\nuuid: child-a2\ncreated: \"2025-01-03T10:00:00-05:00\"\nupdated: \"2025-01-03T10:00:00-05:00\"\nparent: parent-a\ninline-tags:\n  - \"#followup\"\n---\n# Alpha Task 2\n\n- Update docs #followup",
+		},
+		{
+			uuid: "orphan-1", title: "Orphan Note", filename: "Orphan Note.md",
+			raw: "---\nuuid: orphan-1\ncreated: \"2025-01-04T10:00:00-05:00\"\nupdated: \"2025-01-04T10:00:00-05:00\"\ninline-tags:\n  - \"#followup\"\n---\n# Orphan Note\n\n- Standalone item #followup",
+		},
+	}
+
+	vlt, index, childrenMap := setupDynamicTestVault(t, notes)
+	tree := walkDynamic(vlt, index, childrenMap, "root-1")
+	if tree == nil {
+		t.Fatal("tree is nil")
+	}
+
+	text, _ := renderText(tree)
+	// Both Alpha children should be grouped under "Project Alpha"
+	if !strings.Contains(text, "Project Alpha") {
+		t.Errorf("expected parent heading 'Project Alpha', got:\n%s", text)
+	}
+	if !strings.Contains(text, "Fix the build") && !strings.Contains(text, "Update docs") {
+		t.Errorf("expected both alpha items, got:\n%s", text)
+	}
+	// Orphan should use its own title
+	if !strings.Contains(text, "Orphan Note") {
+		t.Errorf("expected orphan note heading, got:\n%s", text)
+	}
+	// Should NOT have separate headings for each alpha child
+	if strings.Contains(text, "Alpha Task 1") || strings.Contains(text, "Alpha Task 2") {
+		t.Errorf("should group by parent, not individual notes, got:\n%s", text)
+	}
+}
+
+func TestDynamicPick_GroupByRoot(t *testing.T) {
+	notes := []testNote{
+		{
+			uuid: "root-1", title: "Hub", filename: "Hub.md",
+			raw: "---\nuuid: root-1\ncreated: \"2025-01-01T10:00:00-05:00\"\nupdated: \"2025-01-01T10:00:00-05:00\"\n---\n# Hub\n\n![[pick: #followup | group=root]]",
+		},
+		{
+			uuid: "grandparent", title: "Top Project", filename: "Top Project.md",
+			raw: "---\nuuid: grandparent\ncreated: \"2025-01-01T10:00:00-05:00\"\nupdated: \"2025-01-01T10:00:00-05:00\"\n---\n# Top Project\n\nOverview.",
+		},
+		{
+			uuid: "parent-a", title: "Sub Module", filename: "Sub Module.md", parent: "grandparent",
+			raw: "---\nuuid: parent-a\ncreated: \"2025-01-01T10:00:00-05:00\"\nupdated: \"2025-01-01T10:00:00-05:00\"\nparent: grandparent\n---\n# Sub Module\n\nDetails.",
+		},
+		{
+			uuid: "child-a1", title: "Deep Task", filename: "Deep Task.md", parent: "parent-a",
+			raw: "---\nuuid: child-a1\ncreated: \"2025-01-02T10:00:00-05:00\"\nupdated: \"2025-01-02T10:00:00-05:00\"\nparent: parent-a\ninline-tags:\n  - \"#followup\"\n---\n# Deep Task\n\n- Deep item #followup",
+		},
+	}
+
+	vlt, index, childrenMap := setupDynamicTestVault(t, notes)
+	tree := walkDynamic(vlt, index, childrenMap, "root-1")
+	if tree == nil {
+		t.Fatal("tree is nil")
+	}
+
+	text, _ := renderText(tree)
+	// Should group under root ancestor "Top Project", not immediate parent "Sub Module"
+	if !strings.Contains(text, "Top Project") {
+		t.Errorf("expected root ancestor heading 'Top Project', got:\n%s", text)
+	}
+	if strings.Contains(text, "Sub Module") {
+		t.Errorf("should not show intermediate parent, got:\n%s", text)
+	}
+}
+
+func TestDynamicPick_GroupByTag(t *testing.T) {
+	notes := []testNote{
+		{
+			uuid: "root-1", title: "Hub", filename: "Hub.md",
+			raw: "---\nuuid: root-1\ncreated: \"2025-01-01T10:00:00-05:00\"\nupdated: \"2025-01-01T10:00:00-05:00\"\n---\n# Hub\n\n![[pick: #todo #followup | any, group=tag]]",
+		},
+		{
+			uuid: "note-a", title: "Work Note", filename: "Work Note.md",
+			raw: "---\nuuid: note-a\ncreated: \"2025-01-02T10:00:00-05:00\"\nupdated: \"2025-01-02T10:00:00-05:00\"\ninline-tags:\n  - \"#todo\"\n  - \"#followup\"\n---\n# Work Note\n\n- Buy milk #todo\n- Call Alex #followup\n- Fix bug #todo #followup",
+		},
+	}
+
+	vlt, index, childrenMap := setupDynamicTestVault(t, notes)
+	tree := walkDynamic(vlt, index, childrenMap, "root-1")
+	if tree == nil {
+		t.Fatal("tree is nil")
+	}
+
+	text, _ := renderText(tree)
+	// Should have separate sections for #todo and #followup
+	if !strings.Contains(text, "#todo") {
+		t.Errorf("expected #todo heading, got:\n%s", text)
+	}
+	if !strings.Contains(text, "#followup") {
+		t.Errorf("expected #followup heading, got:\n%s", text)
+	}
+	// "Fix bug" has both tags and should appear under both
+	todoIdx := strings.Index(text, "#todo")
+	followupIdx := strings.Index(text, "#followup")
+	if todoIdx < 0 || followupIdx < 0 {
+		t.Fatal("missing tag headings")
+	}
+	// "Buy milk" only has #todo
+	if !strings.Contains(text, "Buy milk") {
+		t.Errorf("expected 'Buy milk', got:\n%s", text)
+	}
+	// "Call Alex" only has #followup
+	if !strings.Contains(text, "Call Alex") {
+		t.Errorf("expected 'Call Alex', got:\n%s", text)
+	}
+}

@@ -237,7 +237,12 @@ func (w *composeWalker) expandDynamicPick(ref note.DynamicEmbedRef, depth int, p
 	case "flat":
 		text = renderPickFlat(pickResults, depth)
 	default: // "grouped"
-		text = renderPickGrouped(pickResults, depth)
+		groupBy := ref.Options["group"]
+		if groupBy == "" {
+			groupBy = "note"
+		}
+		groups := w.groupPickResults(pickResults, groupBy, filter.include)
+		text = renderPickGroups(groups, depth)
 	}
 
 	return w.textResult(text, dynInfo, depth)
@@ -523,15 +528,135 @@ func renderSearchSummary(results []SearchResult, depth int) string {
 	return strings.Join(parts, "\n\n")
 }
 
-func renderPickGrouped(results []pickNoteResult, depth int) string {
+// pickGroup is a set of pick matches under a common heading.
+type pickGroup struct {
+	heading string
+	matches []PickMatch
+}
+
+// groupPickResults regroups pick results by the specified key.
+func (w *composeWalker) groupPickResults(results []pickNoteResult, groupBy string, includeTags []string) []pickGroup {
+	switch groupBy {
+	case "parent":
+		return w.groupByParent(results, false)
+	case "root":
+		return w.groupByParent(results, true)
+	case "tag":
+		return groupByTag(results, includeTags)
+	default: // "note"
+		return groupByNote(results)
+	}
+}
+
+func groupByNote(results []pickNoteResult) []pickGroup {
+	var groups []pickGroup
+	for _, r := range results {
+		groups = append(groups, pickGroup{heading: r.title, matches: r.matches})
+	}
+	return groups
+}
+
+func (w *composeWalker) groupByParent(results []pickNoteResult, walkToRoot bool) []pickGroup {
+	type groupKey struct {
+		uuid  string
+		title string
+	}
+
+	ordered := []groupKey{}
+	seen := map[string]int{}
+	grouped := map[string][]PickMatch{}
+
+	for _, r := range results {
+		key := w.resolveParentKey(r.uuid, walkToRoot)
+		if _, ok := seen[key.uuid]; !ok {
+			seen[key.uuid] = len(ordered)
+			ordered = append(ordered, key)
+		}
+		grouped[key.uuid] = append(grouped[key.uuid], r.matches...)
+	}
+
+	var groups []pickGroup
+	for _, key := range ordered {
+		groups = append(groups, pickGroup{heading: key.title, matches: grouped[key.uuid]})
+	}
+	return groups
+}
+
+// resolveParentKey returns the parent (or root ancestor) UUID and title for a note.
+// If the note has no parent, it uses its own identity as the group.
+func (w *composeWalker) resolveParentKey(uuid string, walkToRoot bool) struct{ uuid, title string } {
+	entry, ok := w.index.Titles[uuid]
+	if !ok || entry.Parent == "" {
+		return struct{ uuid, title string }{uuid, entry.Title}
+	}
+
+	parentUUID := entry.Parent
+	if walkToRoot {
+		for {
+			pe, ok := w.index.Titles[parentUUID]
+			if !ok || pe.Parent == "" {
+				break
+			}
+			parentUUID = pe.Parent
+		}
+	}
+
+	if pe, ok := w.index.Titles[parentUUID]; ok {
+		return struct{ uuid, title string }{parentUUID, pe.Title}
+	}
+	return struct{ uuid, title string }{uuid, entry.Title}
+}
+
+func groupByTag(results []pickNoteResult, includeTags []string) []pickGroup {
+	ordered := []string{}
+	seen := map[string]int{}
+	grouped := map[string][]PickMatch{}
+
+	for _, r := range results {
+		for _, m := range r.matches {
+			lineTagsNorm := map[string]bool{}
+			for _, lt := range m.Tags {
+				lineTagsNorm[note.NormalizeTag(lt)] = true
+			}
+			matched := false
+			for _, it := range includeTags {
+				if lineTagsNorm[it] {
+					if _, ok := seen[it]; !ok {
+						seen[it] = len(ordered)
+						ordered = append(ordered, it)
+					}
+					grouped[it] = append(grouped[it], m)
+					matched = true
+				}
+			}
+			if !matched {
+				// Line matched via date or other criteria, no specific tag group
+				key := "(untagged)"
+				if _, ok := seen[key]; !ok {
+					seen[key] = len(ordered)
+					ordered = append(ordered, key)
+				}
+				grouped[key] = append(grouped[key], m)
+			}
+		}
+	}
+
+	var groups []pickGroup
+	for _, tag := range ordered {
+		groups = append(groups, pickGroup{heading: tag, matches: grouped[tag]})
+	}
+	return groups
+}
+
+func renderPickGroups(groups []pickGroup, depth int) string {
 	var parts []string
 	headingPrefix := strings.Repeat("#", min(depth+2, 6))
-	for _, r := range results {
+	for _, g := range groups {
 		var lines []string
-		if r.title != "" {
-			lines = append(lines, fmt.Sprintf("%s %s", headingPrefix, r.title))
+		if g.heading != "" {
+			lines = append(lines, fmt.Sprintf("%s %s", headingPrefix, g.heading))
 		}
-		for _, m := range r.matches {
+		for _, m := range g.matches {
 			content := m.Content
 			if !strings.HasPrefix(content, "- ") && !strings.HasPrefix(content, "* ") {
 				content = "- " + content

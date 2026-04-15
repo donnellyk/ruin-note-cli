@@ -171,11 +171,91 @@ Dynamic embeds run queries at compose time and inline the results. They use `![[
 | `sort` | search, pick | Sort order (e.g., `created:desc`, `title:asc`) |
 | `limit` | search, pick | Maximum results |
 | `filter` | pick | Note-level filter using search query syntax |
+| `group` | pick | Grouping key for `grouped` format: `note` (default), `parent`, `root`, `tag` |
 | `empty` | search, pick | Set to `hide` to suppress "No results" message |
 | `depth` | compose | Max depth for sub-compose (e.g., `depth=2`) |
 | `tag-scope` | search | Tag matching scope: `global`, `inline`, or omit for all |
 
 The compose root note and the parent note containing the dynamic embed are excluded from search/pick results to avoid self-referential output.
+
+#### Search Formats
+
+`![[search: #daily | format=content]]` (default) — full note content, heading-adjusted:
+```markdown
+## Morning thoughts
+Had an interesting idea...
+
+## Meeting notes
+Discussed the Q2 roadmap...
+```
+
+`![[search: #daily | format=list]]` — wiki-link bullet list:
+```markdown
+- [[Morning thoughts]]
+- [[Meeting notes]]
+```
+
+`![[search: #daily | format=summary]]` — title, date, first content line:
+```markdown
+### Morning thoughts
+*2026-04-15*
+Had an interesting idea...
+
+### Meeting notes
+*2026-04-15*
+Discussed the Q2 roadmap...
+```
+
+#### Pick Formats
+
+`![[pick: #followup]]` (default `grouped`) — lines under source note headings:
+```markdown
+### Morning thoughts
+- [ ] Follow up with Alex #followup
+- [x] Check benchmark results #followup
+
+### Project Alpha
+- Review the draft spec #followup
+```
+
+`![[pick: #followup | format=flat]]` — flat list with note attribution:
+```markdown
+- [ ] Follow up with Alex #followup (Morning thoughts)
+- [x] Check benchmark results #followup (Morning thoughts)
+- Review the draft spec #followup (Project Alpha)
+```
+
+#### Pick Grouping
+
+The `group` option controls how lines are organized under headings in `grouped` format:
+
+| Value | Grouping | Heading |
+|-------|----------|---------|
+| `note` | Source note (default) | Note title |
+| `parent` | Immediate parent note | Parent title (orphans use their own title) |
+| `root` | Root ancestor | Top-level parent title |
+| `tag` | Matching tag | Tag name |
+
+`![[pick: #followup | group=parent]]` — lines from sibling notes merged under their shared parent:
+```markdown
+### Project Alpha
+- Fix the build #followup
+- Update docs #followup
+
+### Orphan Note
+- Standalone item #followup
+```
+
+`![[pick: #todo #followup | any, group=tag]]` — lines grouped by which tag matched (lines with both tags appear under each):
+```markdown
+### #todo
+- Buy milk #todo
+- Fix bug #todo #followup
+
+### #followup
+- Call Alex #followup
+- Fix bug #todo #followup
+```
 
 Dynamic embeds that fail to resolve are left unexpanded in the output with a stderr warning.
 
