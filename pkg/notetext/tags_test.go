@@ -124,6 +124,64 @@ func TestExtractTags_SpacedTagEdgeCases(t *testing.T) {
 	}
 }
 
+func TestExtractTags_KebabCase(t *testing.T) {
+	tests := []struct {
+		name    string
+		content string
+		want    []string
+	}{
+		{
+			name:    "single kebab tag",
+			content: "marked as #done-later",
+			want:    []string{"#done-later"},
+		},
+		{
+			name:    "follow-up style",
+			content: "needs #follow-up soon",
+			want:    []string{"#follow-up"},
+		},
+		{
+			name:    "multi-dash tag",
+			content: "#kebab-case-tag here",
+			want:    []string{"#kebab-case-tag"},
+		},
+		{
+			name:    "mixed kebab and simple",
+			content: "#in-progress #followup",
+			want:    []string{"#in-progress", "#followup"},
+		},
+		{
+			name:    "trailing dash stripped",
+			content: "follow up #done- later",
+			want:    []string{"#done"},
+		},
+		{
+			name:    "leading dash does not match",
+			content: "#-leading is not a tag",
+			want:    nil,
+		},
+		{
+			name:    "slash combined with dash",
+			content: "tagged #date/2026-q2 today",
+			want:    []string{"#date/2026-q2"},
+		},
+		{
+			name:    "dash between adjacent tags",
+			content: "#foo-#bar",
+			want:    []string{"#foo", "#bar"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := ExtractTags(tt.content)
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("ExtractTags() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestExtractTags_MarkdownLinks(t *testing.T) {
 	tests := []struct {
 		name    string
@@ -442,13 +500,20 @@ func TestClassifyTags_Embeds(t *testing.T) {
 
 	// #global and #another-global should be global, #inline should be inline
 	hasGlobal := false
+	hasAnotherGlobal := false
 	for _, tag := range global {
-		if NormalizeTag(tag) == "#global" {
+		switch NormalizeTag(tag) {
+		case "#global":
 			hasGlobal = true
+		case "#another-global":
+			hasAnotherGlobal = true
 		}
 	}
 	if !hasGlobal {
 		t.Errorf("expected #global in global tags, got %v", global)
+	}
+	if !hasAnotherGlobal {
+		t.Errorf("expected #another-global in global tags, got %v", global)
 	}
 
 	hasInline := false

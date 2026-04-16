@@ -653,6 +653,7 @@ Content with #tags inline and a date reference @2025-02-03.
 
 - Simple: `#foo`, `#bar`, `#2025/may`
 - Spaced: `#daily note#`
+- Valid non-alphanumeric characters: `_`, `/`, `-` (hyphen cannot lead; trailing hyphens are stripped).
 
 ## Inherited Tags
 

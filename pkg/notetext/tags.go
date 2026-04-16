@@ -6,11 +6,14 @@ import (
 )
 
 // Tag patterns:
-// Simple tag: #word or #word/subword (alphanumeric, underscore, forward slash)
+// Simple tag: #word, #word-with-dashes, #word/subword (alphanumeric, underscore, hyphen, forward slash)
 // Spaced tag: #text with spaces# (must contain at least one space, ends with # not followed by word char)
 var (
-	// simpleTagPattern matches #word, #word/sub, #123, etc.
-	simpleTagPattern = regexp.MustCompile(`#[\w/]+`)
+	// simpleTagPattern matches #word, #word/sub, #kebab-case, #date/2026-q2, etc.
+	// The first character after # must be a word character or slash (not a dash),
+	// which avoids spurious matches like #- or #----.
+	// Trailing dashes are stripped programmatically after matching.
+	simpleTagPattern = regexp.MustCompile(`#[\w/][\w/-]*`)
 
 	// spacedTagPattern is not used as a simple regex due to complexity.
 	// Instead, we detect spaced tags programmatically.
@@ -87,6 +90,12 @@ func findAllTags(content string) []TagMatch {
 		start, end := loc[0], loc[1]
 		if seen[start] || InsideRanges(start, excludedRanges) {
 			continue
+		}
+		// Strip trailing dashes. The regex allows dashes inside the tag but a
+		// trailing dash (e.g. in prose: "follow up #done- later") is treated
+		// as punctuation, not part of the tag.
+		for end > start+1 && content[end-1] == '-' {
+			end--
 		}
 		tag := content[start:end]
 		matches = append(matches, TagMatch{

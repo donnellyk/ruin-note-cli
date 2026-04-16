@@ -13,6 +13,7 @@
   - group by `parent`, `tag`, `root`, `note` (default). See [`compose-advanced.md`](docs/compose-advanced.md) for more information.
 - `ruin log extract` subcommand — extract and classify tags from content without creating a note 
 - `pkg/notetext` public Go package — tag extraction primitives importable by external tools
+- Hyphens are now valid tag characters.
 
 ### Removed
 - **Breaking**: YML compose files and file-based bookmarks removed
