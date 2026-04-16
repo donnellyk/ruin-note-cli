@@ -6,7 +6,8 @@
 - Omit dynamic embed fencing unless using `--edit`
 - Empty headers are omitted during dynamic embed
 - Tags inside inline code and fenced code blocks are no longer extracted
-`--normalize-headers` now applies to dynamic embed output (`![[pick:]]`, `![[search:]]`)
+- `--normalize-headers` now applies to dynamic embed output (`![[pick:]]`, `![[search:]]`)
+- `compose --json` source maps are now complete for dynamic embeds
 
 ### Added
 - `group` options in dynamic embeds

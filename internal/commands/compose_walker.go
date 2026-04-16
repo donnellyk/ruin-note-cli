@@ -19,6 +19,19 @@ type composeTree struct {
 	Segments []composeSegment
 	Children []*composeTree
 	Dynamic  *dynamicInfo // non-nil for dynamic embed nodes
+
+	// Attribution maps line ranges within Content back to their source notes.
+	// Populated by dynamic embed renderers so the sourcemap has a per-line
+	// UUID even when multiple notes contribute to a single rendered block.
+	Attribution []attributionEntry
+}
+
+type attributionEntry struct {
+	UUID       string
+	Title      string
+	Path       string
+	LineOffset int // 0-based line offset within Content
+	LineCount  int // number of lines covered by this entry
 }
 
 type dynamicInfo struct {
@@ -380,8 +393,7 @@ func renderText(tree *composeTree) (string, []sourceEntry) {
 	var prevDepth int
 	var prevListOnly bool
 
-	var writeContent func(uuid, path, title string, content string, depth int)
-	writeContent = func(uuid, path, title string, content string, depth int) {
+	writeBlock := func(content string, depth int) (startLine int) {
 		if b.Len() > 0 {
 			listOnly := isListOnlyContent(content)
 			if depth == prevDepth && prevListOnly && listOnly {
@@ -392,22 +404,40 @@ func renderText(tree *composeTree) (string, []sourceEntry) {
 			}
 		}
 
-		startLine := nextLine
+		startLine = nextLine
 		lineCount := strings.Count(content, "\n") + 1
 		endLine := startLine + lineCount - 1
-
-		sourceMap = append(sourceMap, sourceEntry{
-			UUID:      uuid,
-			Path:      path,
-			Title:     title,
-			StartLine: startLine,
-			EndLine:   endLine,
-		})
 
 		b.WriteString(content)
 		nextLine = endLine + 1
 		prevDepth = depth
 		prevListOnly = isListOnlyContent(content)
+		return startLine
+	}
+
+	writeContent := func(uuid, path, title, content string, depth int) {
+		start := writeBlock(content, depth)
+		lineCount := strings.Count(content, "\n") + 1
+		sourceMap = append(sourceMap, sourceEntry{
+			UUID:      uuid,
+			Path:      path,
+			Title:     title,
+			StartLine: start,
+			EndLine:   start + lineCount - 1,
+		})
+	}
+
+	writeAttributed := func(node *composeTree) {
+		start := writeBlock(node.Content, node.Depth)
+		for _, attr := range node.Attribution {
+			sourceMap = append(sourceMap, sourceEntry{
+				UUID:      attr.UUID,
+				Path:      attr.Path,
+				Title:     attr.Title,
+				StartLine: start + attr.LineOffset,
+				EndLine:   start + attr.LineOffset + attr.LineCount - 1,
+			})
+		}
 	}
 
 	var walk func(node *composeTree)
@@ -425,7 +455,11 @@ func renderText(tree *composeTree) (string, []sourceEntry) {
 				}
 			}
 		} else if strings.TrimSpace(node.Content) != "" {
-			writeContent(node.UUID, node.Path, node.Title, node.Content, node.Depth)
+			if len(node.Attribution) > 0 {
+				writeAttributed(node)
+			} else {
+				writeContent(node.UUID, node.Path, node.Title, node.Content, node.Depth)
+			}
 		}
 
 		for _, child := range node.Children {

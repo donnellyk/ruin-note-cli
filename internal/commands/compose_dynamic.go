@@ -80,11 +80,11 @@ func (w *composeWalker) expandDynamicSearch(ref note.DynamicEmbedRef, depth int,
 
 	switch format {
 	case "list":
-		text := renderSearchList(results)
-		return w.textResult(text, dynInfo, depth)
+		text, attrs := renderSearchList(results)
+		return w.textResult(text, dynInfo, depth, attrs)
 	case "summary":
-		text := renderSearchSummary(results, depth)
-		return w.textResult(text, dynInfo, depth)
+		text, attrs := renderSearchSummary(results, depth)
+		return w.textResult(text, dynInfo, depth, attrs)
 	default: // "content"
 		return w.contentResult(results, dynInfo, depth)
 	}
@@ -219,19 +219,20 @@ func (w *composeWalker) expandDynamicPick(ref note.DynamicEmbedRef, depth int, p
 	}
 
 	var text string
+	var attrs []attributionEntry
 	switch format {
 	case "flat":
-		text = renderPickFlat(pickResults, depth)
+		text, attrs = renderPickFlat(pickResults, depth)
 	default: // "grouped"
 		groupBy := ref.Options["group"]
 		if groupBy == "" {
 			groupBy = "note"
 		}
 		groups := w.groupPickResults(pickResults, groupBy, filter.include)
-		text = renderPickGroups(groups, depth)
+		text, attrs = renderPickGroups(groups, depth)
 	}
 
-	return w.textResult(text, dynInfo, depth)
+	return w.textResult(text, dynInfo, depth, attrs)
 }
 
 func (w *composeWalker) expandDynamicQuery(ref note.DynamicEmbedRef, depth int, parentUUID string) *dynamicResult {
@@ -366,19 +367,21 @@ func (w *composeWalker) emptyResult(ref note.DynamicEmbedRef, dynInfo *dynamicIn
 	}
 }
 
-func (w *composeWalker) textResult(text string, dynInfo *dynamicInfo, depth int) *dynamicResult {
+func (w *composeWalker) textResult(text string, dynInfo *dynamicInfo, depth int, attrs []attributionEntry) *dynamicResult {
 	// Dynamic text generators produce headings at a base level (H1);
-	// adjust them to the correct depth in the tree.
+	// adjust them to the correct depth in the tree. Heading adjustment
+	// does not change line counts, so attribution line offsets stay valid.
 	if w.normalizeHeaders {
 		text = normalizeHeadings(text, depth+1)
 	} else {
 		text = adjustHeadings(text, depth+1)
 	}
 	tree := &composeTree{
-		Depth:    depth + 1,
-		Content:  text,
-		Embedded: true,
-		Dynamic:  dynInfo,
+		Depth:       depth + 1,
+		Content:     text,
+		Embedded:    true,
+		Dynamic:     dynInfo,
+		Attribution: attrs,
 	}
 	return &dynamicResult{
 		segments: []composeSegment{{Embed: tree}},
@@ -459,16 +462,23 @@ func (w *composeWalker) contentResult(results []SearchResult, dynInfo *dynamicIn
 	}
 }
 
-func renderSearchList(results []SearchResult) string {
+func renderSearchList(results []SearchResult) (string, []attributionEntry) {
 	var lines []string
-	for _, r := range results {
+	var attrs []attributionEntry
+	for i, r := range results {
 		lines = append(lines, fmt.Sprintf("- [[%s]]", r.Title))
+		attrs = append(attrs, attributionEntry{
+			UUID: r.UUID, Title: r.Title, Path: r.Path,
+			LineOffset: i, LineCount: 1,
+		})
 	}
-	return strings.Join(lines, "\n")
+	return strings.Join(lines, "\n"), attrs
 }
 
-func renderSearchSummary(results []SearchResult, _ int) string {
+func renderSearchSummary(results []SearchResult, _ int) (string, []attributionEntry) {
 	var parts []string
+	var attrs []attributionEntry
+	cumulativeOffset := 0
 	headingPrefix := "#" // base level; textResult adjusts to correct depth
 	for _, r := range results {
 		n, err := note.Load(r.Path)
@@ -482,14 +492,35 @@ func renderSearchSummary(results []SearchResult, _ int) string {
 		if firstLine != "" {
 			part += "\n" + firstLine
 		}
+		partLineCount := strings.Count(part, "\n") + 1
+		if len(parts) > 0 {
+			cumulativeOffset++ // blank separator line
+		}
+		attrs = append(attrs, attributionEntry{
+			UUID: r.UUID, Title: r.Title, Path: r.Path,
+			LineOffset: cumulativeOffset, LineCount: partLineCount,
+		})
+		cumulativeOffset += partLineCount
 		parts = append(parts, part)
 	}
-	return strings.Join(parts, "\n\n")
+	return strings.Join(parts, "\n\n"), attrs
 }
 
 type pickGroup struct {
 	heading string
-	matches []PickMatch
+	// headingRef is the source note for the heading (empty for group=tag).
+	headingRef sourceRef
+	matches    []pickMatchWithSource
+}
+
+// sourceRef identifies a source note contributing to rendered output.
+type sourceRef struct {
+	UUID, Title, Path string
+}
+
+type pickMatchWithSource struct {
+	match  PickMatch
+	source sourceRef
 }
 
 func (w *composeWalker) groupPickResults(results []pickNoteResult, groupBy string, includeTags []string) []pickGroup {
@@ -501,48 +532,55 @@ func (w *composeWalker) groupPickResults(results []pickNoteResult, groupBy strin
 	case "tag":
 		return groupByTag(results, includeTags)
 	default: // "note"
-		return groupByNote(results)
+		return w.groupByNote(results)
 	}
 }
 
-func groupByNote(results []pickNoteResult) []pickGroup {
+func (w *composeWalker) groupByNote(results []pickNoteResult) []pickGroup {
 	var groups []pickGroup
 	for _, r := range results {
-		groups = append(groups, pickGroup{heading: r.title, matches: r.matches})
+		ref := w.sourceRefForUUID(r.uuid)
+		ref.Title = r.title
+		var matches []pickMatchWithSource
+		for _, m := range r.matches {
+			matches = append(matches, pickMatchWithSource{match: m, source: ref})
+		}
+		groups = append(groups, pickGroup{heading: r.title, headingRef: ref, matches: matches})
 	}
 	return groups
 }
 
 func (w *composeWalker) groupByParent(results []pickNoteResult, walkToRoot bool) []pickGroup {
-	type groupKey struct {
-		uuid  string
-		title string
-	}
-
-	ordered := []groupKey{}
+	ordered := []sourceRef{}
 	seen := map[string]int{}
-	grouped := map[string][]PickMatch{}
+	grouped := map[string][]pickMatchWithSource{}
 
 	for _, r := range results {
 		key := w.resolveParentKey(r.uuid, walkToRoot)
-		if _, ok := seen[key.uuid]; !ok {
-			seen[key.uuid] = len(ordered)
+		if _, ok := seen[key.UUID]; !ok {
+			seen[key.UUID] = len(ordered)
 			ordered = append(ordered, key)
 		}
-		grouped[key.uuid] = append(grouped[key.uuid], r.matches...)
+		srcRef := w.sourceRefForUUID(r.uuid)
+		if srcRef.Title == "" {
+			srcRef.Title = r.title
+		}
+		for _, m := range r.matches {
+			grouped[key.UUID] = append(grouped[key.UUID], pickMatchWithSource{match: m, source: srcRef})
+		}
 	}
 
 	var groups []pickGroup
 	for _, key := range ordered {
-		groups = append(groups, pickGroup{heading: key.title, matches: grouped[key.uuid]})
+		groups = append(groups, pickGroup{heading: key.Title, headingRef: key, matches: grouped[key.UUID]})
 	}
 	return groups
 }
 
-func (w *composeWalker) resolveParentKey(uuid string, walkToRoot bool) struct{ uuid, title string } {
+func (w *composeWalker) resolveParentKey(uuid string, walkToRoot bool) sourceRef {
 	entry, ok := w.index.Titles[uuid]
 	if !ok || entry.Parent == "" {
-		return struct{ uuid, title string }{uuid, entry.Title}
+		return sourceRef{UUID: uuid, Title: entry.Title, Path: entry.Path}
 	}
 
 	parentUUID := entry.Parent
@@ -557,17 +595,25 @@ func (w *composeWalker) resolveParentKey(uuid string, walkToRoot bool) struct{ u
 	}
 
 	if pe, ok := w.index.Titles[parentUUID]; ok {
-		return struct{ uuid, title string }{parentUUID, pe.Title}
+		return sourceRef{UUID: parentUUID, Title: pe.Title, Path: pe.Path}
 	}
-	return struct{ uuid, title string }{uuid, entry.Title}
+	return sourceRef{UUID: uuid, Title: entry.Title, Path: entry.Path}
+}
+
+func (w *composeWalker) sourceRefForUUID(uuid string) sourceRef {
+	if entry, ok := w.index.Titles[uuid]; ok {
+		return sourceRef{UUID: uuid, Title: entry.Title, Path: entry.Path}
+	}
+	return sourceRef{UUID: uuid}
 }
 
 func groupByTag(results []pickNoteResult, includeTags []string) []pickGroup {
 	ordered := []string{}
 	seen := map[string]int{}
-	grouped := map[string][]PickMatch{}
+	grouped := map[string][]pickMatchWithSource{}
 
 	for _, r := range results {
+		srcRef := sourceRef{UUID: r.uuid, Title: r.title}
 		for _, m := range r.matches {
 			lineTagsNorm := map[string]bool{}
 			for _, lt := range m.Tags {
@@ -580,7 +626,7 @@ func groupByTag(results []pickNoteResult, includeTags []string) []pickGroup {
 						seen[it] = len(ordered)
 						ordered = append(ordered, it)
 					}
-					grouped[it] = append(grouped[it], m)
+					grouped[it] = append(grouped[it], pickMatchWithSource{match: m, source: srcRef})
 					matched = true
 				}
 			}
@@ -590,41 +636,68 @@ func groupByTag(results []pickNoteResult, includeTags []string) []pickGroup {
 					seen[key] = len(ordered)
 					ordered = append(ordered, key)
 				}
-				grouped[key] = append(grouped[key], m)
+				grouped[key] = append(grouped[key], pickMatchWithSource{match: m, source: srcRef})
 			}
 		}
 	}
 
 	var groups []pickGroup
 	for _, tag := range ordered {
+		// Tag heading has no source note, so headingRef is empty.
 		groups = append(groups, pickGroup{heading: tag, matches: grouped[tag]})
 	}
 	return groups
 }
 
-func renderPickGroups(groups []pickGroup, _ int) string {
+func renderPickGroups(groups []pickGroup, _ int) (string, []attributionEntry) {
 	var parts []string
+	var attrs []attributionEntry
+	cumulativeOffset := 0
 	headingPrefix := "#" // base level; textResult adjusts to correct depth
-	for _, g := range groups {
+	for gi, g := range groups {
+		if gi > 0 {
+			cumulativeOffset++ // blank separator line between groups
+		}
+		localOffset := 0
 		var lines []string
 		if g.heading != "" {
 			lines = append(lines, fmt.Sprintf("%s %s", headingPrefix, g.heading))
+			attrs = append(attrs, attributionEntry{
+				UUID:       g.headingRef.UUID,
+				Title:      g.headingRef.Title,
+				Path:       g.headingRef.Path,
+				LineOffset: cumulativeOffset + localOffset,
+				LineCount:  1,
+			})
+			localOffset++
 		}
-		for _, m := range g.matches {
-			content := m.Content
+		for _, mw := range g.matches {
+			content := mw.match.Content
 			if !strings.HasPrefix(content, "- ") && !strings.HasPrefix(content, "* ") {
 				content = "- " + content
 			}
 			lines = append(lines, content)
+			attrs = append(attrs, attributionEntry{
+				UUID:       mw.source.UUID,
+				Title:      mw.source.Title,
+				Path:       mw.source.Path,
+				LineOffset: cumulativeOffset + localOffset,
+				LineCount:  1,
+			})
+			localOffset++
 		}
 		parts = append(parts, strings.Join(lines, "\n"))
+		cumulativeOffset += localOffset
 	}
-	return strings.Join(parts, "\n\n")
+	return strings.Join(parts, "\n\n"), attrs
 }
 
-func renderPickFlat(results []pickNoteResult, _ int) string {
+func renderPickFlat(results []pickNoteResult, _ int) (string, []attributionEntry) {
 	var lines []string
+	var attrs []attributionEntry
+	lineOffset := 0
 	for _, r := range results {
+		src := sourceRef{UUID: r.uuid, Title: r.title}
 		for _, m := range r.matches {
 			content := m.Content
 			if !strings.HasPrefix(content, "- ") && !strings.HasPrefix(content, "* ") {
@@ -635,9 +708,17 @@ func renderPickFlat(results []pickNoteResult, _ int) string {
 			} else {
 				lines = append(lines, content)
 			}
+			attrs = append(attrs, attributionEntry{
+				UUID:       src.UUID,
+				Title:      src.Title,
+				Path:       src.Path,
+				LineOffset: lineOffset,
+				LineCount:  1,
+			})
+			lineOffset++
 		}
 	}
-	return strings.Join(lines, "\n")
+	return strings.Join(lines, "\n"), attrs
 }
 
 func firstContentLine(content, title string) string {

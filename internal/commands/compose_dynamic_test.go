@@ -780,3 +780,252 @@ func TestDynamicSearch_NormalizeHeaders(t *testing.T) {
 		t.Errorf("expected search summary heading normalized to ##, got:\n%s", text)
 	}
 }
+
+// --- Source Map Completeness Tests ---
+
+// findSourceLines returns content lines from text (1-indexed range) for an entry.
+func sourceLinesFor(text string, e sourceEntry) string {
+	lines := strings.Split(text, "\n")
+	if e.StartLine < 1 || e.EndLine > len(lines) || e.StartLine > e.EndLine {
+		return ""
+	}
+	return strings.Join(lines[e.StartLine-1:e.EndLine], "\n")
+}
+
+func TestSourceMap_SearchList(t *testing.T) {
+	notes := []testNote{
+		{
+			uuid: "root-1", title: "Hub", filename: "Hub.md",
+			raw: "---\nuuid: root-1\ncreated: \"2025-01-01T10:00:00-05:00\"\nupdated: \"2025-01-01T10:00:00-05:00\"\n---\n# Hub\n\n![[search: #daily | format=list, sort=created:asc]]",
+		},
+		{
+			uuid: "note-a", title: "Day One", filename: "Day One.md",
+			raw: "---\nuuid: note-a\ncreated: \"2025-01-02T10:00:00-05:00\"\nupdated: \"2025-01-02T10:00:00-05:00\"\ntags:\n  - \"#daily\"\n---\n# Day One\n#daily\n\nContent A.",
+		},
+		{
+			uuid: "note-b", title: "Day Two", filename: "Day Two.md",
+			raw: "---\nuuid: note-b\ncreated: \"2025-01-03T10:00:00-05:00\"\nupdated: \"2025-01-03T10:00:00-05:00\"\ntags:\n  - \"#daily\"\n---\n# Day Two\n#daily\n\nContent B.",
+		},
+	}
+	vlt, index, childrenMap := setupDynamicTestVault(t, notes)
+	tree := walkDynamic(vlt, index, childrenMap, "root-1")
+	text, sm := renderText(tree)
+
+	// Expect sourcemap entries for Day One and Day Two list items.
+	found := map[string]string{}
+	for _, e := range sm {
+		if e.UUID == "note-a" || e.UUID == "note-b" {
+			found[e.UUID] = sourceLinesFor(text, e)
+		}
+	}
+	if got := found["note-a"]; got != "- [[Day One]]" {
+		t.Errorf("note-a line = %q, want %q", got, "- [[Day One]]")
+	}
+	if got := found["note-b"]; got != "- [[Day Two]]" {
+		t.Errorf("note-b line = %q, want %q", got, "- [[Day Two]]")
+	}
+}
+
+func TestSourceMap_SearchSummary(t *testing.T) {
+	notes := []testNote{
+		{
+			uuid: "root-1", title: "Hub", filename: "Hub.md",
+			raw: "---\nuuid: root-1\ncreated: \"2025-01-01T10:00:00-05:00\"\nupdated: \"2025-01-01T10:00:00-05:00\"\n---\n# Hub\n\n![[search: #daily | format=summary, sort=created:asc]]",
+		},
+		{
+			uuid: "note-a", title: "Day One", filename: "Day One.md",
+			raw: "---\nuuid: note-a\ncreated: \"2025-01-02T10:00:00-05:00\"\nupdated: \"2025-01-02T10:00:00-05:00\"\ntags:\n  - \"#daily\"\n---\n# Day One\n#daily\n\nOne content.",
+		},
+		{
+			uuid: "note-b", title: "Day Two", filename: "Day Two.md",
+			raw: "---\nuuid: note-b\ncreated: \"2025-01-03T10:00:00-05:00\"\nupdated: \"2025-01-03T10:00:00-05:00\"\ntags:\n  - \"#daily\"\n---\n# Day Two\n#daily\n\nTwo content.",
+		},
+	}
+	vlt, index, childrenMap := setupDynamicTestVault(t, notes)
+	tree := walkDynamic(vlt, index, childrenMap, "root-1")
+	text, sm := renderText(tree)
+
+	found := map[string]string{}
+	for _, e := range sm {
+		if e.UUID == "note-a" || e.UUID == "note-b" {
+			found[e.UUID] = sourceLinesFor(text, e)
+		}
+	}
+	if got := found["note-a"]; !strings.Contains(got, "Day One") || !strings.Contains(got, "One content.") {
+		t.Errorf("note-a sourcemap block = %q, want it to include Day One and its first line", got)
+	}
+	if got := found["note-b"]; !strings.Contains(got, "Day Two") || !strings.Contains(got, "Two content.") {
+		t.Errorf("note-b sourcemap block = %q, want it to include Day Two and its first line", got)
+	}
+}
+
+func TestSourceMap_PickFlat(t *testing.T) {
+	notes := []testNote{
+		{
+			uuid: "root-1", title: "Hub", filename: "Hub.md",
+			raw: "---\nuuid: root-1\ncreated: \"2025-01-01T10:00:00-05:00\"\nupdated: \"2025-01-01T10:00:00-05:00\"\n---\n# Hub\n\n![[pick: #followup | format=flat, sort=created:asc]]",
+		},
+		{
+			uuid: "note-a", title: "Notes A", filename: "Notes A.md",
+			raw: "---\nuuid: note-a\ncreated: \"2025-01-02T10:00:00-05:00\"\nupdated: \"2025-01-02T10:00:00-05:00\"\ninline-tags:\n  - \"#followup\"\n---\n# Notes A\n\n- Task A1 #followup\n- Task A2 #followup",
+		},
+		{
+			uuid: "note-b", title: "Notes B", filename: "Notes B.md",
+			raw: "---\nuuid: note-b\ncreated: \"2025-01-03T10:00:00-05:00\"\nupdated: \"2025-01-03T10:00:00-05:00\"\ninline-tags:\n  - \"#followup\"\n---\n# Notes B\n\n- Task B1 #followup",
+		},
+	}
+	vlt, index, childrenMap := setupDynamicTestVault(t, notes)
+	tree := walkDynamic(vlt, index, childrenMap, "root-1")
+	text, sm := renderText(tree)
+
+	// Each flat line must map back to its source note's UUID.
+	aCount, bCount := 0, 0
+	for _, e := range sm {
+		line := sourceLinesFor(text, e)
+		switch e.UUID {
+		case "note-a":
+			if !strings.Contains(line, "(Notes A)") {
+				t.Errorf("note-a entry maps to %q, expected a line containing (Notes A)", line)
+			}
+			aCount++
+		case "note-b":
+			if !strings.Contains(line, "(Notes B)") {
+				t.Errorf("note-b entry maps to %q, expected a line containing (Notes B)", line)
+			}
+			bCount++
+		}
+	}
+	if aCount != 2 {
+		t.Errorf("note-a entries = %d, want 2", aCount)
+	}
+	if bCount != 1 {
+		t.Errorf("note-b entries = %d, want 1", bCount)
+	}
+}
+
+func TestSourceMap_PickGroupedByNote(t *testing.T) {
+	notes := []testNote{
+		{
+			uuid: "root-1", title: "Hub", filename: "Hub.md",
+			raw: "---\nuuid: root-1\ncreated: \"2025-01-01T10:00:00-05:00\"\nupdated: \"2025-01-01T10:00:00-05:00\"\n---\n# Hub\n\n![[pick: #followup | sort=created:asc]]",
+		},
+		{
+			uuid: "note-a", title: "Notes A", filename: "Notes A.md",
+			raw: "---\nuuid: note-a\ncreated: \"2025-01-02T10:00:00-05:00\"\nupdated: \"2025-01-02T10:00:00-05:00\"\ninline-tags:\n  - \"#followup\"\n---\n# Notes A\n\n- Task A1 #followup",
+		},
+		{
+			uuid: "note-b", title: "Notes B", filename: "Notes B.md",
+			raw: "---\nuuid: note-b\ncreated: \"2025-01-03T10:00:00-05:00\"\nupdated: \"2025-01-03T10:00:00-05:00\"\ninline-tags:\n  - \"#followup\"\n---\n# Notes B\n\n- Task B1 #followup",
+		},
+	}
+	vlt, index, childrenMap := setupDynamicTestVault(t, notes)
+	tree := walkDynamic(vlt, index, childrenMap, "root-1")
+	text, sm := renderText(tree)
+
+	// Heading and match lines should all map to their source note.
+	aLines, bLines := []string{}, []string{}
+	for _, e := range sm {
+		line := sourceLinesFor(text, e)
+		switch e.UUID {
+		case "note-a":
+			aLines = append(aLines, line)
+		case "note-b":
+			bLines = append(bLines, line)
+		}
+	}
+	// Expect 2 entries for each note: heading + one match line.
+	if len(aLines) != 2 {
+		t.Errorf("note-a entries = %d lines = %v, want 2", len(aLines), aLines)
+	}
+	if len(bLines) != 2 {
+		t.Errorf("note-b entries = %d lines = %v, want 2", len(bLines), bLines)
+	}
+}
+
+func TestSourceMap_PickGroupedByParent(t *testing.T) {
+	notes := []testNote{
+		{
+			uuid: "root-1", title: "Hub", filename: "Hub.md",
+			raw: "---\nuuid: root-1\ncreated: \"2025-01-01T10:00:00-05:00\"\nupdated: \"2025-01-01T10:00:00-05:00\"\n---\n# Hub\n\n![[pick: #followup | group=parent, sort=created:asc]]",
+		},
+		{
+			uuid: "parent-a", title: "Project Alpha", filename: "Project Alpha.md",
+			raw: "---\nuuid: parent-a\ncreated: \"2025-01-01T10:00:00-05:00\"\nupdated: \"2025-01-01T10:00:00-05:00\"\n---\n# Project Alpha\n\nOverview.",
+		},
+		{
+			uuid: "child-1", title: "Task 1", filename: "Task 1.md", parent: "parent-a",
+			raw: "---\nuuid: child-1\ncreated: \"2025-01-02T10:00:00-05:00\"\nupdated: \"2025-01-02T10:00:00-05:00\"\nparent: parent-a\ninline-tags:\n  - \"#followup\"\n---\n# Task 1\n\n- Do thing 1 #followup",
+		},
+		{
+			uuid: "child-2", title: "Task 2", filename: "Task 2.md", parent: "parent-a",
+			raw: "---\nuuid: child-2\ncreated: \"2025-01-03T10:00:00-05:00\"\nupdated: \"2025-01-03T10:00:00-05:00\"\nparent: parent-a\ninline-tags:\n  - \"#followup\"\n---\n# Task 2\n\n- Do thing 2 #followup",
+		},
+	}
+	vlt, index, childrenMap := setupDynamicTestVault(t, notes)
+	tree := walkDynamic(vlt, index, childrenMap, "root-1")
+	text, sm := renderText(tree)
+
+	// Heading should map to parent-a; match lines should map to their source notes.
+	parentHeading, child1, child2 := "", "", ""
+	for _, e := range sm {
+		line := sourceLinesFor(text, e)
+		switch e.UUID {
+		case "parent-a":
+			if strings.HasPrefix(strings.TrimSpace(line), "#") {
+				parentHeading = line
+			}
+		case "child-1":
+			child1 = line
+		case "child-2":
+			child2 = line
+		}
+	}
+	if !strings.Contains(parentHeading, "Project Alpha") {
+		t.Errorf("parent-a heading entry = %q, want Project Alpha heading", parentHeading)
+	}
+	if !strings.Contains(child1, "Do thing 1") {
+		t.Errorf("child-1 entry = %q, want its match line", child1)
+	}
+	if !strings.Contains(child2, "Do thing 2") {
+		t.Errorf("child-2 entry = %q, want its match line", child2)
+	}
+}
+
+func TestSourceMap_PickGroupedByTag(t *testing.T) {
+	notes := []testNote{
+		{
+			uuid: "root-1", title: "Hub", filename: "Hub.md",
+			raw: "---\nuuid: root-1\ncreated: \"2025-01-01T10:00:00-05:00\"\nupdated: \"2025-01-01T10:00:00-05:00\"\n---\n# Hub\n\n![[pick: #todo #followup | any, group=tag]]",
+		},
+		{
+			uuid: "note-a", title: "Notes A", filename: "Notes A.md",
+			raw: "---\nuuid: note-a\ncreated: \"2025-01-02T10:00:00-05:00\"\nupdated: \"2025-01-02T10:00:00-05:00\"\ninline-tags:\n  - \"#todo\"\n---\n# Notes A\n\n- Buy milk #todo",
+		},
+		{
+			uuid: "note-b", title: "Notes B", filename: "Notes B.md",
+			raw: "---\nuuid: note-b\ncreated: \"2025-01-03T10:00:00-05:00\"\nupdated: \"2025-01-03T10:00:00-05:00\"\ninline-tags:\n  - \"#followup\"\n---\n# Notes B\n\n- Call Alex #followup",
+		},
+	}
+	vlt, index, childrenMap := setupDynamicTestVault(t, notes)
+	tree := walkDynamic(vlt, index, childrenMap, "root-1")
+	text, sm := renderText(tree)
+
+	// Match lines must map to their source notes, even though the group
+	// heading (tag) has no UUID.
+	aOk, bOk := false, false
+	for _, e := range sm {
+		line := sourceLinesFor(text, e)
+		if e.UUID == "note-a" && strings.Contains(line, "Buy milk") {
+			aOk = true
+		}
+		if e.UUID == "note-b" && strings.Contains(line, "Call Alex") {
+			bOk = true
+		}
+	}
+	if !aOk {
+		t.Errorf("note-a match line missing from sourcemap, text:\n%s\nentries: %+v", text, sm)
+	}
+	if !bOk {
+		t.Errorf("note-b match line missing from sourcemap, text:\n%s\nentries: %+v", text, sm)
+	}
+}
