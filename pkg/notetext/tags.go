@@ -40,7 +40,7 @@ func findAllTags(content string) []TagMatch {
 
 	linkRanges := findMarkdownLinkRanges(content)
 	embedRanges := FindEmbedRanges(content)
-	codeRanges := findCodeRanges(content)
+	codeRanges := FindCodeRanges(content)
 	excludedRanges := append(linkRanges, embedRanges...)
 	excludedRanges = append(excludedRanges, codeRanges...)
 
@@ -100,8 +100,8 @@ func findMarkdownLinkRanges(content string) [][2]int {
 	return ranges
 }
 
-// findCodeRanges returns byte ranges for inline code (`...`) and fenced code blocks (```...```).
-func findCodeRanges(content string) [][2]int {
+// FindCodeRanges returns byte ranges for inline code (`...`) and fenced code blocks (```...```).
+func FindCodeRanges(content string) [][2]int {
 	var ranges [][2]int
 	i := 0
 	for i < len(content) {
