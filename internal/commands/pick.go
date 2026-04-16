@@ -16,16 +16,13 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// doneTag is the special tag that marks a line as resolved/completed.
 const doneTag = "#done"
 
-// pickTagFilter separates tags into include and exclude sets for pick matching.
 type pickTagFilter struct {
-	include []string // tags that must be present
-	exclude []string // tags that must NOT be present
+	include []string
+	exclude []string
 }
 
-// doneFilter controls how #done lines are handled.
 type doneFilter int
 
 const (
@@ -34,7 +31,6 @@ const (
 	doneOnly                      // --done: show only completed lines
 )
 
-// PickMatch represents a single matching line from a note.
 type PickMatch struct {
 	Line    int      `json:"line"`
 	Content string   `json:"content"`
@@ -42,19 +38,16 @@ type PickMatch struct {
 	Done    bool     `json:"done"`
 }
 
-// PickResult groups matches by note.
 type PickResult struct {
 	UUID    string      `json:"uuid"`
 	Title   string      `json:"title,omitempty"`
 	File    string      `json:"file"`
 	Matches []PickMatch `json:"matches"`
-	// unexported, for sorting only
 	created time.Time
 	updated time.Time
 	order   *int
 }
 
-// NewPickCmd creates the pick command.
 func NewPickCmd(getVault func() *vault.Vault, jsonOutput *bool) *cobra.Command {
 	var (
 		anyMode    bool
@@ -172,7 +165,6 @@ fast lookups, then extracts matching lines from the content body.`,
 				return fmt.Errorf("--notes and --parent are mutually exclusive")
 			}
 
-			// Build allowedPaths if --notes or --parent is set
 			var allowedPaths map[string]bool
 			if len(notesFlag) > 0 {
 				index, err := vlt.LoadTitles()
@@ -198,9 +190,7 @@ fast lookups, then extracts matching lines from the content body.`,
 					return fmt.Errorf("failed to load titles index: %w", err)
 				}
 				allowedPaths = make(map[string]bool)
-				// Build parent->children map for recursive descent
 				children := index.ChildrenMap()
-				// BFS to collect all descendants
 				queue := children[parentNote.UUID]
 				for len(queue) > 0 {
 					uuid := queue[0]
@@ -212,7 +202,6 @@ fast lookups, then extracts matching lines from the content body.`,
 				}
 			}
 
-			// Separate args into tags and date tokens
 			var tagArgs []string
 			var dateRanges []dateparse.DateRange
 			for _, arg := range args {
@@ -220,7 +209,7 @@ fast lookups, then extracts matching lines from the content body.`,
 				case strings.HasPrefix(arg, "#"), strings.HasPrefix(arg, "!#"):
 					tagArgs = append(tagArgs, arg)
 				case strings.HasPrefix(arg, "@"):
-					token := arg[1:] // strip @
+					token := arg[1:]
 					dr, err := dateparse.ParseWithReference(token, time.Now())
 					if err != nil {
 						return fmt.Errorf("unrecognized date: %s", arg)
@@ -231,7 +220,6 @@ fast lookups, then extracts matching lines from the content body.`,
 				}
 			}
 
-			// Split tags into include/exclude sets
 			var tagFilter pickTagFilter
 			for _, arg := range tagArgs {
 				if strings.HasPrefix(arg, "!") {
@@ -245,7 +233,6 @@ fast lookups, then extracts matching lines from the content body.`,
 				return fmt.Errorf("at least one inline tag, @date, or --todo required")
 			}
 
-			// Parse --filter into a QueryMatcher
 			var filterMatcher QueryMatcher
 			if filterFlag != "" {
 				m, _, err := parseQuery(filterFlag, TagScopeAll)
@@ -255,13 +242,11 @@ fast lookups, then extracts matching lines from the content body.`,
 				filterMatcher = m
 			}
 
-			// Parse --sort
 			sortFields, err := parseSort(sortFlag)
 			if err != nil {
 				return fmt.Errorf("invalid sort: %w", err)
 			}
 
-			// Determine done filter
 			df := doneExclude
 			if allMode {
 				df = doneInclude
@@ -269,7 +254,6 @@ fast lookups, then extracts matching lines from the content body.`,
 				df = doneOnly
 			}
 
-			// Load all notes
 			notePaths, err := vlt.ListNotes()
 			if err != nil {
 				return fmt.Errorf("failed to list notes: %w", err)
@@ -282,30 +266,24 @@ fast lookups, then extracts matching lines from the content body.`,
 					continue
 				}
 
-				// Fast pre-filter: check inline tags from frontmatter only
 				fast, err := note.LoadFrontmatterOnly(path)
 				if err != nil {
 					continue
 				}
 
-				// Pre-filter: note must have at least one queried include tag as inline
-				// Skip when --todo without tags (match all notes with checkboxes)
 				if len(tagFilter.include) > 0 && !noteHasInlineTag(fast, tagFilter.include) {
 					continue
 				}
 
-				// Pre-filter: apply --filter matcher against frontmatter-only note
 				if filterMatcher != nil && !filterMatcher(fast) {
 					continue
 				}
 
-				// Full load only for notes that pass pre-filter
 				n, err := note.Load(path)
 				if err != nil {
 					continue
 				}
 
-				// Extract matching lines from inline zone
 				matches := pickLinesFromNote(n, tagFilter, dateRanges, anyMode, df, todoMode)
 				if len(matches) == 0 {
 					continue
@@ -351,8 +329,6 @@ fast lookups, then extracts matching lines from the content body.`,
 	return cmd
 }
 
-// noteHasInlineTag returns true if the note has at least one of the queried
-// tags in its InlineTags field.
 func noteHasInlineTag(n *note.Note, queryTags []string) bool {
 	for _, it := range n.InlineTags {
 		itNorm := note.NormalizeTag(it)
@@ -379,20 +355,16 @@ func pickLinesFromNote(n *note.Note, tags pickTagFilter, dateRanges []dateparse.
 			continue
 		}
 
-		// Skip header lines (title)
 		if note.IsHeaderLine(trimmed) {
 			continue
 		}
 
-		// Skip tag-only lines (global tags)
 		if note.IsTagOnlyLine(trimmed) {
 			continue
 		}
 
-		// Extract tags from this line
 		lineTags := note.ExtractTags(line)
 
-		// Normalize line tags for comparison
 		lineTagsNorm := make(map[string]bool)
 		for _, lt := range lineTags {
 			lineTagsNorm[note.NormalizeTag(lt)] = true
@@ -400,31 +372,25 @@ func pickLinesFromNote(n *note.Note, tags pickTagFilter, dateRanges []dateparse.
 
 		isCheckbox := note.IsCheckboxLine(trimmed)
 
-		// Determine if this line matches
 		lineMatched := false
 
 		if todoMode && isCheckbox {
 			if len(tags.include) == 0 {
-				// --todo without tags: match all checkbox lines
 				lineMatched = true
 			} else {
-				// --todo with tags: checkbox must also have the tags
 				lineMatched = matchesTags(lineTagsNorm, tags.include, anyMode)
 			}
 		}
 
-		// Also check tag-based matching (non-todo or todo+tags)
 		if !lineMatched && len(lineTags) > 0 && len(tags.include) > 0 {
 			lineMatched = matchesTags(lineTagsNorm, tags.include, anyMode)
 		}
 
-		// Date-only mode: any content line can potentially match if it contains matching dates.
-		// The date filter below will do the actual date check.
+		// Date-only mode: any content line potentially matches; the date filter below verifies.
 		if !lineMatched && len(tags.include) == 0 && !todoMode && len(dateRanges) > 0 {
 			lineMatched = true
 		}
 
-		// Check exclude tags: line must not have any excluded tag
 		if lineMatched && len(tags.exclude) > 0 {
 			for _, et := range tags.exclude {
 				if lineTagsNorm[et] {
@@ -438,14 +404,12 @@ func pickLinesFromNote(n *note.Note, tags pickTagFilter, dateRanges []dateparse.
 			continue
 		}
 
-		// Check inline date filter: for each date range, the line must
-		// contain at least one @YYYY-MM-DD date that falls within the range.
+		// For each date range, the line must contain at least one @YYYY-MM-DD date within it.
 		if len(dateRanges) > 0 {
 			lineDates := note.ExtractDates(trimmed)
 			if len(lineDates) == 0 {
 				continue
 			}
-			// Parse line dates into time.Time values
 			var parsedDates []time.Time
 			for _, ds := range lineDates {
 				if t, err := time.ParseInLocation("2006-01-02", ds, time.Local); err == nil {
@@ -455,7 +419,6 @@ func pickLinesFromNote(n *note.Note, tags pickTagFilter, dateRanges []dateparse.
 			if len(parsedDates) == 0 {
 				continue
 			}
-			// Every date range must be satisfied by at least one line date
 			allRanges := true
 			for _, dr := range dateRanges {
 				found := slices.ContainsFunc(parsedDates, dr.Contains)
@@ -469,7 +432,7 @@ func pickLinesFromNote(n *note.Note, tags pickTagFilter, dateRanges []dateparse.
 			}
 		}
 
-		// Check done status: #done tag OR checked checkbox [x]
+		// Done = #done tag OR checked checkbox [x].
 		doneTagNorm := note.NormalizeTag(doneTag)
 		isDone := lineTagsNorm[doneTagNorm] || (todoMode && note.IsCheckedLine(trimmed))
 
@@ -485,7 +448,7 @@ func pickLinesFromNote(n *note.Note, tags pickTagFilter, dateRanges []dateparse.
 		}
 
 		matches = append(matches, PickMatch{
-			Line:    i + 1, // 1-indexed
+			Line:    i + 1,
 			Content: trimmed,
 			Tags:    lineTags,
 			Done:    isDone,
@@ -495,7 +458,6 @@ func pickLinesFromNote(n *note.Note, tags pickTagFilter, dateRanges []dateparse.
 	return matches
 }
 
-// matchesTags checks if a line's tags match the query tags in AND or OR mode.
 func matchesTags(lineTagsNorm map[string]bool, queryTags []string, anyMode bool) bool {
 	if anyMode {
 		for _, qt := range queryTags {
@@ -513,14 +475,13 @@ func matchesTags(lineTagsNorm map[string]bool, queryTags []string, anyMode bool)
 	return true
 }
 
-// sortPickResults sorts pick results by the given fields.
 func sortPickResults(results []PickResult, fields []SortField) {
 	sort.Slice(results, func(i, j int) bool {
 		for _, f := range fields {
 			if f.Field == "order" {
 				aSet, bSet := results[i].order != nil, results[j].order != nil
 				if aSet != bSet {
-					return aSet // set before unset
+					return aSet
 				}
 			}
 			cmp := comparePickResults(results[i], results[j], f.Field)
@@ -535,7 +496,6 @@ func sortPickResults(results []PickResult, fields []SortField) {
 	})
 }
 
-// comparePickResults compares two pick results by the given field.
 func comparePickResults(a, b PickResult, field string) int {
 	switch field {
 	case "created":

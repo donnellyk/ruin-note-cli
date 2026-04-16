@@ -13,34 +13,24 @@ import (
 
 // SearchOptions controls search behavior for performance optimizations.
 type SearchOptions struct {
-	// Limit is the maximum number of results to return (0 = unlimited).
-	// When set and no sorting is requested, enables early termination.
+	// Limit caps the number of results (0 = unlimited). With no sort, enables early termination.
 	Limit int
-	// NeedFullNote indicates that matched notes require full content loaded.
-	// When false and MatcherInfo.NeedsBody is false, the fast path skips
-	// full file reads for non-matching notes and defers full load for matches.
+	// NeedFullNote forces a full load for matches even when the matcher only needs frontmatter.
 	NeedFullNote bool
-	// UUIDs constrains the search to only these note UUIDs (empty = no constraint).
-	// Resolved to file paths via titles index before searching.
+	// UUIDs constrains the search to only these UUIDs (empty = no constraint).
 	UUIDs []string
 }
 
-// searchNotes finds all notes matching the query.
 func searchNotes(vlt *vault.Vault, matcher QueryMatcher, info MatcherInfo) ([]SearchResult, error) {
 	return searchNotesWithOptions(vlt, matcher, info, SearchOptions{})
 }
 
-// searchNotesWithOptions finds notes with performance optimizations.
-// Uses concurrent file reading for improved performance.
-// When info.NeedsBody is false, uses LoadFrontmatterOnly for the initial match,
-// then defers to full Load only for matches that need content.
 func searchNotesWithOptions(vlt *vault.Vault, matcher QueryMatcher, info MatcherInfo, opts SearchOptions) ([]SearchResult, error) {
 	notePaths, err := vlt.ListNotes()
 	if err != nil {
 		return nil, err
 	}
 
-	// Pre-filter by UUID set if specified
 	if len(opts.UUIDs) > 0 {
 		titles, err := vlt.LoadTitles()
 		if err != nil {
@@ -61,25 +51,17 @@ func searchNotesWithOptions(vlt *vault.Vault, matcher QueryMatcher, info Matcher
 		notePaths = filtered
 	}
 
-	numWorkers := max(
-		// Cap at 8 workers to avoid excessive parallelism
-		min(
+	// Cap at 8 workers to avoid excessive parallelism.
+	numWorkers := max(min(len(notePaths), min(runtime.NumCPU(), 8)), 1)
 
-			len(notePaths), min(runtime.NumCPU(),
-
-				8)), 1)
-
-	// Channel for paths to process
 	pathsChan := make(chan string, len(notePaths))
 	for _, path := range notePaths {
 		pathsChan <- path
 	}
 	close(pathsChan)
 
-	// Channel for results
 	resultsChan := make(chan SearchResult, len(notePaths))
 
-	// Worker function
 	var wg sync.WaitGroup
 	processNote := func() {
 		defer wg.Done()
@@ -97,7 +79,6 @@ func searchNotesWithOptions(vlt *vault.Vault, matcher QueryMatcher, info Matcher
 			}
 
 			if matcher(n) {
-				// If we matched on frontmatter-only but need full content for output
 				if !info.NeedsBody && opts.NeedFullNote {
 					full, err := note.Load(path)
 					if err != nil {
@@ -117,37 +98,30 @@ func searchNotesWithOptions(vlt *vault.Vault, matcher QueryMatcher, info Matcher
 		}
 	}
 
-	// Start workers
 	wg.Add(numWorkers)
 	for range numWorkers {
 		go processNote()
 	}
 
-	// Close results channel when all workers are done
 	go func() {
 		wg.Wait()
 		close(resultsChan)
 	}()
 
-	// Collect results
 	var results []SearchResult
 	for result := range resultsChan {
 		results = append(results, result)
 
-		// Early termination (only effective when limit is set and no sorting)
+		// Early termination only when limit is set and no sorting requested.
 		if opts.Limit > 0 && len(results) >= opts.Limit {
-			// Note: We can't truly stop workers early with buffered channels,
-			// but we stop collecting more results than needed
 			break
 		}
 	}
 
-	// If we broke early due to limit, drain remaining results
-	// This ensures goroutines can finish
+	// Drain remaining results so goroutines can finish.
 	if opts.Limit > 0 && len(results) >= opts.Limit {
 		go func() {
 			for range resultsChan {
-				// Drain
 			}
 		}()
 	}
@@ -155,15 +129,14 @@ func searchNotesWithOptions(vlt *vault.Vault, matcher QueryMatcher, info Matcher
 	return results, nil
 }
 
-// sortResults sorts the results by the given fields.
+// sortResults sorts the results. Notes with unset Order sort last regardless of direction.
 func sortResults(results []SearchResult, fields []SortField) {
 	sort.Slice(results, func(i, j int) bool {
 		for _, f := range fields {
-			// For order field, unset (nil) always sorts last regardless of direction
 			if f.Field == "order" {
 				aSet, bSet := results[i].note.Order != nil, results[j].note.Order != nil
 				if aSet != bSet {
-					return aSet // set before unset
+					return aSet
 				}
 			}
 			cmp := compareResults(results[i], results[j], f.Field)
@@ -178,7 +151,6 @@ func sortResults(results []SearchResult, fields []SortField) {
 	})
 }
 
-// compareResults compares two results by the given field.
 func compareResults(a, b SearchResult, field string) int {
 	switch field {
 	case "created":
@@ -200,7 +172,6 @@ func compareResults(a, b SearchResult, field string) int {
 	case "title":
 		return strings.Compare(strings.ToLower(a.Title), strings.ToLower(b.Title))
 	case "order":
-		// nil check is handled in sortResults (unset always sorts last)
 		aOrd, bOrd := 0, 0
 		if a.note.Order != nil {
 			aOrd = *a.note.Order
@@ -219,7 +190,6 @@ func compareResults(a, b SearchResult, field string) int {
 	return 0
 }
 
-// dispatchSearchResults handles sort, limit, and output dispatch for search results.
 func dispatchSearchResults(vlt *vault.Vault, results []SearchResult, flags *SearchFlags, jsonOutput bool, sortFields []SortField) error {
 	if len(sortFields) > 0 {
 		sortResults(results, sortFields)

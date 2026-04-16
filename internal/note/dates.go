@@ -8,11 +8,10 @@ import (
 	"github.com/donnellyk/ruin-note-cli/internal/dateparse"
 )
 
-// dateTokenPattern matches @ followed by a potential date token.
-// The token is a sequence of word characters plus hyphens (e.g., today, next-week, 2-days, 2026-02-13).
+// dateTokenPattern matches @ followed by a potential date token (e.g., today,
+// next-week, 2-days, 2026-02-13).
 var dateTokenPattern = regexp.MustCompile(`@([\w][\w-]*)`)
 
-// resolvedDatePattern matches @YYYY-MM-DD — an already-resolved date token.
 var resolvedDatePattern = regexp.MustCompile(`@(\d{4}-\d{2}-\d{2})`)
 
 // ResolveDateTokens finds @<token> patterns in content and resolves relative
@@ -39,27 +38,24 @@ func ResolveDateTokens(content string) string {
 	for _, loc := range matches {
 		start, end := loc[0], loc[1]
 
-		// Check preceding character — skip if alphanumeric (email-like)
+		// Skip if preceding char is alphanumeric (email-like).
 		if start > 0 && isAlphanumeric(content[start-1]) {
 			continue
 		}
 
-		// Skip tokens inside ![[...]] embeds
 		if InsideRanges(start, embedRanges) {
 			continue
 		}
 
-		token := content[start+1 : end] // strip @
+		token := content[start+1 : end]
 
-		// Already a resolved YYYY-MM-DD? Leave alone.
 		if resolvedDatePattern.MatchString(content[start:end]) {
 			continue
 		}
 
-		// Try to resolve
 		resolved, ok := dateparse.ResolveDate(token)
 		if !ok {
-			continue // Unrecognized, leave as-is
+			continue
 		}
 
 		b.WriteString(content[last:start])
@@ -71,14 +67,11 @@ func ResolveDateTokens(content string) string {
 	return b.String()
 }
 
-// ResolveDateTokensInQuery resolves @<token> patterns in a search query string.
-// Same logic as ResolveDateTokens but operates on query text.
 func ResolveDateTokensInQuery(query string) string {
 	return ResolveDateTokens(query)
 }
 
-// ExtractDates finds all @YYYY-MM-DD patterns in content and returns the
-// date strings (without @ prefix), sorted and deduplicated.
+// ExtractDates returns @YYYY-MM-DD dates (without @ prefix), sorted and deduplicated.
 func ExtractDates(content string) []string {
 	matches := resolvedDatePattern.FindAllStringSubmatch(content, -1)
 	if len(matches) == 0 {
@@ -88,7 +81,7 @@ func ExtractDates(content string) []string {
 	seen := make(map[string]bool)
 	var dates []string
 	for _, m := range matches {
-		date := m[1] // capture group without @
+		date := m[1]
 		if !seen[date] {
 			seen[date] = true
 			dates = append(dates, date)

@@ -15,7 +15,6 @@ import (
 // ErrUserAborted is returned when the user declines a confirmation prompt.
 var ErrUserAborted = fmt.Errorf("user aborted")
 
-// NewQueryCmd creates the query command with subcommands.
 func NewQueryCmd(getVault func() *vault.Vault, jsonOutput *bool) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "query",
@@ -37,7 +36,6 @@ Subcommands:
 	return cmd
 }
 
-// newQuerySaveCmd creates the "query save" subcommand.
 func newQuerySaveCmd(getVault func() *vault.Vault, jsonOutput *bool) *cobra.Command {
 	var force bool
 
@@ -71,22 +69,18 @@ See also:
 			name := args[0]
 			query := args[1]
 
-			// Validate the query by parsing it
 			matcher, info, err := parseQuery(query, TagScopeAll)
 			if err != nil {
 				return fmt.Errorf("invalid query: %w", err)
 			}
 
-			// Test the query to count matching notes
 			matchCount, err := countMatches(vlt, matcher, info)
 			if err != nil {
 				return fmt.Errorf("failed to test query: %w", err)
 			}
 
-			// Show match count
 			fmt.Fprintf(os.Stderr, "Query %q matches %d notes.\n", query, matchCount)
 
-			// Confirmation logic
 			if !force {
 				if !isTerminal(os.Stderr) {
 					return fmt.Errorf("non-interactive mode requires --force")
@@ -105,13 +99,11 @@ See also:
 				}
 			}
 
-			// Load existing queries
 			index, err := vlt.LoadQueries()
 			if err != nil {
 				return fmt.Errorf("failed to load queries: %w", err)
 			}
 
-			// Check if name already exists and update or add
 			found := false
 			for i, q := range index.Queries {
 				if q.Name == name {
@@ -128,12 +120,10 @@ See also:
 				})
 			}
 
-			// Save queries
 			if err := vlt.SaveQueries(index); err != nil {
 				return fmt.Errorf("failed to save query: %w", err)
 			}
 
-			// Output
 			if *jsonOutput {
 				output := struct {
 					Name    string `json:"name"`
@@ -159,7 +149,6 @@ See also:
 	return cmd
 }
 
-// newQueryListCmd creates the "query list" subcommand.
 func newQueryListCmd(getVault func() *vault.Vault, jsonOutput *bool) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "list",
@@ -208,7 +197,6 @@ See also:
 	return cmd
 }
 
-// newQueryDeleteCmd creates the "query delete" subcommand.
 func newQueryDeleteCmd(getVault func() *vault.Vault, jsonOutput *bool) *cobra.Command {
 	var force bool
 
@@ -239,7 +227,6 @@ See also:
 				return fmt.Errorf("failed to load queries: %w", err)
 			}
 
-			// Find the query
 			found := -1
 			for i, q := range index.Queries {
 				if q.Name == name {
@@ -252,7 +239,6 @@ See also:
 				return fmt.Errorf("query not found: %s", name)
 			}
 
-			// Confirmation
 			if !force {
 				if !isTerminal(os.Stderr) {
 					return fmt.Errorf("non-interactive mode requires --force")
@@ -271,7 +257,6 @@ See also:
 				}
 			}
 
-			// Remove the query
 			index.Queries = append(index.Queries[:found], index.Queries[found+1:]...)
 
 			if err := vlt.SaveQueries(index); err != nil {
@@ -299,7 +284,6 @@ See also:
 	return cmd
 }
 
-// newQueryRunCmd creates the "query run" subcommand.
 func newQueryRunCmd(getVault func() *vault.Vault, jsonOutput *bool) *cobra.Command {
 	var flags SearchFlags
 
@@ -329,7 +313,6 @@ See also:
 
 			name := args[0]
 
-			// Load queries and find the named one
 			index, err := vlt.LoadQueries()
 			if err != nil {
 				return fmt.Errorf("failed to load queries: %w", err)
@@ -347,12 +330,10 @@ See also:
 				return fmt.Errorf("query not found: %s", name)
 			}
 
-			// Validate flags
 			if err := ValidateSearchFlags(&flags, *jsonOutput); err != nil {
 				return err
 			}
 
-			// Parse query
 			matcher, info, err := parseQuery(query, TagScopeAll)
 			if err != nil {
 				return fmt.Errorf("invalid query: %w", err)
@@ -367,7 +348,6 @@ See also:
 	return cmd
 }
 
-// countMatches counts how many notes match the given query.
 func countMatches(vlt *vault.Vault, matcher QueryMatcher, info MatcherInfo) (int, error) {
 	notePaths, err := vlt.ListNotes()
 	if err != nil {

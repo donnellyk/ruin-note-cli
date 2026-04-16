@@ -12,7 +12,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// InitOutput represents the JSON output for the init command.
 type InitOutput struct {
 	Vault   string   `json:"vault"`
 	Created []string `json:"created,omitempty"`
@@ -21,7 +20,6 @@ type InitOutput struct {
 	Config  string   `json:"config,omitempty"`
 }
 
-// NewInitCmd creates the init command.
 func NewInitCmd(jsonOutput *bool) *cobra.Command {
 	var force bool
 	var noGit bool
@@ -50,7 +48,6 @@ Use --config to create the ~/.config/ruin/ directory and config.yml even when no
   ruin init --force`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			// Determine vault path
 			var vaultPath string
 			if len(args) > 0 {
 				vaultPath = args[0]
@@ -62,7 +59,6 @@ Use --config to create the ~/.config/ruin/ directory and config.yml even when no
 				}
 			}
 
-			// Expand ~ and make absolute
 			if vaultPath[:1] == "~" {
 				home, err := os.UserHomeDir()
 				if err != nil {
@@ -77,24 +73,20 @@ Use --config to create the ~/.config/ruin/ directory and config.yml even when no
 			}
 			vaultPath = absPath
 
-			// Create vault directory if it doesn't exist
 			if err := os.MkdirAll(vaultPath, 0755); err != nil {
 				return fmt.Errorf("failed to create vault directory: %w", err)
 			}
 
-			// Initialize vault
 			vlt := vault.New(vaultPath)
 			result, err := vlt.Initialize(force)
 			if err != nil {
 				return fmt.Errorf("failed to initialize vault: %w", err)
 			}
 
-			// Update config if path was explicitly provided or --config flag set
 			var configPath string
 			if len(args) > 0 || setupConfig {
 				cfg, err := config.Load()
 				if err != nil {
-					// Config might not exist yet, create new one
 					cfg = &config.Config{}
 				}
 				cfg.VaultPath = vaultPath
@@ -107,7 +99,6 @@ Use --config to create the ~/.config/ruin/ directory and config.yml even when no
 				}
 			}
 
-			// Set up git versioning
 			gitInitialized := false
 			if !noGit && versioning.IsAvailable() {
 				g := versioning.New(vaultPath)
@@ -122,7 +113,6 @@ Use --config to create the ~/.config/ruin/ directory and config.yml even when no
 				}
 			}
 
-			// Output
 			if *jsonOutput {
 				output := InitOutput{
 					Vault:   vaultPath,

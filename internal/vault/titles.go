@@ -11,7 +11,6 @@ import (
 
 const titlesFile = "titles.json"
 
-// TitleEntry represents a note in the titles index.
 type TitleEntry struct {
 	Title  string `json:"title"`
 	Path   string `json:"path"`
@@ -23,13 +22,10 @@ type TitlesIndex struct {
 	Titles map[string]TitleEntry `json:"titles"`
 }
 
-// TitlesFile returns the path to the titles.json file.
 func (v *Vault) TitlesFile() string {
 	return filepath.Join(v.RuinDir(), titlesFile)
 }
 
-// LoadTitles reads the titles index from .ruin/titles.json.
-// Returns an empty index if the file is missing.
 func (v *Vault) LoadTitles() (*TitlesIndex, error) {
 	data, err := os.ReadFile(v.TitlesFile())
 	if err != nil {
@@ -51,7 +47,6 @@ func (v *Vault) LoadTitles() (*TitlesIndex, error) {
 	return &index, nil
 }
 
-// SaveTitles writes the titles index to .ruin/titles.json.
 func (v *Vault) SaveTitles(index *TitlesIndex) error {
 	data, err := json.MarshalIndent(index, "", "  ")
 	if err != nil {
@@ -65,7 +60,6 @@ func (v *Vault) SaveTitles(index *TitlesIndex) error {
 	return nil
 }
 
-// UpdateTitleEntry upserts a single entry in the titles index.
 func (v *Vault) UpdateTitleEntry(uuid, title, path, parent string) error {
 	index, err := v.LoadTitles()
 	if err != nil {
@@ -81,7 +75,6 @@ func (v *Vault) UpdateTitleEntry(uuid, title, path, parent string) error {
 	return v.SaveTitles(index)
 }
 
-// RemoveTitleEntry removes a single entry from the titles index.
 func (v *Vault) RemoveTitleEntry(uuid string) error {
 	index, err := v.LoadTitles()
 	if err != nil {
@@ -92,7 +85,6 @@ func (v *Vault) RemoveTitleEntry(uuid string) error {
 	return v.SaveTitles(index)
 }
 
-// RebuildTitlesIndex replaces the entire titles index.
 func (v *Vault) RebuildTitlesIndex(entries map[string]TitleEntry) error {
 	index := &TitlesIndex{Titles: entries}
 	return v.SaveTitles(index)
@@ -109,7 +101,7 @@ func (idx *TitlesIndex) ChildrenMap() map[string][]string {
 	return children
 }
 
-// FindByTitle returns the UUID for a note with an exact case-insensitive title match.
+// FindByTitle returns the UUID for a case-insensitive title match.
 func (idx *TitlesIndex) FindByTitle(title string) (string, bool) {
 	titleLower := strings.ToLower(strings.TrimSpace(title))
 	for uuid, entry := range idx.Titles {

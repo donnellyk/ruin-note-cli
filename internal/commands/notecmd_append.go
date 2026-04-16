@@ -11,8 +11,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// --- note append ---
-
 type noteAppendOutput struct {
 	Path   string `json:"path"`
 	UUID   string `json:"uuid"`
@@ -54,7 +52,6 @@ Text comes from a positional argument or --stdin (mutually exclusive).`,
 				return fmt.Errorf("--raw-line requires --line")
 			}
 
-			// Determine text
 			hasArg := len(args) >= 2
 			if hasArg && stdin {
 				return fmt.Errorf("cannot use both positional text and --stdin")
@@ -70,7 +67,6 @@ Text comes from a positional argument or --stdin (mutually exclusive).`,
 					return fmt.Errorf("failed to read stdin: %w", err)
 				}
 				text = string(data)
-				// Remove a single trailing newline from piped input
 				text = strings.TrimRight(text, "\n")
 			} else {
 				text = args[1]
@@ -86,7 +82,6 @@ Text comes from a positional argument or --stdin (mutually exclusive).`,
 				return err
 			}
 
-			// Translate --raw-line to content-relative line
 			if rawLine && cmd.Flags().Changed("line") {
 				fmLines, err := frontmatterLineCount(n)
 				if err != nil {
@@ -108,8 +103,6 @@ Text comes from a positional argument or --stdin (mutually exclusive).`,
 			var action string
 
 			if !cmd.Flags().Changed("line") {
-				// Append at end
-				// Ensure content ends with newline before appending
 				if n.Content != "" && !strings.HasSuffix(n.Content, "\n") {
 					n.Content += "\n"
 				}
@@ -120,15 +113,13 @@ Text comes from a positional argument or --stdin (mutually exclusive).`,
 				if line < 1 || line > totalLines+1 {
 					return fmt.Errorf("--line %d out of range (valid: 1-%d)", line, totalLines+1)
 				}
-				idx := line - 1 // 0-indexed
+				idx := line - 1
 				if suffix {
-					// Append to end of existing line
 					lines[idx] += text
 					n.Content = strings.Join(lines, "\n")
 					resultLine = line
 					action = "appended"
 				} else {
-					// Insert new line before idx
 					newLines := make([]string, 0, totalLines+1)
 					newLines = append(newLines, lines[:idx]...)
 					newLines = append(newLines, text)

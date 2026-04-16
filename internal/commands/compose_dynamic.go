@@ -13,7 +13,6 @@ import (
 	"github.com/donnellyk/ruin-note-cli/internal/note"
 )
 
-// expandDynamicEmbed dispatches to the appropriate handler for a dynamic embed.
 func (w *composeWalker) expandDynamicEmbed(ref note.DynamicEmbedRef, depth int, parentUUID string) *dynamicResult {
 	switch ref.Type {
 	case "search":
@@ -29,7 +28,6 @@ func (w *composeWalker) expandDynamicEmbed(ref note.DynamicEmbedRef, depth int, 
 	}
 }
 
-// expandDynamicSearch handles ![[search: query | options]].
 func (w *composeWalker) expandDynamicSearch(ref note.DynamicEmbedRef, depth int, parentUUID string) *dynamicResult {
 	tagScope := parseDynamicTagScope(ref.Options)
 	matcher, info, err := parseQuery(ref.Query, tagScope)
@@ -44,25 +42,20 @@ func (w *composeWalker) expandDynamicSearch(ref note.DynamicEmbedRef, depth int,
 		return nil
 	}
 
-	// Exclude the compose root
 	results = excludeUUID(results, w.rootUUID)
-	// Exclude the parent note containing this embed
 	if parentUUID != w.rootUUID {
 		results = excludeUUID(results, parentUUID)
 	}
 
-	// Apply sort
 	if sortStr, ok := ref.Options["sort"]; ok {
 		fields, err := parseSort(sortStr)
 		if err == nil {
 			sortResults(results, fields)
 		}
 	} else {
-		// Default: created:desc
 		sortResults(results, []SortField{{Field: "created", Ascending: false}})
 	}
 
-	// Apply limit
 	if limitStr, ok := ref.Options["limit"]; ok {
 		if limit, err := strconv.Atoi(limitStr); err == nil && limit > 0 && limit < len(results) {
 			results = results[:limit]
@@ -97,9 +90,7 @@ func (w *composeWalker) expandDynamicSearch(ref note.DynamicEmbedRef, depth int,
 	}
 }
 
-// expandDynamicPick handles ![[pick: tags | options]].
 func (w *composeWalker) expandDynamicPick(ref note.DynamicEmbedRef, depth int, parentUUID string) *dynamicResult {
-	// Parse tags and date tokens from query (space-separated, may include negation)
 	resolved := note.ResolveDateTokensInQuery(ref.Query)
 	tagArgs := strings.Fields(resolved)
 	var filter pickTagFilter
@@ -137,7 +128,6 @@ func (w *composeWalker) expandDynamicPick(ref note.DynamicEmbedRef, depth int, p
 		df = doneOnly
 	}
 
-	// Optional note-level filter
 	var filterMatcher QueryMatcher
 	if filterStr, ok := ref.Options["filter"]; ok && filterStr != "" {
 		m, _, err := parseQuery(filterStr, TagScopeAll)
@@ -162,12 +152,10 @@ func (w *composeWalker) expandDynamicPick(ref note.DynamicEmbedRef, depth int, p
 			continue
 		}
 
-		// Exclude compose root and parent
 		if fast.UUID == w.rootUUID || fast.UUID == parentUUID {
 			continue
 		}
 
-		// Pre-filter: must have at least one include tag as inline
 		if len(filter.include) > 0 && !noteHasInlineTag(fast, filter.include) {
 			continue
 		}
@@ -196,7 +184,6 @@ func (w *composeWalker) expandDynamicPick(ref note.DynamicEmbedRef, depth int, p
 		})
 	}
 
-	// Apply sort
 	if sortStr, ok := ref.Options["sort"]; ok {
 		fields, _ := parseSort(sortStr)
 		sortPickNoteResults(pickResults, fields)
@@ -204,7 +191,6 @@ func (w *composeWalker) expandDynamicPick(ref note.DynamicEmbedRef, depth int, p
 		sortPickNoteResults(pickResults, []SortField{{Field: "created", Ascending: false}})
 	}
 
-	// Apply limit
 	if limitStr, ok := ref.Options["limit"]; ok {
 		if limit, err := strconv.Atoi(limitStr); err == nil && limit > 0 && limit < len(pickResults) {
 			pickResults = pickResults[:limit]
@@ -248,7 +234,6 @@ func (w *composeWalker) expandDynamicPick(ref note.DynamicEmbedRef, depth int, p
 	return w.textResult(text, dynInfo, depth)
 }
 
-// expandDynamicQuery handles ![[query: name | options]].
 func (w *composeWalker) expandDynamicQuery(ref note.DynamicEmbedRef, depth int, parentUUID string) *dynamicResult {
 	queries, err := w.vault.LoadQueries()
 	if err != nil {
@@ -281,7 +266,6 @@ func (w *composeWalker) expandDynamicQuery(ref note.DynamicEmbedRef, depth int, 
 		}
 	}
 
-	// Delegate to search handler with the resolved query
 	searchRef := note.DynamicEmbedRef{
 		Type:    "search",
 		Query:   queryStr,
@@ -290,7 +274,6 @@ func (w *composeWalker) expandDynamicQuery(ref note.DynamicEmbedRef, depth int, 
 	}
 	result := w.expandDynamicSearch(searchRef, depth, parentUUID)
 	if result != nil {
-		// Update the dynamic info to reflect this was a query: embed
 		for i := range result.segments {
 			if result.segments[i].Embed != nil && result.segments[i].Embed.Dynamic != nil {
 				result.segments[i].Embed.Dynamic.Type = "query"
@@ -301,9 +284,7 @@ func (w *composeWalker) expandDynamicQuery(ref note.DynamicEmbedRef, depth int, 
 	return result
 }
 
-// expandDynamicCompose handles ![[compose: ref | options]].
 func (w *composeWalker) expandDynamicCompose(ref note.DynamicEmbedRef, depth int) *dynamicResult {
-	// Resolve the note or bookmark
 	resolvedNote, err := ResolveNote(w.vault, ref.Query)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "warning: dynamic compose %q: %v\n", ref.Query, err)
@@ -315,7 +296,6 @@ func (w *composeWalker) expandDynamicCompose(ref note.DynamicEmbedRef, depth int
 		return nil
 	}
 
-	// Determine depth budget for sub-compose (own fresh budget)
 	subMaxDepth := w.maxDepth
 	if depthStr, ok := ref.Options["depth"]; ok {
 		if d, err := strconv.Atoi(depthStr); err == nil && d > 0 {
@@ -325,8 +305,7 @@ func (w *composeWalker) expandDynamicCompose(ref note.DynamicEmbedRef, depth int
 
 	subChildrenMap := w.index.ChildrenMap()
 
-	// Create a sub-walker with its own depth budget and visited set,
-	// but sharing the parent's visited set for circular detection
+	// Sub-walker shares the parent's visited set for circular detection.
 	subVisited := make(map[string]bool)
 	for k, v := range w.visited {
 		subVisited[k] = v
@@ -350,10 +329,9 @@ func (w *composeWalker) expandDynamicCompose(ref note.DynamicEmbedRef, depth int
 		return nil
 	}
 
-	// Adjust heading levels relative to current depth
 	adjustTreeDepth(subTree, depth+1)
 
-	// Copy visited UUIDs back so circular detection is global
+	// Copy visited UUIDs back so circular detection is global.
 	for k, v := range subWalker.visited {
 		w.visited[k] = v
 	}
@@ -373,8 +351,6 @@ func (w *composeWalker) expandDynamicCompose(ref note.DynamicEmbedRef, depth int
 	}
 }
 
-// Helper methods for building results
-
 func (w *composeWalker) emptyResult(ref note.DynamicEmbedRef, dynInfo *dynamicInfo) *dynamicResult {
 	if ref.Options["empty"] == "hide" {
 		return &dynamicResult{}
@@ -391,9 +367,8 @@ func (w *composeWalker) emptyResult(ref note.DynamicEmbedRef, dynInfo *dynamicIn
 }
 
 func (w *composeWalker) textResult(text string, dynInfo *dynamicInfo, depth int) *dynamicResult {
-	// Apply the same heading adjustment that Walk applies to child notes.
 	// Dynamic text generators produce headings at a base level (H1);
-	// this normalizes them to the correct depth in the tree.
+	// adjust them to the correct depth in the tree.
 	if w.normalizeHeaders {
 		text = normalizeHeadings(text, depth+1)
 	} else {
@@ -411,7 +386,6 @@ func (w *composeWalker) textResult(text string, dynInfo *dynamicInfo, depth int)
 }
 
 func (w *composeWalker) contentResult(results []SearchResult, dynInfo *dynamicInfo, depth int) *dynamicResult {
-	// Build a virtual container node whose children are the search results
 	container := &composeTree{
 		Depth:    depth + 1,
 		Content:  "",
@@ -445,7 +419,6 @@ func (w *composeWalker) contentResult(results []SearchResult, dynInfo *dynamicIn
 			Embedded: true,
 		}
 
-		// Expand static embeds in search results (but not dynamic)
 		if w.expandEmbeds {
 			staticWalker := &composeWalker{
 				vault:            w.vault,
@@ -463,7 +436,6 @@ func (w *composeWalker) contentResult(results []SearchResult, dynInfo *dynamicIn
 			staticWalker.expandEmbedsInTree(child, content, depth+1)
 		}
 
-		// Expand children if depth option allows
 		childDepth := 0
 		if depthStr, ok := dynInfo.Options["depth"]; ok {
 			childDepth, _ = strconv.Atoi(depthStr)
@@ -486,8 +458,6 @@ func (w *composeWalker) contentResult(results []SearchResult, dynInfo *dynamicIn
 		embeddedUUIDs: embeddedUUIDs,
 	}
 }
-
-// Rendering helpers
 
 func renderSearchList(results []SearchResult) string {
 	var lines []string
@@ -517,13 +487,11 @@ func renderSearchSummary(results []SearchResult, _ int) string {
 	return strings.Join(parts, "\n\n")
 }
 
-// pickGroup is a set of pick matches under a common heading.
 type pickGroup struct {
 	heading string
 	matches []PickMatch
 }
 
-// groupPickResults regroups pick results by the specified key.
 func (w *composeWalker) groupPickResults(results []pickNoteResult, groupBy string, includeTags []string) []pickGroup {
 	switch groupBy {
 	case "parent":
@@ -571,8 +539,6 @@ func (w *composeWalker) groupByParent(results []pickNoteResult, walkToRoot bool)
 	return groups
 }
 
-// resolveParentKey returns the parent (or root ancestor) UUID and title for a note.
-// If the note has no parent, it uses its own identity as the group.
 func (w *composeWalker) resolveParentKey(uuid string, walkToRoot bool) struct{ uuid, title string } {
 	entry, ok := w.index.Titles[uuid]
 	if !ok || entry.Parent == "" {
@@ -619,7 +585,6 @@ func groupByTag(results []pickNoteResult, includeTags []string) []pickGroup {
 				}
 			}
 			if !matched {
-				// Line matched via date or other criteria, no specific tag group
 				key := "(untagged)"
 				if _, ok := seen[key]; !ok {
 					seen[key] = len(ordered)
@@ -675,7 +640,6 @@ func renderPickFlat(results []pickNoteResult, _ int) string {
 	return strings.Join(lines, "\n")
 }
 
-// firstContentLine returns the first non-empty, non-title, non-tag line of note content.
 func firstContentLine(content, title string) string {
 	for _, line := range strings.Split(content, "\n") {
 		trimmed := strings.TrimSpace(line)
@@ -750,7 +714,6 @@ func sortPickNoteResults(results []pickNoteResult, fields []SortField) {
 	})
 }
 
-// adjustTreeDepth recursively adjusts all depth values and heading levels.
 func adjustTreeDepth(tree *composeTree, baseDepth int) {
 	if baseDepth > 0 && tree.Content != "" {
 		tree.Content = adjustHeadings(tree.Content, baseDepth)

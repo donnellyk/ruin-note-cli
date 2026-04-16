@@ -9,11 +9,10 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// ErrNoMatches is returned when a search finds no results.
-// This allows the caller to distinguish between errors and no matches.
+// ErrNoMatches is returned when a search finds no results, letting callers
+// distinguish "no results" from a real error.
 var ErrNoMatches = fmt.Errorf("no matches found")
 
-// SearchResult represents a single search result.
 type SearchResult struct {
 	Path   string   `json:"path"`
 	UUID   string   `json:"uuid"`
@@ -23,13 +22,11 @@ type SearchResult struct {
 	note   *note.Note
 }
 
-// SortField represents a field and direction for sorting.
 type SortField struct {
 	Field     string
 	Ascending bool
 }
 
-// NewSearchCmd creates the search command.
 func NewSearchCmd(getVault func() *vault.Vault, jsonOutput *bool) *cobra.Command {
 	var flags SearchFlags
 
@@ -141,7 +138,6 @@ See also:
 				return fmt.Errorf("vault not configured")
 			}
 
-			// Validate flags
 			if err := ValidateSearchFlags(&flags, *jsonOutput); err != nil {
 				return err
 			}
@@ -150,7 +146,6 @@ See also:
 				return fmt.Errorf("--global-tags and --inline-tags are mutually exclusive")
 			}
 
-			// Determine tag scope
 			tagScope := TagScopeAll
 			if globalTagsOnly {
 				tagScope = TagScopeGlobal
@@ -158,7 +153,6 @@ See also:
 				tagScope = TagScopeInline
 			}
 
-			// Parse query
 			var matcher QueryMatcher
 			var info MatcherInfo
 			if (everything || linkOnly) && len(args) == 0 {
@@ -172,7 +166,6 @@ See also:
 				}
 			}
 
-			// Wrap matcher with --link filter
 			if linkOnly {
 				baseMatcher := matcher
 				linkMatch := linkNoteMatcher()
@@ -196,8 +189,6 @@ See also:
 	return cmd
 }
 
-// executeSearch runs the shared search pipeline: sort parsing, option building,
-// search execution, and result dispatch. Used by both search and link list.
 func executeSearch(vlt *vault.Vault, matcher QueryMatcher, info MatcherInfo, flags *SearchFlags, jsonOutput bool, uuids []string) error {
 	var sortFields []SortField
 	if flags.Sort != "" {

@@ -13,7 +13,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// LinkNewOutput represents the JSON output for the link new command.
 type LinkNewOutput struct {
 	Path            string `json:"path"`
 	UUID            string `json:"uuid"`
@@ -23,7 +22,6 @@ type LinkNewOutput struct {
 	ResolvedSummary string `json:"resolved_summary,omitempty"`
 }
 
-// NewLinkCmd creates the link command with subcommands.
 func NewLinkCmd(getVault func() *vault.Vault, jsonOutput *bool) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "link",
@@ -76,13 +74,11 @@ func newLinkNewCmd(getVault func() *vault.Vault, jsonOutput *bool) *cobra.Comman
 				}
 			}
 
-			// Determine the note title
 			noteTitle := title
 			if noteTitle == "" && resolvedTitle != "" {
 				noteTitle = resolvedTitle
 			}
 
-			// Build note content
 			var content strings.Builder
 			if noteTitle != "" {
 				fmt.Fprintf(&content, "# %s\n\n", noteTitle)
@@ -98,7 +94,6 @@ func newLinkNewCmd(getVault func() *vault.Vault, jsonOutput *bool) *cobra.Comman
 				content.WriteString("\n> " + resolvedSummary + "\n")
 			}
 
-			// Build tag line
 			var tagLine strings.Builder
 			tagLine.WriteString("#link")
 			if tags != "" {
@@ -121,12 +116,10 @@ func newLinkNewCmd(getVault func() *vault.Vault, jsonOutput *bool) *cobra.Comman
 			}
 			n.URL = rawURL
 
-			// Set order if specified
 			if cmd.Flags().Changed("order") {
 				n.Order = &orderVal
 			}
 
-			// Resolve parent if specified
 			if parentRef != "" {
 				parent, err := ResolveNote(vlt, parentRef)
 				if err != nil {
@@ -139,7 +132,6 @@ func newLinkNewCmd(getVault func() *vault.Vault, jsonOutput *bool) *cobra.Comman
 				return err
 			}
 
-			// Warn on duplicate URLs
 			warnDuplicateURL(vlt, rawURL, n.UUID)
 
 			if *jsonOutput {

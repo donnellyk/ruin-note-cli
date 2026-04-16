@@ -12,7 +12,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// NewParentCmd creates the parent command with subcommands.
 func NewParentCmd(getVault func() *vault.Vault, jsonOutput *bool) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "parent",
@@ -124,7 +123,6 @@ func newParentChildrenCmd(getVault func() *vault.Vault, jsonOutput *bool) *cobra
 				return outputChildrenRecursive(index, n.UUID, *jsonOutput)
 			}
 
-			// Direct children only
 			var children []childInfo
 			for uuid, entry := range index.Titles {
 				if entry.Parent == n.UUID {
@@ -167,7 +165,6 @@ type childInfo struct {
 func outputChildrenRecursive(index *vault.TitlesIndex, parentUUID string, jsonOut bool) error {
 	childrenMap := index.ChildrenMap()
 
-	// Sort children by title
 	for parent := range childrenMap {
 		uuids := childrenMap[parent]
 		sort.Slice(uuids, func(i, j int) bool {
@@ -244,7 +241,6 @@ Without arguments, shows the full forest (all root notes and their descendants).
 
 			childrenMap := index.ChildrenMap()
 
-			// Sort children by title
 			for parent := range childrenMap {
 				uuids := childrenMap[parent]
 				sort.Slice(uuids, func(i, j int) bool {
@@ -253,7 +249,6 @@ Without arguments, shows the full forest (all root notes and their descendants).
 			}
 
 			if len(args) == 1 {
-				// Rooted subtree
 				n, err := ResolveNote(vlt, args[0])
 				if err != nil {
 					return err
@@ -272,13 +267,12 @@ Without arguments, shows the full forest (all root notes and their descendants).
 				return nil
 			}
 
-			// Full forest: find roots (notes with no parent, or parent not in vault)
+			// Roots: no parent, or parent missing from vault (orphaned).
 			var roots []string
 			for uuid, entry := range index.Titles {
 				if entry.Parent == "" {
 					roots = append(roots, uuid)
 				} else if _, ok := index.Titles[entry.Parent]; !ok {
-					// Parent doesn't exist in vault - treat as root
 					roots = append(roots, uuid)
 				}
 			}
@@ -596,8 +590,8 @@ func newParentDeleteCmd(getVault func() *vault.Vault, jsonOutput *bool) *cobra.C
 	return cmd
 }
 
-// detectCycle checks if setting proposedParentUUID as the parent of childUUID
-// would create a cycle. It walks from proposedParent up the ancestor chain.
+// detectCycle walks from proposedParentUUID up the ancestor chain to check if
+// making it the parent of childUUID would create a cycle.
 func detectCycle(index *vault.TitlesIndex, childUUID, proposedParentUUID string) error {
 	current := proposedParentUUID
 	for range 100 {

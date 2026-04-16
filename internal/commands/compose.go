@@ -16,8 +16,6 @@ import (
 var headingPattern = regexp.MustCompile(`(?m)^(#{1,6})\s`)
 var listLinePattern = regexp.MustCompile(`^[ \t]*(?:[-*+]|\d+\.)\s`)
 
-// isListOnlyContent returns true if every non-blank line starts with a
-// markdown list marker (-, *, +, 1.) including checkbox variants.
 func isListOnlyContent(content string) bool {
 	if strings.TrimSpace(content) == "" {
 		return false
@@ -33,7 +31,6 @@ func isListOnlyContent(content string) bool {
 	return true
 }
 
-// NewComposeCmd creates the compose command.
 func NewComposeCmd(getVault func() *vault.Vault, jsonOutput *bool) *cobra.Command {
 	var (
 		maxDepth         int
@@ -158,8 +155,6 @@ Children are sorted by title by default.`,
 	return cmd
 }
 
-// parseComposeSort parses a sort string for the compose command.
-// Format: field[:direction] where direction is asc or desc.
 func parseComposeSort(s string) (SortField, error) {
 	field := SortField{Ascending: true}
 
@@ -180,7 +175,6 @@ func parseComposeSort(s string) (SortField, error) {
 
 	switch field.Field {
 	case "created", "title", "order":
-		// valid
 	default:
 		return field, fmt.Errorf("invalid sort field: %s (use created, title, or order)", field.Field)
 	}
@@ -249,8 +243,6 @@ func sortChildUUIDs(_ *vault.Vault, index *vault.TitlesIndex, uuids []string, sf
 	}
 }
 
-// collectTreeNotes walks the compose tree and returns SearchResults for each note.
-// Notes are returned in compose order (parent first, then sorted children).
 func collectTreeNotes(vlt *vault.Vault, index *vault.TitlesIndex, childrenMap map[string][]string, uuid string, visited map[string]bool, maxDepth, depth int) []SearchResult {
 	if visited[uuid] {
 		return nil
@@ -321,17 +313,14 @@ func composeTextWithSourceMap(vlt *vault.Vault, index *vault.TitlesIndex, childr
 
 		content := n.Content
 
-		// Strip title from root only
 		if depth == 0 && stripTitle {
 			content = note.StripTitle(content)
 		}
 
-		// Strip global tags
 		if stripGlobalTags {
 			content = note.StripGlobalTags(content, n.InlineTags)
 		}
 
-		// Adjust headings for children
 		if depth > 0 {
 			if normalizeHeaders {
 				content = normalizeHeadings(content, depth)
@@ -340,7 +329,7 @@ func composeTextWithSourceMap(vlt *vault.Vault, index *vault.TitlesIndex, childr
 			}
 		}
 
-		// Add separator between notes (\n\n = line terminator + blank line = 1 gap line)
+		// \n\n = line terminator + blank line = 1 gap line.
 		// Suppress blank line between list-only siblings at the same depth.
 		if b.Len() > 0 {
 			listOnly := isListOnlyContent(content)
@@ -369,7 +358,6 @@ func composeTextWithSourceMap(vlt *vault.Vault, index *vault.TitlesIndex, childr
 		prevDepth = depth
 		prevListOnly = isListOnlyContent(content)
 
-		// Recurse into children
 		if maxDepth > 0 && depth >= maxDepth {
 			return
 		}
@@ -386,7 +374,6 @@ func composeTextWithSourceMap(vlt *vault.Vault, index *vault.TitlesIndex, childr
 // adjustHeadings adds `depth` additional # to each heading, capping at H6.
 func adjustHeadings(content string, depth int) string {
 	return headingPattern.ReplaceAllStringFunc(content, func(match string) string {
-		// Count existing #
 		hashes := 0
 		for _, c := range match {
 			if c == '#' {
@@ -408,7 +395,6 @@ func adjustHeadings(content string, depth int) string {
 func normalizeHeadings(content string, depth int) string {
 	targetLevel := depth + 1
 
-	// Find the minimum heading level in the content
 	minLevel := 7
 	for _, match := range headingPattern.FindAllString(content, -1) {
 		hashes := 0

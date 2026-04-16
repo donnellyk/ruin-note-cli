@@ -38,7 +38,6 @@ func (r *HTMLResolver) Resolve(ctx context.Context, rawURL string) (*URLMetadata
 		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
 	}
 
-	// Read body with 1MB limit
 	limited := io.LimitReader(resp.Body, 1<<20)
 	body, err := io.ReadAll(limited)
 	if err != nil {
@@ -63,7 +62,6 @@ func extractTitle(html string) string {
 	if start == -1 {
 		return ""
 	}
-	// Find end of opening tag
 	tagEnd := strings.IndexByte(lower[start:], '>')
 	if tagEnd == -1 {
 		return ""
@@ -82,7 +80,7 @@ func extractTitle(html string) string {
 func extractDescription(html string) string {
 	lower := strings.ToLower(html)
 
-	// Try og:description first, then meta description
+	// og:description is preferred over meta description when both are present.
 	patterns := []string{
 		`<meta property="og:description"`,
 		`<meta name="description"`,
@@ -93,7 +91,6 @@ func extractDescription(html string) string {
 		if idx == -1 {
 			continue
 		}
-		// Find the closing > of this meta tag
 		tagEnd := strings.IndexByte(lower[idx:], '>')
 		if tagEnd == -1 {
 			continue
@@ -114,7 +111,7 @@ func extractMetaContent(tag string) string {
 	if idx == -1 {
 		return ""
 	}
-	rest := tag[idx+8:] // skip "content="
+	rest := tag[idx+8:]
 	if len(rest) == 0 {
 		return ""
 	}

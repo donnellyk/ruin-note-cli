@@ -9,7 +9,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// DateFilterMode specifies which timestamp(s) to match.
 type DateFilterMode int
 
 const (
@@ -18,7 +17,6 @@ const (
 	DateFilterUpdated                       // Match only updated
 )
 
-// NewTodayCmd creates the today command.
 func NewTodayCmd(getVault func() *vault.Vault, jsonOutput *bool) *cobra.Command {
 	var flags SearchFlags
 	var onlyCreated, onlyUpdated bool
@@ -76,7 +74,6 @@ See also:
 	return cmd
 }
 
-// NewYesterdayCmd creates the yesterday command.
 func NewYesterdayCmd(getVault func() *vault.Vault, jsonOutput *bool) *cobra.Command {
 	var flags SearchFlags
 	var onlyCreated, onlyUpdated bool
@@ -134,7 +131,6 @@ See also:
 	return cmd
 }
 
-// runDateCommand is a helper that runs a search filtered by a date range.
 func runDateCommand(
 	getVault func() *vault.Vault,
 	jsonOutput *bool,
@@ -147,12 +143,10 @@ func runDateCommand(
 		return fmt.Errorf("vault not configured")
 	}
 
-	// Validate flags
 	if err := ValidateSearchFlags(flags, *jsonOutput); err != nil {
 		return err
 	}
 
-	// Create date matcher based on mode
 	var matcher QueryMatcher
 	switch mode {
 	case DateFilterCreated:

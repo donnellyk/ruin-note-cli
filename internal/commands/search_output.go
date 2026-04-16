@@ -9,7 +9,6 @@ import (
 	"github.com/donnellyk/ruin-note-cli/internal/note"
 )
 
-// FrontmatterMode controls how frontmatter is included in output.
 type FrontmatterMode string
 
 const (
@@ -18,7 +17,6 @@ const (
 	FrontmatterFull  FrontmatterMode = "full"  // Show complete frontmatter
 )
 
-// outputPaths outputs results as paths with optional frontmatter info.
 func outputPaths(results []SearchResult, fmMode FrontmatterMode) error {
 	for _, r := range results {
 		fmt.Println(r.Path)
@@ -37,7 +35,6 @@ func outputPaths(results []SearchResult, fmMode FrontmatterMode) error {
 	return nil
 }
 
-// formatExtraFields formats extra frontmatter fields as key=value pairs.
 func formatExtraFields(extra map[string]any) string {
 	if len(extra) == 0 {
 		return ""
@@ -49,9 +46,7 @@ func formatExtraFields(extra map[string]any) string {
 	return strings.Join(pairs, ", ")
 }
 
-// outputJSON outputs results as JSON.
 func outputJSON(results []SearchResult, fmMode FrontmatterMode, includeContent, stripGlobalTags, stripTitle bool) error {
-	// Create output with optional frontmatter fields
 	type jsonResult struct {
 		Path          string         `json:"path"`
 		UUID          string         `json:"uuid"`
@@ -86,18 +81,15 @@ func outputJSON(results []SearchResult, fmMode FrontmatterMode, includeContent, 
 			jr.Extra = r.note.Extra
 		}
 
-		// Include content if requested
 		if includeContent {
 			content := r.note.Content
 
-			// Include frontmatter in content if extra or full mode
 			if fmMode == FrontmatterExtra || fmMode == FrontmatterFull {
 				if serialized, err := r.note.Serialize(); err == nil {
 					content = serialized
 				}
 			}
 
-			// Apply stripping options
 			if stripTitle {
 				content = note.StripTitle(content)
 			}
@@ -116,13 +108,11 @@ func outputJSON(results []SearchResult, fmMode FrontmatterMode, includeContent, 
 	return enc.Encode(output)
 }
 
-// outputBulk outputs results in bulk format with %%%% <uuid> %%%% separators.
 func outputBulk(results []SearchResult, fmMode FrontmatterMode) error {
 	entries := make([]note.BulkEntry, len(results))
 	for i, r := range results {
 		content := r.note.Content
 		if fmMode == FrontmatterFull {
-			// Include full frontmatter in the content
 			serialized, err := r.note.Serialize()
 			if err == nil {
 				content = serialized
@@ -136,7 +126,6 @@ func outputBulk(results []SearchResult, fmMode FrontmatterMode) error {
 	return note.FormatBulk(entries, os.Stdout)
 }
 
-// outputFirst outputs the first result's content.
 func outputFirst(results []SearchResult, fmMode FrontmatterMode) error {
 	if len(results) == 0 {
 		return nil

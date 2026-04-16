@@ -12,14 +12,12 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// UpdateOutput represents the JSON output for the update command.
 type UpdateOutput struct {
 	Modified []string `json:"modified,omitempty"`
 	Deleted  []string `json:"deleted,omitempty"`
 	Errors   []string `json:"errors,omitempty"`
 }
 
-// NewUpdateCmd creates the update command.
 func NewUpdateCmd(getVault func() *vault.Vault, jsonOutput *bool) *cobra.Command {
 	var (
 		originalPath string
@@ -58,62 +56,50 @@ New UUIDs in the updated content are an error (use 'log' to create new notes).`,
 				return fmt.Errorf("vault not configured")
 			}
 
-			// Read original content
 			originalContent, err := readFileOrStdin(originalPath)
 			if err != nil {
 				return fmt.Errorf("failed to read original: %w", err)
 			}
 
-			// Read updated content
 			updatedContent, err := readFileOrStdin(updatedPath)
 			if err != nil {
 				return fmt.Errorf("failed to read updated: %w", err)
 			}
 
-			// Parse bulk content
 			originalMap := note.ParseBulk(originalContent)
 			updatedMap := note.ParseBulk(updatedContent)
 
-			// Build UUID -> note path map by loading all notes
 			uuidToPath, uuidToNote, err := buildUUIDMaps(vlt)
 			if err != nil {
 				return fmt.Errorf("failed to build UUID map: %w", err)
 			}
 
-			// Identify changes
-			var toModify []string // UUIDs to modify
-			var toDelete []string // UUIDs to delete
-			var newUUIDs []string // UUIDs only in updated (error)
+			var toModify []string
+			var toDelete []string
+			var newUUIDs []string
 			var errors []string
 
-			// Check for modifications and deletions
 			for uuid, origContent := range originalMap {
 				updContent, exists := updatedMap[uuid]
 
 				if !exists {
-					// Deleted
 					toDelete = append(toDelete, uuid)
 				} else if updContent != origContent {
-					// Modified
 					toModify = append(toModify, uuid)
 				}
 			}
 
-			// Check for new UUIDs
 			for uuid := range updatedMap {
 				if _, exists := originalMap[uuid]; !exists {
 					newUUIDs = append(newUUIDs, uuid)
 				}
 			}
 
-			// Report new UUIDs as errors
 			for _, uuid := range newUUIDs {
 				errors = append(errors, fmt.Sprintf("new UUID found: %s (use 'log' to create new notes)", uuid))
 			}
 
-			// Handle deletions - require confirmation or --force
 			if len(toDelete) > 0 && !force && !dryRun {
-				// Check if stderr is a TTY for interactive confirmation
 				if !isTerminal(os.Stderr) {
 					return fmt.Errorf("deletions require --force in non-interactive mode")
 				}
@@ -145,17 +131,14 @@ New UUIDs in the updated content are an error (use 'log' to create new notes).`,
 				}
 			}
 
-			// Apply changes
 			output := UpdateOutput{}
 			prefix := ""
 			if dryRun {
 				prefix = "[dry-run] "
 			}
 
-			// Load titles index for linked-cards resolution
 			titlesIndex, titlesErr := vlt.LoadTitles()
 
-			// Process modifications
 			for _, uuid := range toModify {
 				path := uuidToPath[uuid]
 				if path == "" {
@@ -169,27 +152,22 @@ New UUIDs in the updated content are an error (use 'log' to create new notes).`,
 					continue
 				}
 
-				// Capture old tags before modification for index update
 				oldGlobalTags := n.Tags
 				oldInlineTags := n.InlineTags
 
-				// Update content
 				n.Content = updatedMap[uuid]
 				n.RefreshTags()
 				if n.EnsureLinkTag() {
 					n.RefreshTags()
 				}
 
-				// Resolve date tokens and extract dates
 				n.Content = note.ResolveDateTokens(n.Content)
 				n.RefreshDates()
 
-				// Refresh linked-cards from wiki links
 				if titlesErr == nil {
 					RefreshLinkedCards(n, titlesIndex)
 				}
 
-				// Refresh inherited tags
 				if _, err := RefreshInheritedTags(n, vlt); err != nil {
 					fmt.Fprintf(os.Stderr, "warning: failed to refresh inherited tags: %v\n", err)
 				}
@@ -204,7 +182,6 @@ New UUIDs in the updated content are an error (use 'log' to create new notes).`,
 
 					vlt.SaveNote(n, oldGlobalTags, oldInlineTags, fmt.Sprintf("ruin update: Modify %q", n.Title))
 
-					// Cascade if global tags changed
 					if !normalizedTagsEqual(oldGlobalTags, n.Tags) {
 						if ti, err := vlt.LoadTitles(); err == nil {
 							if err := CascadeInheritedTags(n.UUID, vlt, ti); err != nil {
@@ -217,7 +194,6 @@ New UUIDs in the updated content are an error (use 'log' to create new notes).`,
 				output.Modified = append(output.Modified, path)
 			}
 
-			// Process deletions
 			for _, uuid := range toDelete {
 				path := uuidToPath[uuid]
 				if path == "" {
@@ -246,14 +222,12 @@ New UUIDs in the updated content are an error (use 'log' to create new notes).`,
 
 			output.Errors = errors
 
-			// Output results
 			if *jsonOutput {
 				enc := json.NewEncoder(os.Stdout)
 				enc.SetIndent("", "  ")
 				return enc.Encode(output)
 			}
 
-			// Human-readable output
 			if len(output.Modified) > 0 || len(output.Deleted) > 0 {
 				fmt.Fprintf(os.Stderr, "%sModified: %d, Deleted: %d\n", prefix, len(output.Modified), len(output.Deleted))
 			} else {
@@ -283,7 +257,7 @@ New UUIDs in the updated content are an error (use 'log' to create new notes).`,
 	return cmd
 }
 
-// readFileOrStdin reads content from a file path, or stdin if path is "-".
+// readFileOrStdin reads from path, or stdin if path is "-".
 func readFileOrStdin(path string) (string, error) {
 	if path == "-" {
 		data, err := io.ReadAll(os.Stdin)
@@ -300,7 +274,6 @@ func readFileOrStdin(path string) (string, error) {
 	return string(data), nil
 }
 
-// buildUUIDMaps builds maps from UUID to file path and UUID to Note.
 func buildUUIDMaps(vlt *vault.Vault) (map[string]string, map[string]*note.Note, error) {
 	paths, err := vlt.ListNotes()
 	if err != nil {
@@ -313,7 +286,7 @@ func buildUUIDMaps(vlt *vault.Vault) (map[string]string, map[string]*note.Note, 
 	for _, path := range paths {
 		n, err := note.Load(path)
 		if err != nil {
-			continue // Skip unparseable notes
+			continue
 		}
 
 		if n.UUID != "" {

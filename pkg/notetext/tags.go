@@ -5,9 +5,6 @@ import (
 	"strings"
 )
 
-// Tag patterns:
-// Simple tag: #word, #word-with-dashes, #word/subword (alphanumeric, underscore, hyphen, forward slash)
-// Spaced tag: #text with spaces# (must contain at least one space, ends with # not followed by word char)
 var (
 	// simpleTagPattern matches #word, #word/sub, #kebab-case, #date/2026-q2, etc.
 	// The first character after # must be a word character or slash (not a dash),
@@ -15,10 +12,6 @@ var (
 	// Trailing dashes are stripped programmatically after matching.
 	simpleTagPattern = regexp.MustCompile(`#[\w/][\w/-]*`)
 
-	// spacedTagPattern is not used as a simple regex due to complexity.
-	// Instead, we detect spaced tags programmatically.
-
-	// markdownLinkPattern matches [text](url) to exclude tag-like strings inside links.
 	markdownLinkPattern = regexp.MustCompile(`\[[^\]]*\]\([^)]*\)`)
 )
 
@@ -43,32 +36,24 @@ func ExtractTagMatches(content string) []TagMatch {
 
 func findAllTags(content string) []TagMatch {
 	var matches []TagMatch
-	seen := make(map[int]bool) // Track start positions to avoid overlaps
+	seen := make(map[int]bool)
 
-	// Find regions to exclude from tag extraction
 	linkRanges := findMarkdownLinkRanges(content)
 	embedRanges := FindEmbedRanges(content)
 	codeRanges := findCodeRanges(content)
 	excludedRanges := append(linkRanges, embedRanges...)
 	excludedRanges = append(excludedRanges, codeRanges...)
 
-	// Find spaced tags first (they take precedence)
-	// A spaced tag: #content with space#
-	// - Must start with #
-	// - Must contain at least one space
-	// - Must end with # not followed by word char
-	// - Must NOT contain another # in the content (which would indicate a broken tag)
+	// Spaced tags take precedence over simple tags on the same positions.
 	for i := 0; i < len(content); i++ {
 		if content[i] != '#' {
 			continue
 		}
 
-		// Skip if inside an excluded range (markdown link or embed)
 		if InsideRanges(i, excludedRanges) {
 			continue
 		}
 
-		// Try to find a closing # for a spaced tag
 		spacedTag, end := tryParseSpacedTag(content, i)
 		if spacedTag != "" {
 			matches = append(matches, TagMatch{
@@ -76,15 +61,13 @@ func findAllTags(content string) []TagMatch {
 				Start: i,
 				End:   end,
 			})
-			// Mark these positions as used
 			for j := i; j < end; j++ {
 				seen[j] = true
 			}
-			i = end - 1 // -1 because loop will increment
+			i = end - 1
 		}
 	}
 
-	// Find simple tags, skip if overlapping with spaced tags or inside excluded ranges
 	simpleMatches := simpleTagPattern.FindAllStringIndex(content, -1)
 	for _, loc := range simpleMatches {
 		start, end := loc[0], loc[1]
@@ -108,7 +91,6 @@ func findAllTags(content string) []TagMatch {
 	return matches
 }
 
-// findMarkdownLinkRanges returns byte ranges for all [text](url) markdown links.
 func findMarkdownLinkRanges(content string) [][2]int {
 	locs := markdownLinkPattern.FindAllStringIndex(content, -1)
 	ranges := make([][2]int, len(locs))
@@ -124,16 +106,12 @@ func findCodeRanges(content string) [][2]int {
 	i := 0
 	for i < len(content) {
 		if content[i] == '`' {
-			// Check for fenced code block (``` at start of line)
 			if i+2 < len(content) && content[i+1] == '`' && content[i+2] == '`' {
-				// Find closing ```
 				start := i
-				// Skip the opening ``` and any language identifier on the same line
 				j := i + 3
 				for j < len(content) && content[j] != '\n' {
 					j++
 				}
-				// Search for closing ``` on its own line
 				for j < len(content) {
 					if content[j] == '\n' && j+3 < len(content) && content[j+1] == '`' && content[j+2] == '`' && content[j+3] == '`' {
 						end := j + 4
@@ -149,7 +127,6 @@ func findCodeRanges(content string) [][2]int {
 					break
 				}
 			} else {
-				// Inline code: find matching closing backtick
 				start := i
 				j := i + 1
 				for j < len(content) && content[j] != '`' && content[j] != '\n' {
@@ -176,50 +153,41 @@ func tryParseSpacedTag(content string, start int) (string, int) {
 		return "", 0
 	}
 
-	// Check for "# x" pattern (hash, single space, then word char) which indicates
-	// a broken tag like "#foo # bar#" - the "# bar#" part should not be a tag
+	// "# x" pattern (hash, single space, then word char) indicates a broken tag
+	// like "#foo # bar#" — the "# bar#" part must not be treated as a spaced tag.
 	if start+2 < len(content) &&
 		content[start+1] == ' ' &&
 		isWordChar(content[start+2]) {
 		return "", 0
 	}
 
-	// Look for closing # on the same line
 	hasSpace := false
 	for i := start + 1; i < len(content); i++ {
 		ch := content[i]
 
 		if ch == '\n' {
-			// End of line, not a spaced tag
 			return "", 0
 		}
 
 		if ch == '#' {
-			// Found a potential closing #
-			// Check if there was a space in the content
 			if !hasSpace {
-				// No space means this is NOT a spaced tag (could be #foo#bar)
 				return "", 0
 			}
 
-			// Check if closing # is followed by a word character
-			// If so, it's starting another tag, not closing this one
+			// A word char after the closing # means it starts another tag rather than closing this one.
 			if i+1 < len(content) {
 				next := content[i+1]
 				if isWordChar(next) {
-					// This # starts another tag, so our potential spaced tag is invalid
 					return "", 0
 				}
 			}
 
-			// Check if there's another # later on the same line
-			// If so, this might be a malformed spaced tag like "#broken # tag#"
-			// In this case, treat it as a simple tag instead
+			// Another # later on the same line indicates a malformed spaced tag
+			// like "#broken # tag#"; fall through to simple-tag handling.
 			if hasAnotherHashOnLine(content, i+1) {
 				return "", 0
 			}
 
-			// Valid spaced tag found
 			inner := content[start+1 : i]
 			normalized := "#" + strings.TrimSpace(inner) + "#"
 			return normalized, i + 1
@@ -230,11 +198,9 @@ func tryParseSpacedTag(content string, start int) (string, int) {
 		}
 	}
 
-	// No closing # found
 	return "", 0
 }
 
-// hasAnotherHashOnLine checks if there's another # character before the next newline
 func hasAnotherHashOnLine(content string, start int) bool {
 	for i := start; i < len(content); i++ {
 		if content[i] == '\n' {
@@ -247,7 +213,8 @@ func hasAnotherHashOnLine(content string, start int) bool {
 	return false
 }
 
-// isWordChar returns true if the character is a word character (for tag purposes)
+// isWordChar treats `/` as a word character so nested tags like #foo/bar
+// are recognized as a single token during spaced-tag boundary checks.
 func isWordChar(ch byte) bool {
 	return (ch >= 'a' && ch <= 'z') ||
 		(ch >= 'A' && ch <= 'Z') ||
@@ -282,7 +249,6 @@ func NormalizeTag(tag string) string {
 func ClassifyTags(content string, title string) (globalTags []string, inlineTags []string) {
 	lines := strings.Split(content, "\n")
 
-	// Build set of tag-only line indices
 	tagOnlyLines := make(map[int]bool)
 	for i, line := range lines {
 		if IsTagOnlyLine(strings.TrimSpace(line)) {
@@ -292,12 +258,11 @@ func ClassifyTags(content string, title string) (globalTags []string, inlineTags
 
 	allMatches := findAllTags(content)
 
-	// Calculate line offsets for position mapping
 	lineOffsets := make([]int, len(lines))
 	offset := 0
 	for i, line := range lines {
 		lineOffsets[i] = offset
-		offset += len(line) + 1 // +1 for newline
+		offset += len(line) + 1
 	}
 
 	seenGlobal := make(map[string]bool)
@@ -326,12 +291,10 @@ func ClassifyTags(content string, title string) (globalTags []string, inlineTags
 // IsHeaderLine returns true if the line is a markdown header (H1 through H6).
 func IsHeaderLine(line string) bool {
 	trimmed := strings.TrimSpace(line)
-	// Count leading # characters
 	i := 0
 	for i < len(trimmed) && trimmed[i] == '#' {
 		i++
 	}
-	// Must have 1-6 #'s followed by a space
 	return i >= 1 && i <= 6 && i < len(trimmed) && trimmed[i] == ' '
 }
 
@@ -344,21 +307,18 @@ func IsTagOnlyLine(line string) bool {
 		return false
 	}
 
-	// Extract all tags from this line
 	tags := findAllTags(line)
 	if len(tags) == 0 {
 		return false
 	}
 
-	// Remove all matched tags from the line and check if only separators remain
 	remaining := line
-	// Sort by position descending to remove from end first (preserves positions)
+	// Remove from end first so earlier positions stay valid.
 	for i := len(tags) - 1; i >= 0; i-- {
 		t := tags[i]
 		remaining = remaining[:t.Start] + remaining[t.End:]
 	}
 
-	// After removing tags, only whitespace and separator punctuation should remain
 	return strings.Trim(remaining, " \t,;|·•–—/") == ""
 }
 
@@ -405,7 +365,6 @@ func StripInheritedTagsFromContent(content string, inheritedTags []string) strin
 		return content
 	}
 
-	// Build lookup set
 	inheritedSet := make(map[string]bool, len(inheritedTags))
 	for _, t := range inheritedTags {
 		inheritedSet[NormalizeTag(t)] = true
@@ -418,11 +377,10 @@ func StripInheritedTagsFromContent(content string, inheritedTags []string) strin
 	for _, line := range lines {
 		trimmed := strings.TrimSpace(line)
 
-		// Pass through non-tag-only lines unchanged
 		if !IsTagOnlyLine(trimmed) {
 			if trimmed == "" {
 				if prevBlank {
-					continue // collapse consecutive blank lines
+					continue
 				}
 				prevBlank = true
 			} else {
@@ -432,10 +390,8 @@ func StripInheritedTagsFromContent(content string, inheritedTags []string) strin
 			continue
 		}
 
-		// Extract tags from this line
 		tags := findAllTags(line)
 
-		// Separate into keep vs strip
 		var keepTags []string
 		for _, tm := range tags {
 			if !inheritedSet[NormalizeTag(tm.Tag)] {
@@ -444,18 +400,15 @@ func StripInheritedTagsFromContent(content string, inheritedTags []string) strin
 		}
 
 		if len(keepTags) == 0 {
-			// All tags were inherited — remove line
 			continue
 		}
 
 		if len(keepTags) == len(tags) {
-			// Nothing stripped — keep original line
 			prevBlank = false
 			result = append(result, line)
 			continue
 		}
 
-		// Reconstruct with remaining tags
 		prevBlank = false
 		result = append(result, strings.Join(keepTags, ", "))
 	}

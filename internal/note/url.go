@@ -5,7 +5,6 @@ import (
 	"strings"
 )
 
-// IsValidURL returns true if s is a valid HTTP or HTTPS URL.
 func IsValidURL(s string) bool {
 	u, err := url.Parse(s)
 	if err != nil {
@@ -14,7 +13,6 @@ func IsValidURL(s string) bool {
 	return (u.Scheme == "http" || u.Scheme == "https") && u.Host != ""
 }
 
-// IsURLNote returns true if the note has a URL (in frontmatter or body).
 func (n *Note) IsURLNote() bool {
 	if n.URL != "" {
 		return true
@@ -27,26 +25,22 @@ func (n *Note) ExtractURL() string {
 	if n.URL != "" {
 		return n.URL
 	}
-	// Check first non-empty, non-title, non-tag-only line
 	lines := strings.SplitSeq(n.Content, "\n")
 	for line := range lines {
 		trimmed := strings.TrimSpace(line)
 		if trimmed == "" {
 			continue
 		}
-		// Skip title lines (headers)
 		if IsHeaderLine(trimmed) {
 			continue
 		}
-		// Skip tag-only lines
 		if IsTagOnlyLine(trimmed) {
 			continue
 		}
-		// Check if this line is a bare URL
 		if IsValidURL(trimmed) {
 			return trimmed
 		}
-		break // first content line is not a URL
+		break // only the first real content line is considered; stop scanning
 	}
 	return ""
 }
@@ -60,7 +54,6 @@ func (n *Note) EnsureLinkTag() bool {
 
 	modified := false
 
-	// Promote body URL to frontmatter if not already set
 	if n.URL == "" {
 		extracted := n.ExtractURL()
 		if extracted != "" {
@@ -69,7 +62,6 @@ func (n *Note) EnsureLinkTag() bool {
 		}
 	}
 
-	// Check if #link tag already present in tags or inline-tags
 	hasLink := false
 	for _, t := range n.Tags {
 		if NormalizeTag(t) == "#link" {
@@ -85,7 +77,6 @@ func (n *Note) EnsureLinkTag() bool {
 			}
 		}
 	}
-	// Also check content directly for #link
 	if !hasLink {
 		for _, t := range ExtractTags(n.Content) {
 			if NormalizeTag(t) == "#link" {
@@ -99,8 +90,6 @@ func (n *Note) EnsureLinkTag() bool {
 		return modified
 	}
 
-	// Need to add #link tag
-	// Find first tag-only line and append
 	lines := strings.Split(n.Content, "\n")
 	inserted := false
 	for i, line := range lines {
@@ -109,7 +98,6 @@ func (n *Note) EnsureLinkTag() bool {
 			continue
 		}
 		if IsTagOnlyLine(trimmed) {
-			// Determine separator: if line uses commas, use ", ", else use " "
 			sep := " "
 			if strings.Contains(trimmed, ",") {
 				sep = ", "
@@ -121,7 +109,6 @@ func (n *Note) EnsureLinkTag() bool {
 	}
 
 	if !inserted {
-		// Insert after title header or at end
 		insertIdx := -1
 		for i, line := range lines {
 			if IsHeaderLine(strings.TrimSpace(line)) {
@@ -130,14 +117,12 @@ func (n *Note) EnsureLinkTag() bool {
 			}
 		}
 		if insertIdx >= 0 {
-			// Insert after the title line
 			newLines := make([]string, 0, len(lines)+2)
 			newLines = append(newLines, lines[:insertIdx+1]...)
 			newLines = append(newLines, "", "#link")
 			newLines = append(newLines, lines[insertIdx+1:]...)
 			lines = newLines
 		} else {
-			// Append at end
 			lines = append(lines, "", "#link")
 		}
 	}

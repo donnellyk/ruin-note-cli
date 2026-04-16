@@ -6,12 +6,10 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// errMutuallyExclusive returns an error for mutually exclusive flags.
 func errMutuallyExclusive(a, b string) error {
 	return fmt.Errorf("%s and %s are mutually exclusive", a, b)
 }
 
-// SearchFlags holds the common flags shared by search-like commands.
 type SearchFlags struct {
 	Bulk            bool
 	First           bool
@@ -25,8 +23,7 @@ type SearchFlags struct {
 	StripTitle      bool
 }
 
-// AddSearchFlags adds the shared search output flags to a command.
-// defaultSort can be empty for no default, or a value like "created:desc".
+// AddSearchFlags adds the shared search output flags. Pass "" to omit the default sort.
 func AddSearchFlags(cmd *cobra.Command, f *SearchFlags, defaultSort string) {
 	cmd.Flags().BoolVarP(&f.Bulk, "bulk", "b", false, "output content with %%%% <uuid> %%%% separators")
 	cmd.Flags().BoolVar(&f.First, "first", false, "output first match content only")
@@ -41,9 +38,7 @@ func AddSearchFlags(cmd *cobra.Command, f *SearchFlags, defaultSort string) {
 	cmd.Flags().BoolVar(&f.StripTitle, "strip-title", false, "remove H1 title from content (requires --content)")
 }
 
-// ValidateSearchFlags checks for mutual exclusivity and other validation rules.
 func ValidateSearchFlags(f *SearchFlags, jsonOutput bool) error {
-	// Check mutual exclusivity of output formats
 	modeCount := 0
 	if f.Bulk {
 		modeCount++
@@ -55,17 +50,14 @@ func ValidateSearchFlags(f *SearchFlags, jsonOutput bool) error {
 		return errMutuallyExclusive("--bulk", "--first")
 	}
 
-	// --edit is orthogonal to format, but incompatible with --json
 	if f.Edit && jsonOutput {
 		return errMutuallyExclusive("--json", "--edit")
 	}
 
-	// --content only works with --json
 	if f.Content && !jsonOutput {
 		return fmt.Errorf("--content requires --json")
 	}
 
-	// --strip-global-tags and --strip-title require --content
 	if f.StripGlobalTags && !f.Content {
 		return fmt.Errorf("--strip-global-tags requires --content")
 	}

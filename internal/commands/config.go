@@ -10,7 +10,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// NewConfigCmd creates the config command.
 func NewConfigCmd(jsonOutput *bool) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "config [key] [value]",
@@ -37,19 +36,15 @@ Available keys:
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cfg, err := config.Load()
 			if err != nil {
-				// Config might not exist, create empty one
 				cfg = &config.Config{}
 			}
 
 			switch len(args) {
 			case 0:
-				// Show all config
 				return showAllConfig(cfg, *jsonOutput)
 			case 1:
-				// Show specific key
 				return showConfigKey(cfg, args[0], *jsonOutput)
 			case 2:
-				// Set key=value
 				return setConfigKey(cfg, args[0], args[1], *jsonOutput)
 			}
 
@@ -67,7 +62,6 @@ func showAllConfig(cfg *config.Config, jsonOut bool) error {
 		return enc.Encode(cfg)
 	}
 
-	// Human-readable output
 	fmt.Printf("vault_path: %s\n", cfg.VaultPath)
 	return nil
 }
@@ -157,7 +151,6 @@ func parseBoolValue(s string) (bool, error) {
 	}
 }
 
-// ListConfigKeys returns all available config keys (for shell completion).
 func ListConfigKeys() []string {
 	t := reflect.TypeFor[config.Config]()
 	keys := make([]string, 0, t.NumField())

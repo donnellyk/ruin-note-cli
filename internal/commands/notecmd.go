@@ -10,7 +10,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// NewNoteCmd creates the note command group with subcommands.
 func NewNoteCmd(getVault func() *vault.Vault, jsonOutput *bool) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "note",
@@ -25,8 +24,6 @@ func NewNoteCmd(getVault func() *vault.Vault, jsonOutput *bool) *cobra.Command {
 
 	return cmd
 }
-
-// --- note delete ---
 
 type noteDeleteOutput struct {
 	Path  string `json:"path"`

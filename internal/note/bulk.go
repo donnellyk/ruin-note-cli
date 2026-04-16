@@ -7,16 +7,13 @@ import (
 	"strings"
 )
 
-// BulkSeparatorPattern matches %%%% <uuid> %%%% separators in bulk format.
 var BulkSeparatorPattern = regexp.MustCompile(`%%%% ([a-zA-Z0-9-]+) %%%%\n?`)
 
-// BulkEntry represents a single note entry in bulk format.
 type BulkEntry struct {
 	UUID    string
 	Content string
 }
 
-// FormatBulk formats notes in bulk export format with %%%% <uuid> %%%% separators.
 func FormatBulk(entries []BulkEntry, w io.Writer) error {
 	for i, entry := range entries {
 		if i > 0 {
@@ -31,7 +28,6 @@ func FormatBulk(entries []BulkEntry, w io.Writer) error {
 	return nil
 }
 
-// ParseBulk parses bulk format content into uuid -> content map.
 func ParseBulk(content string) map[string]string {
 	result := make(map[string]string)
 
@@ -52,7 +48,6 @@ func ParseBulk(content string) map[string]string {
 		}
 
 		noteContent := content[contentStart:contentEnd]
-		// Trim trailing newline that we added for separation
 		noteContent = strings.TrimSuffix(noteContent, "\n")
 
 		result[uuid] = noteContent
@@ -61,7 +56,6 @@ func ParseBulk(content string) map[string]string {
 	return result
 }
 
-// ParseBulkOrdered parses bulk format content preserving order.
 func ParseBulkOrdered(content string) []BulkEntry {
 	var entries []BulkEntry
 

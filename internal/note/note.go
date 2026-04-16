@@ -11,35 +11,31 @@ import (
 	"github.com/google/uuid"
 )
 
-// TimeFormat is the format used for created/updated timestamps.
 const TimeFormat = "2006-01-02T15:04:05-07:00"
 
-// Note represents a markdown note with frontmatter.
 type Note struct {
 	UUID          string
 	Created       time.Time
 	Updated       time.Time
-	Tags          []string // Global tags (categorization)
-	InlineTags    []string // Inline tags (contextual annotations within content)
-	InheritedTags []string // Global tags inherited from ancestor notes
-	Dates         []string // Dates referenced in content (@YYYY-MM-DD tokens)
-	Parent        string   // UUID of parent note
-	Order         *int     // Manual sort order (nil = unset)
-	LinkedCards   []string // Resolved UUIDs from [[wiki links]]
-	URL           string   // URL for link notes
-	Title         string   // H1 header text (without #)
-	Content       string   // Full markdown content (without frontmatter)
-	FilePath      string   // Path to the file on disk
+	Tags          []string
+	InlineTags    []string
+	InheritedTags []string
+	Dates         []string
+	Parent        string
+	Order         *int
+	LinkedCards   []string
+	URL           string
+	Title         string
+	Content       string
+	FilePath      string
 
-	// Extra preserves additional frontmatter fields added by the user.
+	// Extra preserves user-added frontmatter fields round-trip; unknown keys
+	// here are re-emitted verbatim on save.
 	Extra map[string]any
 }
 
-// headerPattern matches any markdown header (H1 through H6).
 var headerPattern = regexp.MustCompile(`(?m)^#{1,6}\s+(.+)$`)
 
-// Parse reads a note from markdown content.
-// It extracts frontmatter, title, and tags.
 func Parse(content string) (*Note, error) {
 	fm, body, err := ParseFrontmatter(content)
 	if err != nil {
@@ -57,7 +53,6 @@ func Parse(content string) (*Note, error) {
 		Extra:         fm.Extra,
 	}
 
-	// Parse timestamps
 	if fm.Created != "" {
 		if t, err := time.Parse(TimeFormat, fm.Created); err == nil {
 			note.Created = t
@@ -69,21 +64,17 @@ func Parse(content string) (*Note, error) {
 		}
 	}
 
-	// Extract title from first header
 	note.Title = extractTitle(body)
 
-	// Extract and classify tags
 	globalTags, inlineTags := ClassifyTags(body, note.Title)
 	note.Tags = globalTags
 	note.InlineTags = inlineTags
 
-	// Extract dates from content
 	note.Dates = ExtractDates(body)
 
 	return note, nil
 }
 
-// Load reads a note from a file.
 func Load(path string) (*Note, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
@@ -99,7 +90,6 @@ func Load(path string) (*Note, error) {
 	return note, nil
 }
 
-// extractTitle finds the first markdown header (any level) in the content.
 func extractTitle(content string) string {
 	match := headerPattern.FindStringSubmatch(content)
 	if len(match) >= 2 {
@@ -108,7 +98,6 @@ func extractTitle(content string) string {
 	return ""
 }
 
-// Serialize converts the note back to markdown with frontmatter.
 func (n *Note) Serialize() (string, error) {
 	fm := &Frontmatter{
 		UUID:          n.UUID,
@@ -138,8 +127,6 @@ func (n *Note) Serialize() (string, error) {
 	return fmStr + n.Content, nil
 }
 
-// Save writes the note to a file.
-// If the note has no FilePath set, an error is returned.
 func (n *Note) Save() error {
 	if n.FilePath == "" {
 		return fmt.Errorf("note has no file path")
@@ -150,7 +137,6 @@ func (n *Note) Save() error {
 		return err
 	}
 
-	// Ensure directory exists
 	dir := filepath.Dir(n.FilePath)
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return fmt.Errorf("failed to create directory: %w", err)
@@ -163,14 +149,12 @@ func (n *Note) Save() error {
 	return nil
 }
 
-// EnsureUUID generates a UUID if one is not already set.
 func (n *Note) EnsureUUID() {
 	if n.UUID == "" {
 		n.UUID = uuid.New().String()
 	}
 }
 
-// SetTimestamps sets created (if not set) and updated timestamps.
 func (n *Note) SetTimestamps() {
 	now := time.Now()
 	if n.Created.IsZero() {
@@ -179,39 +163,32 @@ func (n *Note) SetTimestamps() {
 	n.Updated = now
 }
 
-// RefreshTags re-extracts tags from the content.
 func (n *Note) RefreshTags() {
 	globalTags, inlineTags := ClassifyTags(n.Content, n.Title)
 	n.Tags = globalTags
 	n.InlineTags = inlineTags
 }
 
-// RefreshDates re-extracts dates from the content.
 func (n *Note) RefreshDates() {
 	n.Dates = ExtractDates(n.Content)
 }
 
 // EffectiveGlobalTags returns own global tags merged with inherited tags (deduplicated).
-// Use this for output/matching where inherited tags should be visible.
 func (n *Note) EffectiveGlobalTags() []string {
 	return MergeTags(n.Tags, n.InheritedTags)
 }
 
-// AllTags returns all tags (global + inline merged, deduplicated).
-// Use this for tag index operations where both types should be counted.
-// Does NOT include inherited tags (parent already counts them).
+// AllTags returns global + inline merged, deduplicated. Does NOT include
+// inherited tags (parent already counts them).
 func (n *Note) AllTags() []string {
 	return MergeTags(n.Tags, n.InlineTags)
 }
 
-// GenerateFilename creates a filename for the note based on title or timestamp.
-// The extension is not included.
 func (n *Note) GenerateFilename() string {
 	if n.Title != "" {
 		return SanitizeFilename(n.Title)
 	}
 
-	// Use timestamp
 	t := n.Created
 	if t.IsZero() {
 		t = time.Now()
@@ -219,9 +196,7 @@ func (n *Note) GenerateFilename() string {
 	return t.Format("2006-01-02T15-04-05")
 }
 
-// SanitizeFilename removes or replaces invalid filename characters.
 func SanitizeFilename(name string) string {
-	// Replace characters that are invalid in filenames
 	replacer := strings.NewReplacer(
 		"/", "-",
 		"\\", "-",
@@ -235,11 +210,9 @@ func SanitizeFilename(name string) string {
 	)
 	name = replacer.Replace(name)
 
-	// Trim whitespace and dots from ends
 	name = strings.TrimSpace(name)
 	name = strings.Trim(name, ".")
 
-	// Limit length
 	if len(name) > 200 {
 		name = name[:200]
 	}
@@ -247,7 +220,6 @@ func SanitizeFilename(name string) string {
 	return name
 }
 
-// ContentWithoutTitle returns the content with the title header line removed.
 func (n *Note) ContentWithoutTitle() string {
 	if n.Title == "" {
 		return n.Content
@@ -265,7 +237,6 @@ func (n *Note) ContentWithoutTitle() string {
 		result = append(result, line)
 	}
 
-	// Trim leading empty lines
 	for len(result) > 0 && strings.TrimSpace(result[0]) == "" {
 		result = result[1:]
 	}

@@ -13,7 +13,6 @@ import (
 
 const frontmatterDelimiter = "---"
 
-// Frontmatter represents the YAML frontmatter of a note.
 type Frontmatter struct {
 	UUID          string   `yaml:"uuid,omitempty"`
 	Created       string   `yaml:"created,omitempty"`
@@ -27,43 +26,33 @@ type Frontmatter struct {
 	LinkedCards   []string `yaml:"linked-cards,omitempty"`
 	URL           string   `yaml:"url,omitempty"`
 
-	// Extra holds any additional frontmatter fields not explicitly defined.
-	// This preserves user-added fields.
 	Extra map[string]any `yaml:"-"`
 }
 
-// ParseFrontmatter extracts frontmatter from markdown content.
-// Returns the frontmatter, the remaining content (without frontmatter), and any error.
-// If no frontmatter is present, returns an empty Frontmatter and the original content.
+// ParseFrontmatter extracts frontmatter from markdown content. If no
+// frontmatter is present, returns an empty Frontmatter and the original content.
 func ParseFrontmatter(content string) (*Frontmatter, string, error) {
 	content = strings.TrimLeft(content, "\n\r")
 
-	// Check if content starts with frontmatter delimiter
 	if !strings.HasPrefix(content, frontmatterDelimiter) {
 		return &Frontmatter{Extra: make(map[string]any)}, content, nil
 	}
 
-	// Find the closing delimiter
 	rest := content[len(frontmatterDelimiter):]
 	before, after, ok := strings.Cut(rest, "\n"+frontmatterDelimiter)
 	if !ok {
-		// No closing delimiter, treat as no frontmatter
 		return &Frontmatter{Extra: make(map[string]any)}, content, nil
 	}
 
-	// Extract frontmatter YAML
 	fmYAML := before
 
-	// Find where content starts after closing delimiter
 	afterClosing := after
-	// Skip the newline after closing delimiter if present
 	if strings.HasPrefix(afterClosing, "\n") {
 		afterClosing = afterClosing[1:]
 	} else if strings.HasPrefix(afterClosing, "\r\n") {
 		afterClosing = afterClosing[2:]
 	}
 
-	// Parse frontmatter
 	fm, err := parseFrontmatterYAML(fmYAML)
 	if err != nil {
 		return nil, "", err
@@ -75,13 +64,11 @@ func ParseFrontmatter(content string) (*Frontmatter, string, error) {
 func parseFrontmatterYAML(yamlContent string) (*Frontmatter, error) {
 	fm := &Frontmatter{Extra: make(map[string]any)}
 
-	// First, unmarshal into a generic map to capture all fields
 	var raw map[string]any
 	if err := yaml.Unmarshal([]byte(yamlContent), &raw); err != nil {
 		return nil, err
 	}
 
-	// Extract known fields
 	if v, ok := raw["uuid"].(string); ok {
 		fm.UUID = v
 		delete(raw, "uuid")
@@ -133,13 +120,11 @@ func parseFrontmatterYAML(yamlContent string) (*Frontmatter, error) {
 		delete(raw, "url")
 	}
 
-	// Store remaining fields as extra
 	fm.Extra = raw
 
 	return fm, nil
 }
 
-// valueToString converts various types to string (handles time.Time from YAML)
 func valueToString(v any) string {
 	switch val := v.(type) {
 	case string:
@@ -172,17 +157,15 @@ func toStringSlice(v any) []string {
 	}
 }
 
-// Serialize converts the frontmatter to a YAML string with delimiters.
-// Returns an empty string if the frontmatter is empty.
+// Serialize converts the frontmatter to a YAML string with delimiters. Returns
+// an empty string if the frontmatter is empty.
 func (fm *Frontmatter) Serialize() (string, error) {
 	if fm.IsEmpty() {
 		return "", nil
 	}
 
-	// Build a map with known fields first (for ordering), then extra
 	data := make(map[string]any)
 
-	// Add known fields in preferred order
 	if fm.UUID != "" {
 		data["uuid"] = fm.UUID
 	}
@@ -217,10 +200,8 @@ func (fm *Frontmatter) Serialize() (string, error) {
 		data["url"] = fm.URL
 	}
 
-	// Add extra fields
 	maps.Copy(data, fm.Extra)
 
-	// Use yaml.v3 encoder for better control
 	var buf bytes.Buffer
 	encoder := yaml.NewEncoder(&buf)
 	encoder.SetIndent(2)
@@ -233,7 +214,6 @@ func (fm *Frontmatter) Serialize() (string, error) {
 	return frontmatterDelimiter + "\n" + buf.String() + frontmatterDelimiter + "\n", nil
 }
 
-// IsEmpty returns true if the frontmatter has no data.
 func (fm *Frontmatter) IsEmpty() bool {
 	return fm.UUID == "" &&
 		fm.Created == "" &&
@@ -249,8 +229,8 @@ func (fm *Frontmatter) IsEmpty() bool {
 		len(fm.Extra) == 0
 }
 
-// Merge combines another frontmatter into this one.
-// The other frontmatter's values take precedence for non-empty fields.
+// Merge combines another frontmatter into this one. The other frontmatter's
+// values take precedence for non-empty fields.
 func (fm *Frontmatter) Merge(other *Frontmatter) {
 	if other == nil {
 		return
@@ -290,12 +270,10 @@ func (fm *Frontmatter) Merge(other *Frontmatter) {
 		fm.URL = other.URL
 	}
 
-	// Merge extra fields
 	if fm.Extra == nil {
 		fm.Extra = make(map[string]any)
 	}
 	maps.Copy(fm.Extra, other.Extra)
 }
 
-// ErrInvalidFrontmatter indicates malformed frontmatter.
 var ErrInvalidFrontmatter = errors.New("invalid frontmatter")

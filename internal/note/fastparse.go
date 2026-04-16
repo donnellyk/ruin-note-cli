@@ -11,7 +11,6 @@ import (
 	"time"
 )
 
-// ErrFrontmatterTruncated indicates the frontmatter didn't fit in the read buffer.
 var ErrFrontmatterTruncated = errors.New("frontmatter truncated")
 
 var bufPool = sync.Pool{
@@ -22,29 +21,24 @@ var bufPool = sync.Pool{
 }
 
 // ParseFrontmatterFast parses frontmatter from a byte slice using a hand-rolled
-// line-by-line scanner, avoiding yaml.Unmarshal overhead.
-// Returns the parsed Frontmatter, the byte offset where the body begins, and any error.
-// Unknown keys are silently skipped (Extra is not populated).
+// line-by-line scanner, avoiding yaml.Unmarshal overhead. Unknown keys are
+// silently skipped (Extra is not populated).
 func ParseFrontmatterFast(data []byte) (*Frontmatter, int, error) {
-	// Trim leading newlines
 	offset := 0
 	for offset < len(data) && (data[offset] == '\n' || data[offset] == '\r') {
 		offset++
 	}
 
-	// Check for opening ---
 	if !bytes.HasPrefix(data[offset:], []byte("---")) {
 		return &Frontmatter{}, offset, nil
 	}
 
-	// Find end of opening delimiter line
 	lineEnd := bytes.IndexByte(data[offset:], '\n')
 	if lineEnd == -1 {
 		return &Frontmatter{}, offset, nil
 	}
 	fmStart := offset + lineEnd + 1
 
-	// Find closing ---
 	closingIdx := bytes.Index(data[fmStart:], []byte("\n---"))
 	if closingIdx == -1 {
 		return nil, 0, ErrFrontmatterTruncated
@@ -52,7 +46,6 @@ func ParseFrontmatterFast(data []byte) (*Frontmatter, int, error) {
 
 	fmBytes := data[fmStart : fmStart+closingIdx]
 
-	// Body starts after closing --- and its newline
 	bodyOffset := fmStart + closingIdx + 4 // len("\n---")
 	if bodyOffset < len(data) && data[bodyOffset] == '\n' {
 		bodyOffset++
@@ -68,14 +61,12 @@ func ParseFrontmatterFast(data []byte) (*Frontmatter, int, error) {
 	return fm, bodyOffset, nil
 }
 
-// parseFMLines scans frontmatter lines and populates known fields.
 func parseFMLines(data []byte, fm *Frontmatter) error {
 	var currentKey string
 	var currentList *[]string
 
 	lines := bytes.SplitSeq(data, []byte("\n"))
 	for line := range lines {
-		// Strip \r
 		if len(line) > 0 && line[len(line)-1] == '\r' {
 			line = line[:len(line)-1]
 		}
@@ -84,7 +75,6 @@ func parseFMLines(data []byte, fm *Frontmatter) error {
 			continue
 		}
 
-		// Check if this is a list item (starts with whitespace + "- ")
 		if (line[0] == ' ' || line[0] == '\t') && currentList != nil {
 			trimmed := bytes.TrimSpace(line)
 			if bytes.HasPrefix(trimmed, []byte("- ")) {
@@ -94,10 +84,8 @@ func parseFMLines(data []byte, fm *Frontmatter) error {
 			}
 		}
 
-		// Key: value line
 		colonIdx := bytes.IndexByte(line, ':')
 		if colonIdx <= 0 {
-			// Not a key line; could be continuation, skip
 			currentKey = ""
 			currentList = nil
 			continue
@@ -108,7 +96,6 @@ func parseFMLines(data []byte, fm *Frontmatter) error {
 		currentKey = key
 		currentList = nil
 
-		// Check for flow-style list: [a, b, c]
 		if len(value) > 0 && value[0] == '[' {
 			list := parseFlowList(value)
 			switch key {
@@ -126,7 +113,6 @@ func parseFMLines(data []byte, fm *Frontmatter) error {
 			continue
 		}
 
-		// If value is empty, this might be a block-style list
 		if len(value) == 0 {
 			switch key {
 			case "tags":
@@ -139,13 +125,10 @@ func parseFMLines(data []byte, fm *Frontmatter) error {
 				currentList = &fm.Dates
 			case "linked-cards":
 				currentList = &fm.LinkedCards
-			default:
-				// Unknown key with block list - skip
 			}
 			continue
 		}
 
-		// Scalar value
 		strVal := unquote(value)
 		switch key {
 		case "uuid":
@@ -163,7 +146,6 @@ func parseFMLines(data []byte, fm *Frontmatter) error {
 				fm.Order = &n
 			}
 		case "tags":
-			// Single value on same line as key (unusual but handle it)
 			fm.Tags = []string{strVal}
 		case "inline-tags":
 			fm.InlineTags = []string{strVal}
@@ -174,7 +156,6 @@ func parseFMLines(data []byte, fm *Frontmatter) error {
 		case "linked-cards":
 			fm.LinkedCards = []string{strVal}
 		default:
-			// Unknown key - skip
 			_ = currentKey
 		}
 	}
@@ -182,7 +163,6 @@ func parseFMLines(data []byte, fm *Frontmatter) error {
 	return nil
 }
 
-// unquote strips surrounding quotes from a byte slice and returns a string.
 func unquote(b []byte) string {
 	s := string(bytes.TrimSpace(b))
 	if len(s) >= 2 {
@@ -195,7 +175,6 @@ func unquote(b []byte) string {
 
 // parseFlowList parses a YAML flow-style list like [a, b, c] or ["a", "b"].
 func parseFlowList(data []byte) []string {
-	// Strip [ and ]
 	s := string(bytes.TrimSpace(data))
 	if len(s) < 2 || s[0] != '[' || s[len(s)-1] != ']' {
 		return nil
@@ -217,10 +196,9 @@ func parseFlowList(data []byte) []string {
 	return result
 }
 
-// LoadFrontmatterOnly reads only the frontmatter portion of a note file.
-// It reads up to 4KB, parses frontmatter with the fast parser, and extracts
-// the title from the beginning of the body. Content is left empty.
-// On truncated frontmatter or parse error, falls back to full Load.
+// LoadFrontmatterOnly reads only the frontmatter portion of a note file (up to
+// 4KB) and extracts the title from the beginning of the body. Content is left
+// empty. On truncated frontmatter, falls back to full Load.
 func LoadFrontmatterOnly(path string) (*Note, error) {
 	f, err := os.Open(path)
 	if err != nil {
@@ -259,7 +237,6 @@ func LoadFrontmatterOnly(path string) (*Note, error) {
 		FilePath:      path,
 	}
 
-	// Parse timestamps
 	if fm.Created != "" {
 		if t, err := time.Parse(TimeFormat, fm.Created); err == nil {
 			note.Created = t
@@ -271,7 +248,6 @@ func LoadFrontmatterOnly(path string) (*Note, error) {
 		}
 	}
 
-	// Extract title from body portion of the buffer
 	if bodyOffset < len(data) {
 		note.Title = extractTitleFromBytes(data[bodyOffset:])
 	}
@@ -279,11 +255,8 @@ func LoadFrontmatterOnly(path string) (*Note, error) {
 	return note, nil
 }
 
-// extractTitleFromBytes finds the first markdown header in a byte slice.
 func extractTitleFromBytes(data []byte) string {
-	// Scan line by line looking for ^#{1,6}
 	for len(data) > 0 {
-		// Find end of line
 		lineEnd := bytes.IndexByte(data, '\n')
 		var line []byte
 		if lineEnd == -1 {
@@ -294,17 +267,14 @@ func extractTitleFromBytes(data []byte) string {
 			data = data[lineEnd+1:]
 		}
 
-		// Strip \r
 		if len(line) > 0 && line[len(line)-1] == '\r' {
 			line = line[:len(line)-1]
 		}
 
-		// Check for header: starts with # followed by more # or space
 		if len(line) == 0 || line[0] != '#' {
 			continue
 		}
 
-		// Count # characters (1-6)
 		hashes := 0
 		for hashes < len(line) && line[hashes] == '#' {
 			hashes++
@@ -316,7 +286,6 @@ func extractTitleFromBytes(data []byte) string {
 			continue
 		}
 
-		// Extract title text
 		title := bytes.TrimSpace(line[hashes:])
 		return string(title)
 	}

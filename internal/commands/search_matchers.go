@@ -14,7 +14,6 @@ func isDateTerm(term string) bool {
 	if len(term) != 11 || term[0] != '@' {
 		return false
 	}
-	// Check format: @YYYY-MM-DD
 	for i, ch := range term[1:] {
 		switch {
 		case i == 4 || i == 7:
@@ -30,15 +29,12 @@ func isDateTerm(term string) bool {
 	return true
 }
 
-// dateMatcher returns a matcher that checks if a note has the given date in its dates field.
 func dateMatcher(dateStr string) QueryMatcher {
 	return func(n *note.Note) bool {
 		return slices.Contains(n.Dates, dateStr)
 	}
 }
 
-// tagMatcher returns a matcher that checks if a note has the given tag.
-// The scope controls which tag fields are checked.
 func tagMatcher(tag string, scope TagScope) QueryMatcher {
 	tagNorm := note.NormalizeTag(tag)
 	return func(n *note.Note) bool {
@@ -60,15 +56,12 @@ func tagMatcher(tag string, scope TagScope) QueryMatcher {
 	}
 }
 
-// textMatcher returns a matcher that checks if a note contains the given text.
 func textMatcher(text string) QueryMatcher {
 	textLower := strings.ToLower(text)
 	return func(n *note.Note) bool {
-		// Search in content
 		if strings.Contains(strings.ToLower(n.Content), textLower) {
 			return true
 		}
-		// Search in title
 		if strings.Contains(strings.ToLower(n.Title), textLower) {
 			return true
 		}
@@ -76,7 +69,6 @@ func textMatcher(text string) QueryMatcher {
 	}
 }
 
-// titleMatcher returns a matcher that checks if a note's title contains the given text.
 func titleMatcher(text string) QueryMatcher {
 	textLower := strings.ToLower(text)
 	return func(n *note.Note) bool {
@@ -84,8 +76,7 @@ func titleMatcher(text string) QueryMatcher {
 	}
 }
 
-// parentMatcher returns a matcher for parent filter.
-// "none" matches notes with no parent. Any other value matches by parent UUID.
+// parentMatcher: "none" matches notes with no parent; any other value matches by parent UUID.
 func parentMatcher(value string) QueryMatcher {
 	if strings.ToLower(value) == "none" {
 		return func(n *note.Note) bool {
@@ -97,14 +88,12 @@ func parentMatcher(value string) QueryMatcher {
 	}
 }
 
-// linkNoteMatcher returns a matcher that checks if a note is a link note (has a URL).
 func linkNoteMatcher() QueryMatcher {
 	return func(n *note.Note) bool {
 		return n.IsURLNote()
 	}
 }
 
-// linkMatcher returns a matcher that checks if a note's URL field contains the given text.
 func linkMatcher(text string) QueryMatcher {
 	textLower := strings.ToLower(text)
 	return func(n *note.Note) bool {
@@ -112,7 +101,6 @@ func linkMatcher(text string) QueryMatcher {
 	}
 }
 
-// pathMatcher returns a matcher that checks if a note's path contains the given text.
 func pathMatcher(text string) QueryMatcher {
 	textLower := strings.ToLower(text)
 	return func(n *note.Note) bool {
@@ -120,8 +108,6 @@ func pathMatcher(text string) QueryMatcher {
 	}
 }
 
-// createdDateMatcher returns a matcher for created date filter.
-// Supports exact dates, months, years, and natural language dates.
 func createdDateMatcher(value string) (QueryMatcher, error) {
 	r, err := dateparse.Parse(value)
 	if err != nil {
@@ -132,7 +118,6 @@ func createdDateMatcher(value string) (QueryMatcher, error) {
 	}, nil
 }
 
-// updatedDateMatcher returns a matcher for updated date filter.
 func updatedDateMatcher(value string) (QueryMatcher, error) {
 	r, err := dateparse.Parse(value)
 	if err != nil {
@@ -143,32 +128,27 @@ func updatedDateMatcher(value string) (QueryMatcher, error) {
 	}, nil
 }
 
-// beforeDateMatcher returns a matcher for notes created before a date.
 func beforeDateMatcher(value string) (QueryMatcher, error) {
 	r, err := dateparse.Parse(value)
 	if err != nil {
 		return nil, fmt.Errorf("invalid date for before filter: %w", err)
 	}
-	// Before the start of the parsed range
 	return func(n *note.Note) bool {
 		return n.Created.Before(r.Start)
 	}, nil
 }
 
-// afterDateMatcher returns a matcher for notes created after a date.
 func afterDateMatcher(value string) (QueryMatcher, error) {
 	r, err := dateparse.Parse(value)
 	if err != nil {
 		return nil, fmt.Errorf("invalid date for after filter: %w", err)
 	}
-	// After the end of the parsed range
 	return func(n *note.Note) bool {
 		return !n.Created.Before(r.End)
 	}, nil
 }
 
-// betweenDateMatcher returns a matcher for notes created between two dates.
-// Format: DATE,DATE (e.g., "2025-01-01,2025-01-31" or "2025-01,today")
+// betweenDateMatcher parses "DATE,DATE" (e.g., "2025-01-01,2025-01-31" or "2025-01,today").
 func betweenDateMatcher(value string) (QueryMatcher, error) {
 	parts := strings.SplitN(value, ",", 2)
 	if len(parts) != 2 {
@@ -185,7 +165,7 @@ func betweenDateMatcher(value string) (QueryMatcher, error) {
 		return nil, fmt.Errorf("invalid end date for between filter: %w", err)
 	}
 
-	// Range is from start of first date to end of second date (inclusive)
+	// Range spans from start of first date to end of second date (inclusive).
 	return func(n *note.Note) bool {
 		return !n.Created.Before(startRange.Start) && n.Created.Before(endRange.End)
 	}, nil

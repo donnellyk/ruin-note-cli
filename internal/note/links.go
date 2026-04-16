@@ -8,14 +8,13 @@ import (
 // wikiLinkPattern matches [[title]] and [[title|display text]]
 var wikiLinkPattern = regexp.MustCompile(`\[\[([^\[\]|]+?)(?:\|([^\[\]]*?))?\]\]`)
 
-// WikiLink represents a parsed wiki-style link.
 type WikiLink struct {
-	Title   string // Target title (left of |)
-	Display string // Display text (right of |, or empty)
+	Title   string
+	Display string
 }
 
-// ExtractWikiLinks finds all wiki-style links in the given content.
-// Returns deduplicated links by lowercase title, keeping first occurrence.
+// ExtractWikiLinks returns wiki links deduplicated by lowercase title, keeping
+// first occurrence.
 func ExtractWikiLinks(content string) []WikiLink {
 	locs := wikiLinkPattern.FindAllStringSubmatchIndex(content, -1)
 	if len(locs) == 0 {
@@ -26,7 +25,7 @@ func ExtractWikiLinks(content string) []WikiLink {
 	var result []WikiLink
 
 	for _, loc := range locs {
-		// Skip embeds: ![[...]] — check character before [[
+		// Skip embeds: ![[...]]
 		if loc[0] > 0 && content[loc[0]-1] == '!' {
 			continue
 		}
@@ -52,8 +51,8 @@ func ExtractWikiLinks(content string) []WikiLink {
 	return result
 }
 
-// ExtractWikiLinkTitles returns unique titles from wiki links in content.
-// Deduplicated case-insensitively, keeping first occurrence's casing.
+// ExtractWikiLinkTitles returns unique titles deduplicated case-insensitively,
+// keeping first occurrence's casing.
 func ExtractWikiLinkTitles(content string) []string {
 	links := ExtractWikiLinks(content)
 	if len(links) == 0 {

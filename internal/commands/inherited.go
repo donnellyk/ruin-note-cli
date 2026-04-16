@@ -106,7 +106,6 @@ func CascadeInheritedTags(parentUUID string, vlt *vault.Vault, titlesIndex *vaul
 
 	children := titlesIndex.ChildrenMap()
 
-	// BFS from parentUUID
 	queue := children[parentUUID]
 	visited := make(map[string]bool)
 	visited[parentUUID] = true
@@ -131,7 +130,6 @@ func CascadeInheritedTags(parentUUID string, vlt *vault.Vault, titlesIndex *vaul
 
 		newInherited := ComputeInheritedTags(uuid, titlesIndex, loader)
 
-		// Load the full note to check and save
 		n, err := note.Load(entry.Path)
 		if err != nil {
 			continue
@@ -144,7 +142,6 @@ func CascadeInheritedTags(parentUUID string, vlt *vault.Vault, titlesIndex *vaul
 			}
 		}
 
-		// Enqueue this node's children
 		queue = append(queue, children[uuid]...)
 	}
 

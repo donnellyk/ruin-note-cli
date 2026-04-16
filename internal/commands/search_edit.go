@@ -11,25 +11,20 @@ import (
 	"github.com/donnellyk/ruin-note-cli/internal/vault"
 )
 
-// handleEdit opens results in $EDITOR and saves changes.
 func handleEdit(vlt *vault.Vault, results []SearchResult, force bool, fmMode FrontmatterMode) error {
 	editor := os.Getenv("EDITOR")
 	if editor == "" {
 		editor = "vi"
 	}
 
-	// Single note: use simple format without bulk separators
 	if len(results) == 1 {
 		return handleEditSingle(vlt, results[0], force, fmMode, editor)
 	}
 
-	// Multiple notes: use bulk format
 	return handleEditBulk(vlt, results, force, fmMode, editor)
 }
 
-// handleEditSingle handles editing a single note without bulk separators.
 func handleEditSingle(vlt *vault.Vault, result SearchResult, force bool, fmMode FrontmatterMode, editor string) error {
-	// Create temp file
 	tmpFile, err := os.CreateTemp("", "ruin-edit-*.md")
 	if err != nil {
 		return fmt.Errorf("failed to create temp file: %w", err)
@@ -37,7 +32,6 @@ func handleEditSingle(vlt *vault.Vault, result SearchResult, force bool, fmMode 
 	tmpPath := tmpFile.Name()
 	defer os.Remove(tmpPath)
 
-	// Prepare content
 	content := result.note.Content
 	if fmMode == FrontmatterFull {
 		serialized, err := result.note.Serialize()
@@ -54,7 +48,6 @@ func handleEditSingle(vlt *vault.Vault, result SearchResult, force bool, fmMode 
 
 	originalContent := content
 
-	// Open editor
 	cmd := exec.Command("sh", "-c", editor+" \"$1\"", "sh", tmpPath)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
@@ -64,20 +57,17 @@ func handleEditSingle(vlt *vault.Vault, result SearchResult, force bool, fmMode 
 		return fmt.Errorf("editor failed: %w", err)
 	}
 
-	// Read modified content
 	modifiedBytes, err := os.ReadFile(tmpPath)
 	if err != nil {
 		return fmt.Errorf("failed to read modified file: %w", err)
 	}
 	modifiedContent := string(modifiedBytes)
 
-	// If no changes, nothing to do
 	if modifiedContent == originalContent {
 		fmt.Fprintln(os.Stderr, "No changes made")
 		return nil
 	}
 
-	// Check for deletion (empty content)
 	if strings.TrimSpace(modifiedContent) == "" {
 		if !force {
 			if !isTerminal(os.Stderr) {
@@ -103,11 +93,9 @@ func handleEditSingle(vlt *vault.Vault, result SearchResult, force bool, fmMode 
 		return nil
 	}
 
-	// Capture old tags before modification for index update
 	oldGlobalTags := result.note.Tags
 	oldInlineTags := result.note.InlineTags
 
-	// Apply changes
 	if strings.HasPrefix(strings.TrimLeft(modifiedContent, "\n\r"), "---") {
 		fm, body, err := note.ParseFrontmatter(modifiedContent)
 		if err != nil {
@@ -135,23 +123,19 @@ func handleEditSingle(vlt *vault.Vault, result SearchResult, force bool, fmMode 
 		result.note.RefreshTags()
 	}
 
-	// Ensure #link tag for URL notes
 	if result.note.EnsureLinkTag() {
 		result.note.RefreshTags()
 	}
 
-	// Resolve date tokens and extract dates
 	result.note.Content = note.ResolveDateTokens(result.note.Content)
 	result.note.RefreshDates()
 
 	result.note.SetTimestamps()
 
-	// Refresh linked-cards from wiki links
 	if titlesIndex, err := vlt.LoadTitles(); err == nil {
 		RefreshLinkedCards(result.note, titlesIndex)
 	}
 
-	// Refresh inherited tags
 	if _, err := RefreshInheritedTags(result.note, vlt); err != nil {
 		fmt.Fprintf(os.Stderr, "warning: failed to refresh inherited tags: %v\n", err)
 	}
@@ -162,7 +146,6 @@ func handleEditSingle(vlt *vault.Vault, result SearchResult, force bool, fmMode 
 
 	vlt.SaveNote(result.note, oldGlobalTags, oldInlineTags, fmt.Sprintf("ruin search --edit: Update %q", result.Title))
 
-	// Cascade if global tags changed
 	if !normalizedTagsEqual(oldGlobalTags, result.note.Tags) {
 		if titlesIndex, err := vlt.LoadTitles(); err == nil {
 			if err := CascadeInheritedTags(result.note.UUID, vlt, titlesIndex); err != nil {
@@ -175,9 +158,7 @@ func handleEditSingle(vlt *vault.Vault, result SearchResult, force bool, fmMode 
 	return nil
 }
 
-// handleEditBulk handles editing multiple notes with bulk format.
 func handleEditBulk(vlt *vault.Vault, results []SearchResult, force bool, fmMode FrontmatterMode, editor string) error {
-	// Create temp file with bulk format
 	tmpFile, err := os.CreateTemp("", "ruin-edit-*.md")
 	if err != nil {
 		return fmt.Errorf("failed to create temp file: %w", err)
@@ -185,12 +166,10 @@ func handleEditBulk(vlt *vault.Vault, results []SearchResult, force bool, fmMode
 	tmpPath := tmpFile.Name()
 	defer os.Remove(tmpPath)
 
-	// Write original content
 	entries := make([]note.BulkEntry, len(results))
 	for i, r := range results {
 		content := r.note.Content
 		if fmMode == FrontmatterFull {
-			// Include full frontmatter in the content for editing
 			serialized, err := r.note.Serialize()
 			if err == nil {
 				content = serialized
@@ -214,10 +193,9 @@ func handleEditBulk(vlt *vault.Vault, results []SearchResult, force bool, fmMode
 	}
 	tmpFile.Close()
 
-	// Save original for comparison
 	originalContent := original.String()
 
-	// Open editor - use shell to handle $EDITOR with arguments (e.g., "code --wait")
+	// Use shell so $EDITOR with arguments works (e.g., "code --wait").
 	cmd := exec.Command("sh", "-c", editor+" \"$1\"", "sh", tmpPath)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
@@ -227,36 +205,29 @@ func handleEditBulk(vlt *vault.Vault, results []SearchResult, force bool, fmMode
 		return fmt.Errorf("editor failed: %w", err)
 	}
 
-	// Read modified content
 	modifiedBytes, err := os.ReadFile(tmpPath)
 	if err != nil {
 		return fmt.Errorf("failed to read modified file: %w", err)
 	}
 	modifiedContent := string(modifiedBytes)
 
-	// If no changes, nothing to do
 	if modifiedContent == originalContent {
 		fmt.Fprintln(os.Stderr, "No changes made")
 		return nil
 	}
 
-	// Parse and apply changes
 	return applyBulkChanges(vlt, originalContent, modifiedContent, results, force)
 }
 
-// applyBulkChanges applies changes from bulk edit.
 func applyBulkChanges(vlt *vault.Vault, original, modified string, results []SearchResult, force bool) error {
-	// Parse original into uuid -> content map
 	originalMap := note.ParseBulk(original)
 	modifiedMap := note.ParseBulk(modified)
 
-	// Build uuid -> result map
 	resultMap := make(map[string]SearchResult)
 	for _, r := range results {
 		resultMap[r.UUID] = r
 	}
 
-	// First pass: collect modifications and deletions
 	var toModify []string
 	var toDelete []string
 
@@ -270,7 +241,6 @@ func applyBulkChanges(vlt *vault.Vault, original, modified string, results []Sea
 		}
 	}
 
-	// Check for new UUIDs (error case)
 	var errors []string
 	for uuid := range modifiedMap {
 		if _, exists := originalMap[uuid]; !exists {
@@ -278,9 +248,7 @@ func applyBulkChanges(vlt *vault.Vault, original, modified string, results []Sea
 		}
 	}
 
-	// Handle deletions - require confirmation or --force
 	if len(toDelete) > 0 && !force {
-		// Check if stderr is a TTY for interactive confirmation
 		if !isTerminal(os.Stderr) {
 			return fmt.Errorf("deletions require --force in non-interactive mode")
 		}
@@ -305,10 +273,8 @@ func applyBulkChanges(vlt *vault.Vault, original, modified string, results []Sea
 		}
 	}
 
-	// Load titles index for linked-cards resolution
 	titlesIndex, titlesErr := vlt.LoadTitles()
 
-	// Apply modifications
 	var modifiedCount int
 	for _, uuid := range toModify {
 		result, ok := resultMap[uuid]
@@ -317,29 +283,23 @@ func applyBulkChanges(vlt *vault.Vault, original, modified string, results []Sea
 			continue
 		}
 
-		// Capture old tags before modification for index update
 		oldGlobalTags := result.note.Tags
 		oldInlineTags := result.note.InlineTags
 
 		modContent := modifiedMap[uuid]
 
-		// Check if modified content includes frontmatter
 		if strings.HasPrefix(strings.TrimLeft(modContent, "\n\r"), "---") {
-			// Parse frontmatter from modified content
 			fm, body, err := note.ParseFrontmatter(modContent)
 			if err != nil {
 				errors = append(errors, fmt.Sprintf("Failed to parse frontmatter for %s: %v", result.Path, err))
 				continue
 			}
 
-			// Protect immutable fields
 			if fm.UUID != "" && fm.UUID != result.note.UUID {
 				errors = append(errors, fmt.Sprintf("Cannot change UUID for %s", result.Path))
 				continue
 			}
 
-			// Apply allowed frontmatter changes
-			// Extra fields can be modified
 			if len(fm.Extra) > 0 {
 				if result.note.Extra == nil {
 					result.note.Extra = make(map[string]any)
@@ -347,38 +307,30 @@ func applyBulkChanges(vlt *vault.Vault, original, modified string, results []Sea
 				maps.Copy(result.note.Extra, fm.Extra)
 			}
 
-			// Tags from frontmatter override extracted tags if explicitly set
 			if len(fm.Tags) > 0 {
 				result.note.Tags = fm.Tags
 			}
 
-			// Set content (without frontmatter)
 			result.note.Content = body
 		} else {
-			// No frontmatter - just update content
 			result.note.Content = modContent
 		}
 
-		// Refresh tags from content (unless overridden by frontmatter)
 		if !strings.HasPrefix(strings.TrimLeft(modContent, "\n\r"), "---") {
 			result.note.RefreshTags()
 		}
 
-		// Ensure #link tag for URL notes
 		if result.note.EnsureLinkTag() {
 			result.note.RefreshTags()
 		}
 
-		// Resolve date tokens and extract dates
 		result.note.Content = note.ResolveDateTokens(result.note.Content)
 		result.note.RefreshDates()
 
-		// Refresh linked-cards from wiki links
 		if titlesErr == nil {
 			RefreshLinkedCards(result.note, titlesIndex)
 		}
 
-		// Refresh inherited tags
 		if _, err := RefreshInheritedTags(result.note, vlt); err != nil {
 			fmt.Fprintf(os.Stderr, "warning: failed to refresh inherited tags: %v\n", err)
 		}
@@ -392,7 +344,6 @@ func applyBulkChanges(vlt *vault.Vault, original, modified string, results []Sea
 
 		vlt.SaveNote(result.note, oldGlobalTags, oldInlineTags, fmt.Sprintf("ruin search --edit: Update %q", result.note.Title))
 
-		// Cascade if global tags changed
 		if !normalizedTagsEqual(oldGlobalTags, result.note.Tags) {
 			if ti, err := vlt.LoadTitles(); err == nil {
 				if err := CascadeInheritedTags(result.note.UUID, vlt, ti); err != nil {
@@ -404,7 +355,6 @@ func applyBulkChanges(vlt *vault.Vault, original, modified string, results []Sea
 		modifiedCount++
 	}
 
-	// Apply deletions
 	var deletedCount int
 	for _, uuid := range toDelete {
 		result, ok := resultMap[uuid]
@@ -421,7 +371,6 @@ func applyBulkChanges(vlt *vault.Vault, original, modified string, results []Sea
 		deletedCount++
 	}
 
-	// Report results
 	fmt.Fprintf(os.Stderr, "Modified: %d, Deleted: %d\n", modifiedCount, deletedCount)
 	if len(errors) > 0 {
 		fmt.Fprintf(os.Stderr, "Errors:\n")

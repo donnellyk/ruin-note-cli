@@ -9,8 +9,6 @@ import (
 	"github.com/donnellyk/ruin-note-cli/internal/note"
 )
 
-// resolveDateArg takes a user-provided date argument (with or without @),
-// resolves natural language tokens, and returns "@YYYY-MM-DD".
 func resolveDateArg(raw string) (string, error) {
 	token := strings.TrimPrefix(raw, "@")
 	resolved, ok := dateparse.ResolveDate(token)
@@ -20,12 +18,9 @@ func resolveDateArg(raw string) (string, error) {
 	return "@" + resolved.Format("2006-01-02"), nil
 }
 
-// resolvedDateRe matches @YYYY-MM-DD patterns for removal.
 var resolvedDateRe = regexp.MustCompile(`\s*@\d{4}-\d{2}-\d{2}`)
 
-// specificDateRe returns a regex matching a specific @YYYY-MM-DD date.
 func specificDateRe(date string) *regexp.Regexp {
-	// date is already "@YYYY-MM-DD"
 	return regexp.MustCompile(`\s*` + regexp.QuoteMeta(date))
 }
 
@@ -34,7 +29,6 @@ func specificDateRe(date string) *regexp.Regexp {
 // Otherwise: append to end of specified line.
 func insertDateInContent(content, date string, lineNum int) (string, error) {
 	if lineNum == 0 {
-		// Insert like a global tag — on the first tag-only line or after title
 		return insertGlobalTag(content, date), nil
 	}
 	lines := strings.Split(content, "\n")
@@ -71,7 +65,7 @@ func removeDateFromContent(content, date string, lineNum int) string {
 		if i >= start && i < end {
 			newLine := re.ReplaceAllString(l, "")
 			newLine = strings.TrimRight(newLine, " \t")
-			// If a tag-only line becomes empty after date removal, skip it
+			// Drop tag-only lines that become empty after date removal.
 			if strings.TrimSpace(newLine) == "" && note.IsTagOnlyLine(strings.TrimSpace(l)) {
 				continue
 			}

@@ -12,7 +12,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// NewTagsCmd creates the tags command with subcommands.
 func NewTagsCmd(getVault func() *vault.Vault, jsonOutput *bool) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "tags",
@@ -27,7 +26,6 @@ func NewTagsCmd(getVault func() *vault.Vault, jsonOutput *bool) *cobra.Command {
 	return cmd
 }
 
-// newTagsListCmd creates the "tags list" subcommand.
 func newTagsListCmd(getVault func() *vault.Vault, jsonOutput *bool) *cobra.Command {
 	var (
 		sortBy string
@@ -65,7 +63,6 @@ See also:
 				return fmt.Errorf("failed to load tags: %w", err)
 			}
 
-			// Filter by minimum usage
 			var filtered []vault.TagEntry
 			for _, t := range index.Tags {
 				if t.Count >= minUse {
@@ -73,7 +70,6 @@ See also:
 				}
 			}
 
-			// Sort
 			switch {
 			case strings.HasPrefix(sortBy, "name"):
 				sort.Slice(filtered, func(i, j int) bool {
@@ -87,11 +83,10 @@ See also:
 					if strings.HasSuffix(sortBy, ":asc") {
 						return filtered[i].Count < filtered[j].Count
 					}
-					return filtered[i].Count > filtered[j].Count // desc by default
+					return filtered[i].Count > filtered[j].Count
 				})
 			}
 
-			// Output
 			if *jsonOutput {
 				enc := json.NewEncoder(os.Stdout)
 				enc.SetIndent("", "  ")
@@ -116,7 +111,6 @@ See also:
 	return cmd
 }
 
-// newTagsRenameCmd creates the "tags rename" subcommand.
 func newTagsRenameCmd(getVault func() *vault.Vault, jsonOutput *bool) *cobra.Command {
 	var (
 		force  bool
@@ -155,7 +149,6 @@ See also:
 			oldTag := args[0]
 			newTag := args[1]
 
-			// Validate tags start with #
 			if !strings.HasPrefix(oldTag, "#") {
 				oldTag = "#" + oldTag
 			}
@@ -163,7 +156,6 @@ See also:
 				newTag = "#" + newTag
 			}
 
-			// Find all notes with the old tag
 			notePaths, err := vlt.ListNotes()
 			if err != nil {
 				return fmt.Errorf("failed to list notes: %w", err)
@@ -188,7 +180,6 @@ See also:
 				return nil
 			}
 
-			// Confirm unless --force or --dry-run
 			if !force && !dryRun {
 				if !isTerminal(os.Stderr) {
 					return fmt.Errorf("rename requires --force in non-interactive mode")
@@ -217,7 +208,6 @@ See also:
 				return nil
 			}
 
-			// Apply changes
 			var updated int
 			var errors []string
 			var globalTagsChangedUUIDs []string
@@ -231,7 +221,6 @@ See also:
 				oldGlobalTags := make([]string, len(n.Tags))
 				copy(oldGlobalTags, n.Tags)
 
-				// Replace tag in content
 				n.Content = replaceTag(n.Content, oldTag, newTag)
 				n.RefreshTags()
 				n.SetTimestamps()
@@ -247,7 +236,6 @@ See also:
 				updated++
 			}
 
-			// Cascade inherited tags for notes whose global tags changed
 			if len(globalTagsChangedUUIDs) > 0 {
 				if titlesIndex, err := vlt.LoadTitles(); err == nil {
 					for _, uuid := range globalTagsChangedUUIDs {
@@ -258,12 +246,10 @@ See also:
 				}
 			}
 
-			// Update tags index
 			if err := rebuildTagsIndex(vlt); err != nil {
 				errors = append(errors, fmt.Sprintf("Failed to rebuild tags index: %v", err))
 			}
 
-			// Commit to version history
 			if updated > 0 {
 				vlt.Commit(fmt.Sprintf("ruin tags rename: %s -> %s (%d notes)", oldTag, newTag, updated))
 			}
@@ -286,7 +272,6 @@ See also:
 	return cmd
 }
 
-// newTagsDeleteCmd creates the "tags delete" subcommand.
 func newTagsDeleteCmd(getVault func() *vault.Vault, jsonOutput *bool) *cobra.Command {
 	var (
 		force  bool
@@ -324,12 +309,10 @@ See also:
 
 			tag := args[0]
 
-			// Validate tag starts with #
 			if !strings.HasPrefix(tag, "#") {
 				tag = "#" + tag
 			}
 
-			// Find all notes with the tag
 			notePaths, err := vlt.ListNotes()
 			if err != nil {
 				return fmt.Errorf("failed to list notes: %w", err)
@@ -354,7 +337,6 @@ See also:
 				return nil
 			}
 
-			// Confirm unless --force or --dry-run
 			if !force && !dryRun {
 				if !isTerminal(os.Stderr) {
 					return fmt.Errorf("delete requires --force in non-interactive mode")
@@ -383,7 +365,6 @@ See also:
 				return nil
 			}
 
-			// Apply changes
 			var updated int
 			var errors []string
 			var globalTagsChangedUUIDs []string
@@ -397,7 +378,6 @@ See also:
 				oldGlobalTags := make([]string, len(n.Tags))
 				copy(oldGlobalTags, n.Tags)
 
-				// Remove tag from content
 				n.Content = removeTag(n.Content, tag)
 				n.RefreshTags()
 				n.SetTimestamps()
@@ -413,7 +393,6 @@ See also:
 				updated++
 			}
 
-			// Cascade inherited tags for notes whose global tags changed
 			if len(globalTagsChangedUUIDs) > 0 {
 				if titlesIndex, err := vlt.LoadTitles(); err == nil {
 					for _, uuid := range globalTagsChangedUUIDs {
@@ -424,12 +403,10 @@ See also:
 				}
 			}
 
-			// Update tags index
 			if err := rebuildTagsIndex(vlt); err != nil {
 				errors = append(errors, fmt.Sprintf("Failed to rebuild tags index: %v", err))
 			}
 
-			// Commit to version history
 			if updated > 0 {
 				vlt.Commit(fmt.Sprintf("ruin tags delete: %s (%d notes)", tag, updated))
 			}
@@ -452,23 +429,17 @@ See also:
 	return cmd
 }
 
-// replaceTag replaces oldTag with newTag in content.
 func replaceTag(content, oldTag, newTag string) string {
-	// Handle both simple tags (#foo) and spaced tags (#foo bar#)
-	// Simple replacement - this handles the basic case
 	return strings.ReplaceAll(content, oldTag, newTag)
 }
 
-// removeTag removes a tag from content.
 func removeTag(content, tag string) string {
-	// Remove the tag and any trailing space
 	result := strings.ReplaceAll(content, tag+" ", "")
 	result = strings.ReplaceAll(result, " "+tag, "")
 	result = strings.ReplaceAll(result, tag, "")
 	return result
 }
 
-// rebuildTagsIndex rebuilds the tags index from all notes.
 func rebuildTagsIndex(vlt *vault.Vault) error {
 	notePaths, err := vlt.ListNotes()
 	if err != nil {

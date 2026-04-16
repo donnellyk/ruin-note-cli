@@ -11,7 +11,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// DoctorOutput represents the JSON output for the doctor command.
 type DoctorOutput struct {
 	Scanned               int      `json:"scanned"`
 	UUIDGenerated         []string `json:"uuid_generated,omitempty"`
@@ -25,7 +24,6 @@ type DoctorOutput struct {
 	OrphanedBookmarks     []string `json:"orphaned_bookmarks,omitempty"`
 }
 
-// NewDoctorCmd creates the doctor command.
 func NewDoctorCmd(getVault func() *vault.Vault, jsonOutput *bool) *cobra.Command {
 	var dryRun bool
 
@@ -64,7 +62,6 @@ Does NOT update created or updated timestamps.`,
 				return fmt.Errorf("vault not configured")
 			}
 
-			// Ensure vault is initialized
 			if !vlt.IsInitialized() {
 				if !dryRun {
 					if _, err := vlt.Initialize(false); err != nil {
@@ -85,9 +82,7 @@ Does NOT update created or updated timestamps.`,
 	return cmd
 }
 
-// doctorFiles reindexes specific files with incremental index updates.
 func doctorFiles(vlt *vault.Vault, paths []string, dryRun bool, jsonOutput bool) error {
-	// Resolve paths relative to vault
 	resolved := make([]string, 0, len(paths))
 	for _, p := range paths {
 		abs := p
@@ -100,7 +95,6 @@ func doctorFiles(vlt *vault.Vault, paths []string, dryRun bool, jsonOutput bool)
 		resolved = append(resolved, abs)
 	}
 
-	// Load titles index for linked-cards resolution
 	titlesIndex, err := vlt.LoadTitles()
 	if err != nil {
 		return fmt.Errorf("failed to load titles index: %w", err)
@@ -116,7 +110,6 @@ func doctorFiles(vlt *vault.Vault, paths []string, dryRun bool, jsonOutput bool)
 	}
 
 	for _, path := range resolved {
-		// Read raw frontmatter to capture old on-disk tags
 		rawBytes, err := os.ReadFile(path)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "%swarning: failed to read %s: %v\n", prefix, path, err)
@@ -132,21 +125,18 @@ func doctorFiles(vlt *vault.Vault, paths []string, dryRun bool, jsonOutput bool)
 
 		needsSave := false
 
-		// Check for missing UUID
 		if n.UUID == "" {
 			n.EnsureUUID()
 			output.UUIDGenerated = append(output.UUIDGenerated, path)
 			needsSave = true
 		}
 
-		// Compare on-disk frontmatter tags against content-derived classification
 		tagsChanged := !normalizedTagsEqual(rawFM.Tags, n.Tags) || !normalizedTagsEqual(rawFM.InlineTags, n.InlineTags)
 		if tagsChanged {
 			output.TagsReindexed = append(output.TagsReindexed, path)
 			needsSave = true
 		}
 
-		// Resolve date tokens and refresh dates
 		resolvedContent := note.ResolveDateTokens(n.Content)
 		if resolvedContent != n.Content {
 			n.Content = resolvedContent
@@ -158,7 +148,6 @@ func doctorFiles(vlt *vault.Vault, paths []string, dryRun bool, jsonOutput bool)
 			needsSave = true
 		}
 
-		// Resolve linked-cards
 		oldLinkedCards := make(map[string]bool)
 		for _, lc := range n.LinkedCards {
 			oldLinkedCards[lc] = true
@@ -182,7 +171,6 @@ func doctorFiles(vlt *vault.Vault, paths []string, dryRun bool, jsonOutput bool)
 			needsSave = true
 		}
 
-		// Compute inherited tags
 		var newInherited []string
 		if vlt.TagInheritanceEnabled() && n.Parent != "" {
 			loader := func(p string) (*note.Note, error) {
@@ -196,7 +184,6 @@ func doctorFiles(vlt *vault.Vault, paths []string, dryRun bool, jsonOutput bool)
 			needsSave = true
 		}
 
-		// Strip inherited tags from content
 		if len(newInherited) > 0 {
 			stripped := note.StripInheritedTagsFromContent(n.Content, newInherited)
 			if stripped != n.Content {
@@ -207,13 +194,11 @@ func doctorFiles(vlt *vault.Vault, paths []string, dryRun bool, jsonOutput bool)
 			}
 		}
 
-		// Ensure #link tag for URL notes
 		if n.EnsureLinkTag() {
 			n.RefreshTags()
 			needsSave = true
 		}
 
-		// Save note if needed
 		if needsSave && !dryRun {
 			if err := n.Save(); err != nil {
 				fmt.Fprintf(os.Stderr, "%swarning: failed to save %s: %v\n", prefix, path, err)
@@ -221,7 +206,6 @@ func doctorFiles(vlt *vault.Vault, paths []string, dryRun bool, jsonOutput bool)
 			}
 		}
 
-		// Incremental index updates
 		if !dryRun {
 			vlt.SaveNote(n, rawFM.Tags, rawFM.InlineTags, "")
 			output.TagsYMLUpdated = true
@@ -232,7 +216,6 @@ func doctorFiles(vlt *vault.Vault, paths []string, dryRun bool, jsonOutput bool)
 		}
 	}
 
-	// Commit to version history
 	if !dryRun {
 		repaired := len(output.UUIDGenerated) + len(output.TagsReindexed) + len(output.LinkedCardsReindexed) + len(output.InheritedTagsUpdated) + len(output.InheritedTagsStripped)
 		if repaired > 0 {
@@ -243,9 +226,7 @@ func doctorFiles(vlt *vault.Vault, paths []string, dryRun bool, jsonOutput bool)
 	return doctorPrintOutput(&output, prefix, jsonOutput)
 }
 
-// doctorFullScan performs the original full-vault doctor scan.
 func doctorFullScan(vlt *vault.Vault, dryRun bool, jsonOutput bool) error {
-	// Get all notes
 	notePaths, err := vlt.ListNotes()
 	if err != nil {
 		return fmt.Errorf("failed to list notes: %w", err)
@@ -255,15 +236,12 @@ func doctorFullScan(vlt *vault.Vault, dryRun bool, jsonOutput bool) error {
 		Scanned: len(notePaths),
 	}
 
-	// Track all tags across the vault for rebuilding tags.yml
 	tagCounts := make(map[string]int)
 	globalTagSet := make(map[string]bool)
 	inlineTagSet := make(map[string]bool)
 
-	// Track all titles for rebuilding titles.json
 	titleEntries := make(map[string]vault.TitleEntry)
 
-	// Store loaded notes for linked-cards pass
 	var loadedNotes []*note.Note
 
 	prefix := ""
@@ -291,7 +269,6 @@ func doctorFullScan(vlt *vault.Vault, dryRun bool, jsonOutput bool) error {
 
 		needsSave := false
 
-		// Check for missing UUID
 		if n.UUID == "" {
 			n.EnsureUUID()
 			output.UUIDGenerated = append(output.UUIDGenerated, path)
@@ -306,7 +283,6 @@ func doctorFullScan(vlt *vault.Vault, dryRun bool, jsonOutput bool) error {
 			needsSave = true
 		}
 
-		// Resolve date tokens and refresh dates
 		resolvedContent := note.ResolveDateTokens(n.Content)
 		if resolvedContent != n.Content {
 			n.Content = resolvedContent
@@ -318,7 +294,6 @@ func doctorFullScan(vlt *vault.Vault, dryRun bool, jsonOutput bool) error {
 			needsSave = true
 		}
 
-		// Count tags for rebuilding tags.yml (global + inline)
 		for _, t := range n.AllTags() {
 			tagCounts[t]++
 		}
@@ -329,14 +304,12 @@ func doctorFullScan(vlt *vault.Vault, dryRun bool, jsonOutput bool) error {
 			inlineTagSet[t] = true
 		}
 
-		// Collect title entry
 		titleEntries[n.UUID] = vault.TitleEntry{
 			Title:  n.Title,
 			Path:   path,
 			Parent: n.Parent,
 		}
 
-		// Save if needed
 		if needsSave && !dryRun {
 			if err := n.Save(); err != nil {
 				fmt.Fprintf(os.Stderr, "%swarning: failed to save %s: %v\n", prefix, path, err)
@@ -346,7 +319,6 @@ func doctorFullScan(vlt *vault.Vault, dryRun bool, jsonOutput bool) error {
 		loadedNotes = append(loadedNotes, n)
 	}
 
-	// Post-loop: rebuild linked-cards using collected title entries
 	tempIndex := &vault.TitlesIndex{Titles: titleEntries}
 	for _, n := range loadedNotes {
 		oldLinkedCards := make(map[string]bool)
@@ -381,15 +353,12 @@ func doctorFullScan(vlt *vault.Vault, dryRun bool, jsonOutput bool) error {
 		}
 	}
 
-	// Post-loop: compute and fix inherited tags
-	// Build note lookup and parent->children map
 	noteByUUID := make(map[string]*note.Note, len(loadedNotes))
 	for _, n := range loadedNotes {
 		noteByUUID[n.UUID] = n
 	}
 
 	loader := func(path string) (*note.Note, error) {
-		// Try to find in already-loaded notes first
 		for _, n := range loadedNotes {
 			if n.FilePath == path {
 				return n, nil
@@ -398,7 +367,7 @@ func doctorFullScan(vlt *vault.Vault, dryRun bool, jsonOutput bool) error {
 		return note.LoadFrontmatterOnly(path)
 	}
 
-	// Process topologically: BFS from roots (notes without parents)
+	// BFS from roots ensures parents are processed before children.
 	childrenMap := tempIndex.ChildrenMap()
 	var roots []string
 	for uuid, entry := range titleEntries {
@@ -407,7 +376,6 @@ func doctorFullScan(vlt *vault.Vault, dryRun bool, jsonOutput bool) error {
 		}
 	}
 
-	// BFS order ensures parents are processed before children
 	queue := make([]string, len(roots))
 	copy(queue, roots)
 	for i := 0; i < len(queue); i++ {
@@ -428,12 +396,10 @@ func doctorFullScan(vlt *vault.Vault, dryRun bool, jsonOutput bool) error {
 
 		inheritedChanged := !normalizedTagsEqual(n.InheritedTags, newInherited)
 
-		// Strip inherited tags from content (tag-only lines)
 		var contentChanged bool
 		if len(newInherited) > 0 {
 			stripped := note.StripInheritedTagsFromContent(n.Content, newInherited)
 			if stripped != n.Content {
-				// Subtract old tag counts before refreshing
 				for _, t := range n.AllTags() {
 					tagCounts[t]--
 				}
@@ -442,12 +408,9 @@ func doctorFullScan(vlt *vault.Vault, dryRun bool, jsonOutput bool) error {
 				n.RefreshTags()
 				contentChanged = true
 
-				// Re-collect corrected tags for index
 				for _, t := range n.AllTags() {
 					tagCounts[t]++
 				}
-				// Refresh scope sets (idempotent for sets, but needed
-				// in case a tag was entirely removed from this note)
 				for _, t := range n.Tags {
 					globalTagSet[t] = true
 				}
@@ -464,7 +427,6 @@ func doctorFullScan(vlt *vault.Vault, dryRun bool, jsonOutput bool) error {
 			output.InheritedTagsUpdated = append(output.InheritedTagsUpdated, n.FilePath)
 		}
 
-		// Ensure #link tag for URL notes
 		if n.EnsureLinkTag() {
 			n.RefreshTags()
 			contentChanged = true
@@ -477,7 +439,6 @@ func doctorFullScan(vlt *vault.Vault, dryRun bool, jsonOutput bool) error {
 		}
 	}
 
-	// Rebuild tags.yml
 	if !dryRun {
 		if err := vlt.RebuildTagsIndex(tagCounts, globalTagSet, inlineTagSet); err != nil {
 			fmt.Fprintf(os.Stderr, "%swarning: failed to rebuild tags.yml: %v\n", prefix, err)
@@ -485,10 +446,9 @@ func doctorFullScan(vlt *vault.Vault, dryRun bool, jsonOutput bool) error {
 			output.TagsYMLUpdated = true
 		}
 	} else {
-		output.TagsYMLUpdated = true // Would update
+		output.TagsYMLUpdated = true
 	}
 
-	// Rebuild titles.json
 	if !dryRun {
 		if err := vlt.RebuildTitlesIndex(titleEntries); err != nil {
 			fmt.Fprintf(os.Stderr, "%swarning: failed to rebuild titles.json: %v\n", prefix, err)
@@ -496,10 +456,9 @@ func doctorFullScan(vlt *vault.Vault, dryRun bool, jsonOutput bool) error {
 			output.TitlesUpdated = true
 		}
 	} else {
-		output.TitlesUpdated = true // Would update
+		output.TitlesUpdated = true
 	}
 
-	// Detect orphaned parent references
 	for uuid, entry := range titleEntries {
 		if entry.Parent != "" {
 			if _, ok := titleEntries[entry.Parent]; !ok {
@@ -509,7 +468,6 @@ func doctorFullScan(vlt *vault.Vault, dryRun bool, jsonOutput bool) error {
 		}
 	}
 
-	// Detect orphaned bookmarks
 	parentBookmarks, err := vlt.LoadParents()
 	if err == nil {
 		for _, p := range parentBookmarks.Parents {
@@ -520,7 +478,6 @@ func doctorFullScan(vlt *vault.Vault, dryRun bool, jsonOutput bool) error {
 		}
 	}
 
-	// Commit to version history
 	if !dryRun {
 		repaired := len(output.UUIDGenerated) + len(output.TagsReindexed) + len(output.LinkedCardsReindexed) + len(output.InheritedTagsUpdated) + len(output.InheritedTagsStripped)
 		if repaired > 0 {
@@ -531,7 +488,6 @@ func doctorFullScan(vlt *vault.Vault, dryRun bool, jsonOutput bool) error {
 	return doctorPrintOutput(&output, prefix, jsonOutput)
 }
 
-// doctorPrintOutput prints the doctor output in JSON or human-readable format.
 func doctorPrintOutput(output *DoctorOutput, prefix string, jsonOutput bool) error {
 	if jsonOutput {
 		enc := json.NewEncoder(os.Stdout)
@@ -539,7 +495,6 @@ func doctorPrintOutput(output *DoctorOutput, prefix string, jsonOutput bool) err
 		return enc.Encode(output)
 	}
 
-	// Human-readable output
 	fmt.Fprintf(os.Stderr, "%sScanned %d notes\n", prefix, output.Scanned)
 	if len(output.UUIDGenerated) > 0 {
 		fmt.Fprintf(os.Stderr, "  %d notes: %sgenerated missing UUID\n", len(output.UUIDGenerated), prefix)
@@ -578,7 +533,6 @@ func doctorPrintOutput(output *DoctorOutput, prefix string, jsonOutput bool) err
 	return nil
 }
 
-// stringSlicesEqual compares two string slices for exact equality.
 func stringSlicesEqual(a, b []string) bool {
 	if len(a) != len(b) {
 		return false

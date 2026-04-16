@@ -15,7 +15,6 @@ func ResolveDate(token string) (time.Time, bool) {
 }
 
 // ResolveDateAt resolves a date token relative to a reference time.
-// This is the testable version of ResolveDate.
 func ResolveDateAt(token string, ref time.Time) (time.Time, bool) {
 	token = strings.TrimSpace(strings.ToLower(token))
 

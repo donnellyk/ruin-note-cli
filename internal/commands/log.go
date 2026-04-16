@@ -16,7 +16,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// LogOutput represents the JSON output for the log command.
 type LogOutput struct {
 	Path   string `json:"path"`
 	UUID   string `json:"uuid"`
@@ -24,7 +23,6 @@ type LogOutput struct {
 	Parent string `json:"parent,omitempty"`
 }
 
-// NewLogCmd creates the log command.
 func NewLogCmd(getVault func() *vault.Vault, jsonOutput *bool) *cobra.Command {
 	var (
 		title     string
@@ -87,12 +85,10 @@ Details here..."
 				return fmt.Errorf("failed to parse content: %w", err)
 			}
 
-			// Set order if specified
 			if cmd.Flags().Changed("order") {
 				n.Order = &orderVal
 			}
 
-			// Resolve parent if specified
 			if parentRef != "" {
 				parent, err := ResolveNote(vlt, parentRef)
 				if err != nil {
@@ -101,7 +97,6 @@ Details here..."
 				n.Parent = parent.UUID
 			}
 
-			// URL auto-detection: if content starts with a URL and no title is set
 			urlResolved := false
 			if title == "" && !useH1 && n.Title == "" && n.IsURLNote() && !noFetch {
 				extractedURL := n.ExtractURL()
@@ -152,14 +147,11 @@ Details here..."
 	return cmd
 }
 
-// getContent retrieves content from args or stdin.
 func getContent(args []string, useStdin bool) (string, error) {
-	// If content provided as argument
 	if len(args) > 0 {
 		return strings.Join(args, " "), nil
 	}
 
-	// Check if we should read from stdin
 	if useStdin || !isTerminal(os.Stdin) {
 		return readStdin()
 	}
@@ -167,7 +159,6 @@ func getContent(args []string, useStdin bool) (string, error) {
 	return "", fmt.Errorf("no content provided; use argument or pipe content via stdin")
 }
 
-// isTerminal checks if the given file is a terminal.
 func isTerminal(f *os.File) bool {
 	fi, err := f.Stat()
 	if err != nil {
@@ -176,7 +167,6 @@ func isTerminal(f *os.File) bool {
 	return (fi.Mode() & os.ModeCharDevice) != 0
 }
 
-// readStdin reads all content from stdin.
 func readStdin() (string, error) {
 	reader := bufio.NewReader(os.Stdin)
 	var builder strings.Builder
@@ -195,20 +185,17 @@ func readStdin() (string, error) {
 	return builder.String(), nil
 }
 
-// determineFilename determines the filename for the note.
-// Priority: --title flag > --h1 flag > timestamp
+// determineFilename picks a filename for the note.
+// Priority: --title flag > --h1 flag > timestamp.
 func determineFilename(n *note.Note, titleFlag string, useH1 bool) string {
-	// Priority 1: explicit title flag
 	if titleFlag != "" {
 		return note.SanitizeFilename(titleFlag)
 	}
 
-	// Priority 2: extract from header (only if --h1 flag is set)
 	if useH1 && n.Title != "" {
 		return note.SanitizeFilename(n.Title)
 	}
 
-	// Priority 3: timestamp (ignore title if --h1 not set)
 	t := n.Created
 	if t.IsZero() {
 		t = time.Now()
@@ -216,7 +203,6 @@ func determineFilename(n *note.Note, titleFlag string, useH1 bool) string {
 	return t.Format("2006-01-02T15-04-05")
 }
 
-// sanitizeTitle strips newlines and collapses whitespace in a resolved HTML title.
 func sanitizeTitle(s string) string {
 	return strings.Join(strings.Fields(s), " ")
 }

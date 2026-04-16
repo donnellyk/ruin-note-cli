@@ -60,7 +60,6 @@ Content can be provided as a positional argument or via stdin.`,
 	return cmd
 }
 
-// nonNil returns the slice or an empty non-nil slice (for consistent JSON output).
 func nonNil(s []string) []string {
 	if s == nil {
 		return []string{}

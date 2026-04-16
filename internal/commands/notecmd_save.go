@@ -17,16 +17,13 @@ func frontmatterLineCount(n *note.Note) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	// Content starts where frontmatter ends. Count lines in the frontmatter portion.
 	fmLen := len(serialized) - len(n.Content)
 	fm := serialized[:fmLen]
-	// Count newlines in the frontmatter string
 	return strings.Count(fm, "\n"), nil
 }
 
-// createNote performs the shared create-note pipeline:
-// EnsureUUID, SetTimestamps, save pipeline, filename generation, file write, and index creation.
-// The note's Content, URL, Parent, Order, and Title should be set by the caller before calling this.
+// createNote performs the shared create-note pipeline. Callers must set
+// Content, URL, Parent, Order, and Title before calling.
 func createNote(n *note.Note, vlt *vault.Vault, titleFlag string, useH1 bool) error {
 	n.EnsureUUID()
 	n.SetTimestamps()
@@ -70,9 +67,8 @@ func createNote(n *note.Note, vlt *vault.Vault, titleFlag string, useH1 bool) er
 	return nil
 }
 
-// saveWithIndexUpdate performs the shared note-level post-modification flow:
-// refresh tags/dates/links, set timestamps, and save the file.
-// Callers should follow this with vlt.SaveNote() for index updates.
+// saveWithIndexUpdate refreshes derived metadata and saves the file. Callers
+// must follow this with vlt.SaveNote() to update indexes.
 func saveWithIndexUpdate(n *note.Note, vlt *vault.Vault) error {
 	oldGlobalTags := make([]string, len(n.Tags))
 	copy(oldGlobalTags, n.Tags)
@@ -89,7 +85,6 @@ func saveWithIndexUpdate(n *note.Note, vlt *vault.Vault) error {
 		RefreshLinkedCards(n, titlesIndex)
 	}
 
-	// Refresh inherited tags from parent chain
 	if _, err := RefreshInheritedTags(n, vlt); err != nil {
 		fmt.Fprintf(os.Stderr, "warning: failed to refresh inherited tags: %v\n", err)
 	}
@@ -100,7 +95,6 @@ func saveWithIndexUpdate(n *note.Note, vlt *vault.Vault) error {
 		return fmt.Errorf("failed to save: %w", err)
 	}
 
-	// If global tags changed, cascade to descendants
 	if !normalizedTagsEqual(oldGlobalTags, n.Tags) {
 		if titlesIndex, err := vlt.LoadTitles(); err == nil {
 			if err := CascadeInheritedTags(n.UUID, vlt, titlesIndex); err != nil {

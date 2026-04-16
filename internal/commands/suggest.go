@@ -12,7 +12,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// NewSuggestCmd creates the suggest command.
 func NewSuggestCmd(getVault func() *vault.Vault, jsonOutput *bool) *cobra.Command {
 	var limit int
 
@@ -37,7 +36,6 @@ index is missing.`,
 
 			index, err := vlt.LoadTitles()
 			if err != nil || len(index.Titles) == 0 {
-				// Fallback to vault scan
 				return suggestByVaultScan(vlt, prefix, limit, *jsonOutput)
 			}
 
@@ -60,12 +58,10 @@ index is missing.`,
 				}
 			}
 
-			// Sort by title
 			sort.Slice(results, func(i, j int) bool {
 				return results[i].Title < results[j].Title
 			})
 
-			// Apply limit
 			if limit > 0 && len(results) > limit {
 				results = results[:limit]
 			}

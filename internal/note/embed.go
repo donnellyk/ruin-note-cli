@@ -10,12 +10,10 @@ import (
 
 var embedPattern = regexp.MustCompile(`!\[\[([^\[\]#|]+?)(?:#([^\[\]|]+?))?\]\]`)
 
-// FindEmbedRanges returns the [start, end) byte positions of all ![[...]] blocks.
 func FindEmbedRanges(content string) [][2]int {
 	return notetext.FindEmbedRanges(content)
 }
 
-// InsideRanges returns true if position pos falls within any of the given ranges.
 func InsideRanges(pos int, ranges [][2]int) bool {
 	return notetext.InsideRanges(pos, ranges)
 }

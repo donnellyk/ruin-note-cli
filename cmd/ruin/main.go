@@ -15,13 +15,11 @@ import (
 var (
 	version = "dev"
 
-	// Global flags
 	cfgFile   string
 	vaultPath string
 	jsonOut   bool
 	noColor   bool
 
-	// Loaded at runtime
 	cfg *config.Config
 	vlt *vault.Vault
 )
@@ -29,12 +27,10 @@ var (
 func main() {
 	sanitizeLeadingDashArgs()
 	if err := rootCmd.Execute(); err != nil {
-		// Determine appropriate exit code based on error type
 		switch {
 		case err == commands.ErrUserAborted:
 			os.Exit(exitUserAborted)
 		default:
-			// Print the error to stderr
 			fmt.Fprintf(os.Stderr, "error: %v\n", err)
 			os.Exit(exitError)
 		}
@@ -50,34 +46,29 @@ tags, and powerful search capabilities.`,
 	SilenceUsage:  true,
 	SilenceErrors: true,
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-		// Skip config loading for commands that don't need it
 		if cmd.Name() == "version" || cmd.Name() == "help" || cmd.Name() == "init" || cmd.Name() == "dev" || cmd.Name() == "seed" {
 			return nil
 		}
 
-		// Load configuration
 		var err error
 		cfg, err = config.LoadFrom(cfgFile)
 		if err != nil {
 			return err
 		}
 
-		// Override vault path from flag
 		if vaultPath != "" {
 			cfg.VaultPath = vaultPath
 		}
 
-		// For config command without args, don't require valid vault
+		// The config command (without subcommand args) runs before a vault is required.
 		if cmd.Name() == "config" {
 			return nil
 		}
 
-		// Validate config for other commands
 		if err := cfg.Validate(); err != nil {
 			return err
 		}
 
-		// Create vault instance
 		expandedPath, err := cfg.ExpandedVaultPath()
 		if err != nil {
 			return err
@@ -85,7 +76,6 @@ tags, and powerful search capabilities.`,
 		vlt = vault.New(expandedPath)
 		vlt.SetTagInheritance(cfg.TagInheritanceEnabled())
 
-		// Set up versioning if enabled and vault is a git repo
 		if cfg.VersioningEnabled() && versioning.IsAvailable() {
 			g := versioning.New(expandedPath)
 			if g.IsRepo() {
@@ -106,18 +96,15 @@ var versionCmd = &cobra.Command{
 }
 
 func init() {
-	// Check NO_COLOR environment variable
 	if os.Getenv("NO_COLOR") != "" {
 		noColor = true
 	}
 
-	// Global flags
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is ~/.config/ruin/config.yml)")
 	rootCmd.PersistentFlags().StringVar(&vaultPath, "vault", "", "vault path (overrides config)")
 	rootCmd.PersistentFlags().BoolVar(&jsonOut, "json", false, "output in JSON format")
 	rootCmd.PersistentFlags().BoolVar(&noColor, "no-color", false, "disable colored output")
 
-	// Add commands
 	rootCmd.AddCommand(versionCmd)
 	rootCmd.AddCommand(commands.NewLogCmd(getVault, &jsonOut))
 	rootCmd.AddCommand(commands.NewSearchCmd(getVault, &jsonOut))
@@ -139,12 +126,10 @@ func init() {
 	rootCmd.AddCommand(commands.NewDevCmd(&jsonOut))
 }
 
-// getVault returns the current vault instance.
 func getVault() *vault.Vault {
 	return vlt
 }
 
-// exitCode constants for consistent exit behavior
 const (
 	exitSuccess     = 0
 	exitError       = 1
@@ -152,20 +137,18 @@ const (
 	exitUserAborted = 3
 )
 
-// printError writes an error message to stderr
 func printError(format string, args ...any) {
 	fmt.Fprintf(os.Stderr, "error: "+format+"\n", args...)
 }
 
-// sanitizeLeadingDashArgs fixes a cobra bug where positional arguments starting
-// with "- " (dash-space, e.g. markdown list items) are treated as flags.
+// sanitizeLeadingDashArgs works around a cobra bug where positional arguments
+// starting with "- " (dash-space, e.g. markdown list items) are treated as flags.
 // See https://github.com/spf13/cobra/issues/2295
 //
 // Only applies to "log" since its content arg commonly starts with "- ".
 // The fix removes the "- " arg from its position and appends it after a "--"
 // separator at the end, so flags in any position still get parsed correctly.
 func sanitizeLeadingDashArgs() {
-	// Find "log" subcommand
 	logIdx := -1
 	for i := 1; i < len(os.Args); i++ {
 		if os.Args[i] == "--" {
@@ -180,11 +163,10 @@ func sanitizeLeadingDashArgs() {
 		return
 	}
 
-	// After "log", find the first arg starting with "- " (dash-space)
 	dashArgIdx := -1
 	for i := logIdx + 1; i < len(os.Args); i++ {
 		if os.Args[i] == "--" {
-			return // explicit separator already present
+			return
 		}
 		if strings.HasPrefix(os.Args[i], "- ") {
 			dashArgIdx = i
@@ -195,8 +177,6 @@ func sanitizeLeadingDashArgs() {
 		return
 	}
 
-	// Remove the "- " arg and re-append it after "--" at the end.
-	// This keeps all flags (before or after) parseable.
 	dashArg := os.Args[dashArgIdx]
 	newArgs := make([]string, 0, len(os.Args)+1)
 	newArgs = append(newArgs, os.Args[:dashArgIdx]...)

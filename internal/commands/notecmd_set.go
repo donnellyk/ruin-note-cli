@@ -11,8 +11,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// --- note set ---
-
 type noteSetChange struct {
 	Field  string `json:"field"`
 	Action string `json:"action"`
@@ -71,7 +69,6 @@ Without --line, tags are added globally and removed from all lines.`,
   ruin note set <uuid> --toggle-todo --line 5 --sink`,
 		Args: cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			// Validate mutually exclusive flags
 			if noOrder && cmd.Flags().Changed("order") {
 				return fmt.Errorf("--order and --no-order are mutually exclusive")
 			}
@@ -79,23 +76,19 @@ Without --line, tags are added globally and removed from all lines.`,
 				return fmt.Errorf("--parent and --no-parent are mutually exclusive")
 			}
 
-			// --toggle-todo requires --line
 			if toggleTodo && !cmd.Flags().Changed("line") {
 				return fmt.Errorf("--toggle-todo requires --line")
 			}
-			// --sink requires --toggle-todo
 			if sink && !toggleTodo {
 				return fmt.Errorf("--sink requires --toggle-todo")
 			}
 
-			// --line requires a tag, date, or toggle-todo flag
 			hasLineTarget := cmd.Flags().Changed("line")
 			if hasLineTarget && len(addTags) == 0 && len(removeTags) == 0 &&
 				len(addDates) == 0 && len(removeDates) == 0 && !removeAllDt && !toggleTodo {
 				return fmt.Errorf("--line requires --add-tag, --remove-tag, --add-date, --remove-date, --remove-dates, or --toggle-todo")
 			}
 
-			// At least one mutation required
 			hasMutation := len(addTags) > 0 || len(removeTags) > 0 ||
 				cmd.Flags().Changed("order") || noOrder ||
 				len(fields) > 0 || parent != "" || noParent ||
@@ -115,7 +108,6 @@ Without --line, tags are added globally and removed from all lines.`,
 				return err
 			}
 
-			// Validate --line range
 			if hasLineTarget {
 				if line < 1 {
 					return fmt.Errorf("--line must be positive (got %d)", line)
@@ -126,23 +118,19 @@ Without --line, tags are added globally and removed from all lines.`,
 				}
 			}
 
-			// Capture old tags for index update
 			oldGlobal := n.Tags
 			oldInline := n.InlineTags
 
 			var changes []noteSetChange
 
-			// --- add tags ---
 			for _, raw := range addTags {
 				tag := ensureHashPrefix(raw)
 				if !hasLineTarget {
-					// Global add (current behavior)
 					if noteHasTag(n, tag) {
 						continue
 					}
 					n.Content = insertGlobalTag(n.Content, tag)
 				} else {
-					// Inline add to specific line
 					var err error
 					n.Content, err = insertInlineTag(n.Content, tag, line)
 					if err != nil {
@@ -152,17 +140,14 @@ Without --line, tags are added globally and removed from all lines.`,
 				changes = append(changes, noteSetChange{Field: "tag", Action: "added", Value: tag})
 			}
 
-			// --- remove tags ---
 			for _, raw := range removeTags {
 				tag := ensureHashPrefix(raw)
 				if !hasLineTarget {
-					// Remove from all lines (current behavior)
 					if !noteHasTag(n, tag) {
 						continue
 					}
 					n.Content = removeTagClean(n.Content, tag)
 				} else {
-					// Remove from specific line only
 					var err error
 					n.Content, err = removeTagFromLineNum(n.Content, tag, line)
 					if err != nil {
@@ -172,7 +157,6 @@ Without --line, tags are added globally and removed from all lines.`,
 				changes = append(changes, noteSetChange{Field: "tag", Action: "removed", Value: tag})
 			}
 
-			// --- add dates ---
 			for _, raw := range addDates {
 				dateStr, err := resolveDateArg(raw)
 				if err != nil {
@@ -189,7 +173,6 @@ Without --line, tags are added globally and removed from all lines.`,
 				changes = append(changes, noteSetChange{Field: "date", Action: "added", Value: dateStr})
 			}
 
-			// --- remove dates ---
 			if removeAllDt {
 				var targetLine int
 				if hasLineTarget {
@@ -211,7 +194,6 @@ Without --line, tags are added globally and removed from all lines.`,
 				changes = append(changes, noteSetChange{Field: "date", Action: "removed", Value: dateStr})
 			}
 
-			// --- toggle-todo ---
 			if toggleTodo {
 				contentLines := strings.Split(n.Content, "\n")
 				idx := line - 1
@@ -222,11 +204,9 @@ Without --line, tags are added globally and removed from all lines.`,
 				contentLines[idx] = note.ToggleCheckbox(contentLines[idx])
 				toggledContent := strings.TrimSpace(contentLines[idx])
 
-				// --sink: reposition within contiguous checkbox block
-				//   Completing: move below all open todos, above completed ones
-				//   Uncompleting: move to bottom of open todos
+				// --sink: completing moves below all open todos (above completed ones);
+				// uncompleting moves to bottom of open todos.
 				if sink {
-					// Find boundaries of contiguous checkbox block
 					blockStart := idx
 					for j := idx - 1; j >= 0; j-- {
 						if note.IsCheckboxLine(contentLines[j]) {
@@ -244,16 +224,14 @@ Without --line, tags are added globally and removed from all lines.`,
 						}
 					}
 
-					// Remove the toggled line from its current position
 					toggled := contentLines[idx]
 					remaining := make([]string, 0, len(contentLines)-1)
 					remaining = append(remaining, contentLines[:idx]...)
 					remaining = append(remaining, contentLines[idx+1:]...)
 
-					// Adjust block bounds for the shortened slice
-					adjEnd := blockEnd - 1 // blockStart unchanged since idx >= blockStart
+					// blockStart is unchanged since idx >= blockStart.
+					adjEnd := blockEnd - 1
 
-					// Find insertion point: after last open todo in the block
 					insertAt := blockStart
 					for j := blockStart; j <= adjEnd; j++ {
 						if !note.IsCheckedLine(remaining[j]) {
@@ -261,7 +239,6 @@ Without --line, tags are added globally and removed from all lines.`,
 						}
 					}
 
-					// Re-insert at the boundary
 					contentLines = make([]string, 0, len(remaining)+1)
 					contentLines = append(contentLines, remaining[:insertAt]...)
 					contentLines = append(contentLines, toggled)
@@ -276,7 +253,6 @@ Without --line, tags are added globally and removed from all lines.`,
 				changes = append(changes, noteSetChange{Field: "todo", Action: action, Value: toggledContent})
 			}
 
-			// --- order ---
 			if cmd.Flags().Changed("order") {
 				n.Order = &order
 				changes = append(changes, noteSetChange{Field: "order", Action: "set", Value: order})
@@ -286,7 +262,6 @@ Without --line, tags are added globally and removed from all lines.`,
 				changes = append(changes, noteSetChange{Field: "order", Action: "unset", Value: nil})
 			}
 
-			// --- extra fields ---
 			if n.Extra == nil {
 				n.Extra = make(map[string]any)
 			}
@@ -307,7 +282,6 @@ Without --line, tags are added globally and removed from all lines.`,
 				}
 			}
 
-			// --- parent ---
 			if parent != "" {
 				parentNote, err := ResolveNote(vlt, parent)
 				if err != nil {
@@ -334,16 +308,13 @@ Without --line, tags are added globally and removed from all lines.`,
 				changes = append(changes, noteSetChange{Field: "parent", Action: "set", Value: parentNote.UUID})
 			}
 			if noParent {
-				if n.Parent == "" {
-					// Already no parent, but still count it
-				} else {
+				if n.Parent != "" {
 					n.Parent = ""
 					changes = append(changes, noteSetChange{Field: "parent", Action: "removed", Value: nil})
 				}
 			}
 
 			if len(changes) == 0 {
-				// All ops were no-ops
 				if *jsonOutput {
 					out := noteSetOutput{Path: n.FilePath, UUID: n.UUID, Title: n.Title, Changes: changes}
 					enc := json.NewEncoder(os.Stdout)
@@ -354,7 +325,6 @@ Without --line, tags are added globally and removed from all lines.`,
 				return nil
 			}
 
-			// Shared post-modification flow
 			if err := saveWithIndexUpdate(n, vlt); err != nil {
 				return err
 			}

@@ -37,7 +37,6 @@ embeds, and dynamic embeds.`,
 				path = args[0]
 			}
 
-			// Expand ~ and make absolute
 			if len(path) > 0 && path[0] == '~' {
 				home, err := os.UserHomeDir()
 				if err != nil {
@@ -83,7 +82,7 @@ func cleanVault(path string) error {
 		return fmt.Errorf("not a directory: %s", path)
 	}
 
-	// Safety check: only delete if .ruin/ directory exists
+	// Only delete if .ruin/ directory exists, as a safety check.
 	ruinDir := filepath.Join(path, ".ruin")
 	if _, err := os.Stat(ruinDir); os.IsNotExist(err) {
 		return fmt.Errorf("not a ruin vault (no .ruin/ directory): %s\nRefusing to delete for safety", path)
@@ -111,7 +110,6 @@ func createSeedVault(path string) error {
 	rng := rand.New(rand.NewSource(42)) // deterministic seed for reproducibility
 	baseTime := time.Now().AddDate(0, 0, -30)
 
-	// --- Create hub notes ---
 	fmt.Fprintln(os.Stderr, "  Creating 5 hub notes...")
 	type hubDef struct {
 		project, title, desc string
@@ -154,7 +152,6 @@ Actively maintained.
 		fmt.Fprintf(os.Stderr, "    %s.md (%s)\n", note.SanitizeFilename(h.title), n.UUID)
 	}
 
-	// --- Content pools ---
 	categories := []string{"daily", "work", "personal", "idea", "project", "meeting", "code", "review", "bug", "design", "infra", "docs", "platform"}
 	projects := []string{"alpha", "beta", "infra", "docs", "platform"}
 	statuses := []string{"draft", "wip", "done", "blocked", "urgent"}
@@ -258,7 +255,6 @@ Actively maintained.
 		"Prepare demo for stakeholder review",
 	}
 
-	// URL pools
 	codeMdURLs := []string{
 		"[PR #142: Fix retry logic](https://github.com/acme/api-server/pull/142)",
 		"[PR #287: Add circuit breaker](https://github.com/acme/api-server/pull/287)",
@@ -322,7 +318,6 @@ Actively maintained.
 		return ""
 	}
 
-	// --- Generate 100 regular notes ---
 	fmt.Fprintln(os.Stderr, "  Creating 100 notes...")
 
 	for num := 1; num <= 100; num++ {
@@ -345,7 +340,6 @@ Actively maintained.
 			filename string
 		)
 
-		// Determine note type: 25 daily, 25 code, 20 meeting, 15 idea, 15 task
 		switch {
 		case num <= 25: // daily
 			title := fmt.Sprintf("Daily Log %s", datePart)
@@ -409,7 +403,6 @@ Reference: %s
 				statusTag = fmt.Sprintf("\n\n#%s", status)
 			}
 
-			// ~40% get a hub parent
 			if rng.Intn(5) < 2 {
 				parent = fmt.Sprintf("test-uuid-hub-%s", proj)
 			}
@@ -486,7 +479,6 @@ Resources: %s
 				draftTag = " #draft"
 			}
 
-			// Idea nesting: 72->71, 74->72, 76->74
 			switch num {
 			case 72:
 				parent = "test-uuid-071"
@@ -534,12 +526,10 @@ Think about this more. Maybe prototype something. #draft
 				taskInline = "  #question"
 			}
 
-			// ~40% get a hub parent
 			if rng.Intn(5) < 2 {
 				parent = fmt.Sprintf("test-uuid-hub-%s", proj)
 			}
 
-			// Task notes get sequential order values (1-15)
 			o := num - 85
 			order = &o
 
@@ -559,7 +549,6 @@ Think about this more. Maybe prototype something. #draft
 `, title, proj, status, t1, taskInline, t2, t3, t4)
 		}
 
-		// Orphan parent tests (notes 98, 99, 100)
 		switch num {
 		case 98:
 			parent = "test-uuid-orphan-parent-1"
@@ -588,12 +577,10 @@ Think about this more. Maybe prototype something. #draft
 			fmt.Fprintf(os.Stderr, "    Created %d / 100 notes...\n", num)
 		}
 
-		// Reset per-iteration state
 		parent = ""
 		order = nil
 	}
 
-	// --- Create link notes ---
 	fmt.Fprintln(os.Stderr, "  Creating 5 link notes...")
 	linkNotes := []struct {
 		uuid, filename, content string
@@ -677,7 +664,6 @@ Official API docs for the v2 platform endpoints.
 		fmt.Fprintf(os.Stderr, "    %s (%s)\n", ln.filename, n.UUID)
 	}
 
-	// --- Create notes with embeds ---
 	fmt.Fprintln(os.Stderr, "  Creating 3 embed notes...")
 	embedNotes := []struct {
 		uuid, filename, content string
@@ -759,7 +745,6 @@ Overview of Project Alpha work.
 		fmt.Fprintf(os.Stderr, "    %s (%s)\n", en.filename, n.UUID)
 	}
 
-	// --- Write queries.yml ---
 	fmt.Fprintln(os.Stderr, "  Writing saved queries...")
 	queriesYML := `queries:
     - name: daily-work
@@ -777,7 +762,6 @@ Overview of Project Alpha work.
 		return fmt.Errorf("failed to write queries.yml: %w", err)
 	}
 
-	// --- Write parents.yml ---
 	fmt.Fprintln(os.Stderr, "  Writing saved parent bookmarks...")
 	parentsYML := `parents:
     - name: alpha
@@ -795,15 +779,13 @@ Overview of Project Alpha work.
 		return fmt.Errorf("failed to write parents.yml: %w", err)
 	}
 
-	// --- Run doctor to build indexes ---
 	fmt.Fprintln(os.Stderr, "  Building indexes...")
 	vlt := vault.New(path)
 	if _, err := vlt.Initialize(false); err != nil {
-		// Already created .ruin, so Initialize may report files exist -- that's fine
+		// Already created .ruin, so Initialize may report files exist -- that's fine.
 		_ = err
 	}
 
-	// Run doctorFullScan directly to build tags.yml and titles.json
 	if err := doctorFullScan(vlt, false, false); err != nil {
 		return fmt.Errorf("failed to build indexes: %w", err)
 	}

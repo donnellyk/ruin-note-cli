@@ -120,14 +120,13 @@ func (w *composeWalker) Walk(uuid string, depth int) *composeTree {
 }
 
 func (w *composeWalker) expandEmbedsInTree(tree *composeTree, content string, depth int) {
-	// Find dynamic embeds first (if enabled), then static embeds
 	var dynEmbeds []note.DynamicEmbedRef
 	if w.expandDynamic {
 		dynEmbeds = note.FindDynamicEmbeds(content)
 	}
 	staticEmbeds := note.FindEmbeds(content)
 
-	// Build a set of dynamic embed line numbers so static detection skips them
+	// Static detection must skip lines already consumed by dynamic embeds.
 	dynLines := make(map[int]bool)
 	for _, de := range dynEmbeds {
 		dynLines[de.Line] = true
@@ -149,7 +148,6 @@ func (w *composeWalker) expandEmbedsInTree(tree *composeTree, content string, de
 		return
 	}
 
-	// Merge all embed lines into a sorted list for segmentation
 	var allEmbeds []embedLine
 	for i, se := range filteredStatic {
 		allEmbeds = append(allEmbeds, embedLine{line: se.Line, staticIdx: i})
@@ -157,13 +155,11 @@ func (w *composeWalker) expandEmbedsInTree(tree *composeTree, content string, de
 	for i, de := range dynEmbeds {
 		allEmbeds = append(allEmbeds, embedLine{line: de.Line, isDynamic: true, dynIdx: i})
 	}
-	// Sort by line number
 	sortEmbedLines(allEmbeds)
 
 	embeddedUUIDs := make(map[string]bool)
 	lines := strings.Split(content, "\n")
 
-	// Split content at all embed lines
 	embedLineNums := make([]int, len(allEmbeds))
 	for i, el := range allEmbeds {
 		embedLineNums[i] = el.line
@@ -198,7 +194,6 @@ func (w *composeWalker) expandEmbedsInTree(tree *composeTree, content string, de
 					}
 					continue
 				}
-				// Dynamic embed failed — leave line unexpanded
 				segText = segText + "\n" + lines[el.line]
 			} else {
 				se := filteredStatic[el.staticIdx]
@@ -238,7 +233,6 @@ func (w *composeWalker) expandEmbedsInTree(tree *composeTree, content string, de
 	}
 }
 
-// dynamicResult holds the output of a dynamic embed expansion.
 type dynamicResult struct {
 	segments      []composeSegment
 	embeddedUUIDs []string
@@ -278,7 +272,6 @@ func sortEmbedLines(lines []embedLine) {
 	}
 }
 
-// splitByLines splits content at specified line numbers, returning len(lineNums)+1 segments.
 func splitByLines(lines []string, lineNums []int) []string {
 	if len(lineNums) == 0 {
 		return []string{strings.Join(lines, "\n")}
@@ -491,7 +484,7 @@ func renderEditList(tree *composeTree) []SearchResult {
 
 	var walk func(node *composeTree)
 	walk = func(node *composeTree) {
-		// Add real notes to the edit list; skip dynamic containers (no path)
+		// Skip dynamic containers (no path).
 		if node.Path != "" && !seen[node.UUID] {
 			n, err := note.Load(node.Path)
 			if err == nil {
@@ -506,7 +499,6 @@ func renderEditList(tree *composeTree) []SearchResult {
 				})
 			}
 		}
-		// Always walk children and segments, even for dynamic containers
 		if len(node.Segments) > 0 {
 			for _, seg := range node.Segments {
 				if seg.Embed != nil {

@@ -11,8 +11,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// --- note merge ---
-
 type noteMergeOutput struct {
 	TargetPath    string   `json:"target_path"`
 	TargetUUID    string   `json:"target_uuid"`
@@ -63,7 +61,6 @@ Source's children are reparented to target.`,
 				return fmt.Errorf("cannot merge a note into itself")
 			}
 
-			// Confirm unless --force or --dry-run
 			if !force && !dryRun {
 				if !isTerminal(os.Stderr) {
 					return fmt.Errorf("merge requires --force in non-interactive mode")
@@ -84,7 +81,7 @@ Source's children are reparented to target.`,
 			oldTargetGlobal := target.Tags
 			oldTargetInline := target.InlineTags
 
-			// 1. Merge source's Extra fields into target (target takes precedence)
+			// Merge Extra: target takes precedence.
 			if target.Extra == nil {
 				target.Extra = make(map[string]any)
 			}
@@ -94,7 +91,6 @@ Source's children are reparented to target.`,
 				}
 			}
 
-			// 2. Merge source's global tags into target content
 			var tagsMerged []string
 			for _, tag := range source.Tags {
 				if !noteHasTag(target, tag) {
@@ -103,7 +99,6 @@ Source's children are reparented to target.`,
 				}
 			}
 
-			// 3. Append source content
 			sourceContent := source.Content
 			if stripTitle {
 				sourceContent = note.StripTitle(sourceContent)
@@ -115,7 +110,6 @@ Source's children are reparented to target.`,
 				target.Content += "\n" + sourceContent
 			}
 
-			// 4. Reparent source's children to target
 			titlesIndex, err := vlt.LoadTitles()
 			if err != nil {
 				return fmt.Errorf("failed to load titles index: %w", err)
@@ -164,7 +158,6 @@ Source's children are reparented to target.`,
 				return nil
 			}
 
-			// Save target with full pipeline
 			if err := saveWithIndexUpdate(target, vlt); err != nil {
 				return err
 			}
@@ -172,7 +165,6 @@ Source's children are reparented to target.`,
 			commitMsg := fmt.Sprintf("ruin note merge: Merge %q into %q", source.Title, target.Title)
 			vlt.SaveNote(target, oldTargetGlobal, oldTargetInline, commitMsg)
 
-			// 5. Delete source if requested
 			sourceDeleted := false
 			if deleteSource {
 				if err := vlt.DeleteNote(source, commitMsg); err != nil {

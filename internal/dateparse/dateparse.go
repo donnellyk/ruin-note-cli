@@ -27,12 +27,10 @@ func Parse(s string) (DateRange, error) {
 	s = strings.TrimSpace(strings.ToLower(s))
 	now := time.Now()
 
-	// Try natural language first
 	if r, ok := parseNaturalLanguage(s, now); ok {
 		return r, nil
 	}
 
-	// Try ISO date formats
 	if r, ok := parseISODate(s); ok {
 		return r, nil
 	}
@@ -41,16 +39,13 @@ func Parse(s string) (DateRange, error) {
 }
 
 // ParseWithReference parses a date string relative to a reference time.
-// This is useful for testing or when you need to parse relative to a specific time.
 func ParseWithReference(s string, ref time.Time) (DateRange, error) {
 	s = strings.TrimSpace(strings.ToLower(s))
 
-	// Try natural language first
 	if r, ok := parseNaturalLanguage(s, ref); ok {
 		return r, nil
 	}
 
-	// Try ISO date formats
 	if r, ok := parseISODate(s); ok {
 		return r, nil
 	}
@@ -58,9 +53,7 @@ func ParseWithReference(s string, ref time.Time) (DateRange, error) {
 	return DateRange{}, fmt.Errorf("unrecognized date format: %s", s)
 }
 
-// parseNaturalLanguage handles natural language date expressions.
 func parseNaturalLanguage(s string, now time.Time) (DateRange, bool) {
-	// Get start of today (midnight local time)
 	today := startOfDay(now)
 
 	switch s {
@@ -85,6 +78,7 @@ func parseNaturalLanguage(s string, now time.Time) (DateRange, bool) {
 		}, true
 
 	case "this-week":
+		// time.Weekday uses Sunday=0; remap so Monday=1..Sunday=7 to get ISO week start.
 		weekday := int(now.Weekday())
 		if weekday == 0 {
 			weekday = 7
@@ -124,9 +118,7 @@ func parseNaturalLanguage(s string, now time.Time) (DateRange, bool) {
 	return DateRange{}, false
 }
 
-// parseISODate handles ISO-style date formats.
 func parseISODate(s string) (DateRange, bool) {
-	// Full date: YYYY-MM-DD
 	if t, err := time.ParseInLocation("2006-01-02", s, time.Local); err == nil {
 		return DateRange{
 			Start: t,
@@ -134,7 +126,6 @@ func parseISODate(s string) (DateRange, bool) {
 		}, true
 	}
 
-	// Year and month: YYYY-MM
 	if t, err := time.ParseInLocation("2006-01", s, time.Local); err == nil {
 		return DateRange{
 			Start: t,
@@ -142,7 +133,6 @@ func parseISODate(s string) (DateRange, bool) {
 		}, true
 	}
 
-	// Year only: YYYY
 	if len(s) == 4 {
 		if t, err := time.ParseInLocation("2006", s, time.Local); err == nil {
 			return DateRange{
@@ -155,7 +145,6 @@ func parseISODate(s string) (DateRange, bool) {
 	return DateRange{}, false
 }
 
-// startOfDay returns midnight of the given day in local time.
 func startOfDay(t time.Time) time.Time {
 	y, m, d := t.Date()
 	return time.Date(y, m, d, 0, 0, 0, 0, t.Location())

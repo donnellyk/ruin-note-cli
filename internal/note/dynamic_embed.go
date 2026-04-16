@@ -9,15 +9,13 @@ var dynamicEmbedPattern = regexp.MustCompile(`^\s*!\[\[(\w+):\s*(.+?)\]\]\s*$`)
 
 // DynamicEmbedRef represents a dynamic embed like ![[search: #daily @today | limit=5]].
 type DynamicEmbedRef struct {
-	Type    string            // "search", "pick", "query", "compose"
-	Query   string            // query string (before the |)
-	Options map[string]string // parsed key=value options (after the |)
-	Line    int               // 0-indexed line number in content
+	Type    string
+	Query   string
+	Options map[string]string
+	Line    int
 }
 
-// FindDynamicEmbeds scans content for dynamic embed lines.
-// Only recognized types (search, pick, query, compose) are returned.
-// Lines that don't match the dynamic pattern are left for static embed detection.
+// FindDynamicEmbeds returns embeds of recognized types (search, pick, query, compose).
 func FindDynamicEmbeds(content string) []DynamicEmbedRef {
 	lines := strings.Split(content, "\n")
 	var refs []DynamicEmbedRef
@@ -29,7 +27,6 @@ func FindDynamicEmbeds(content string) []DynamicEmbedRef {
 		embedType := strings.ToLower(m[1])
 		switch embedType {
 		case "search", "pick", "query", "compose":
-			// recognized
 		default:
 			continue
 		}
@@ -55,8 +52,8 @@ func splitQueryOptions(raw string) (string, map[string]string) {
 	return raw[:idx], ParseDynamicOptions(raw[idx+1:])
 }
 
-// ParseDynamicOptions parses a comma-separated option string.
-// Supports key=value pairs and bare flags (treated as key=true).
+// ParseDynamicOptions parses a comma-separated option string. Bare flags are
+// treated as key=true.
 func ParseDynamicOptions(raw string) map[string]string {
 	opts := make(map[string]string)
 	for _, p := range strings.Split(raw, ",") {

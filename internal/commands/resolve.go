@@ -11,7 +11,6 @@ import (
 // ResolveNote resolves a note identifier to a loaded Note.
 // Resolution order: saved parent bookmark, exact UUID match, title substring, path substring.
 func ResolveNote(vlt *vault.Vault, identifier string) (*note.Note, error) {
-	// 0. Saved parent bookmark lookup (exact name match)
 	if bookmark, ok := vlt.LookupParent(identifier); ok {
 		index, err := vlt.LoadTitles()
 		if err == nil {
@@ -26,11 +25,9 @@ func ResolveNote(vlt *vault.Vault, identifier string) (*note.Note, error) {
 
 	index, err := vlt.LoadTitles()
 	if err != nil {
-		// Fallback to vault scan if titles index unavailable
 		return resolveByVaultScan(vlt, identifier)
 	}
 
-	// 1. Exact UUID match
 	if entry, ok := index.Titles[identifier]; ok {
 		n, err := note.Load(entry.Path)
 		if err != nil {
@@ -39,7 +36,6 @@ func ResolveNote(vlt *vault.Vault, identifier string) (*note.Note, error) {
 		return n, nil
 	}
 
-	// 2. Title substring (case-insensitive)
 	identLower := strings.ToLower(identifier)
 	var titleMatches []matchCandidate
 	for uuid, entry := range index.Titles {
@@ -58,7 +54,6 @@ func ResolveNote(vlt *vault.Vault, identifier string) (*note.Note, error) {
 		return nil, ambiguousError(identifier, titleMatches)
 	}
 
-	// 3. Path substring (case-insensitive)
 	var pathMatches []matchCandidate
 	for uuid, entry := range index.Titles {
 		if strings.Contains(strings.ToLower(entry.Path), identLower) {
@@ -98,7 +93,6 @@ func ambiguousError(identifier string, candidates []matchCandidate) error {
 	return fmt.Errorf("%s", b.String())
 }
 
-// resolveByVaultScan is the fallback when titles.json is unavailable.
 func resolveByVaultScan(vlt *vault.Vault, identifier string) (*note.Note, error) {
 	paths, err := vlt.ListNotes()
 	if err != nil {
@@ -114,12 +108,10 @@ func resolveByVaultScan(vlt *vault.Vault, identifier string) (*note.Note, error)
 			continue
 		}
 
-		// Exact UUID
 		if n.UUID == identifier {
 			return n, nil
 		}
 
-		// Title or path substring
 		if strings.Contains(strings.ToLower(n.Title), identLower) ||
 			strings.Contains(strings.ToLower(n.FilePath), identLower) {
 			matches = append(matches, n)

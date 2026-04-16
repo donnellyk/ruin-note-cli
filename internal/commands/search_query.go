@@ -7,15 +7,13 @@ import (
 	"github.com/donnellyk/ruin-note-cli/internal/note"
 )
 
-// QueryMatcher is a function that tests if a note matches the query.
+// QueryMatcher tests if a note matches the query.
 type QueryMatcher func(n *note.Note) bool
 
-// MatcherInfo describes matcher properties for optimization.
 type MatcherInfo struct {
-	NeedsBody bool // true if the matcher needs full note content (e.g., text search)
+	NeedsBody bool // matcher requires full content (e.g., text search)
 }
 
-// TagScope controls which tag fields are checked during tag search.
 type TagScope int
 
 const (
@@ -24,8 +22,7 @@ const (
 	TagScopeInline                 // Check only inline tags (--inline-tags)
 )
 
-// parseQuery parses a search query string into a matcher function.
-// MVP supports: tag search, text search, && (AND), space (implicit AND)
+// parseQuery parses a search query: tag search, text search, && (AND), or space (implicit AND).
 // Date tokens (@today, @tomorrow, etc.) are resolved before parsing.
 func parseQuery(query string, tagScope TagScope) (QueryMatcher, MatcherInfo, error) {
 	query = strings.TrimSpace(query)
@@ -33,10 +30,8 @@ func parseQuery(query string, tagScope TagScope) (QueryMatcher, MatcherInfo, err
 		return nil, MatcherInfo{}, fmt.Errorf("empty query")
 	}
 
-	// Resolve date tokens in query (@tomorrow → @2026-02-13)
 	query = note.ResolveDateTokensInQuery(query)
 
-	// Split by && first
 	parts := strings.Split(query, "&&")
 	var matchers []QueryMatcher
 	info := MatcherInfo{}
@@ -47,7 +42,6 @@ func parseQuery(query string, tagScope TagScope) (QueryMatcher, MatcherInfo, err
 			continue
 		}
 
-		// Split by space for implicit AND
 		terms := splitTerms(part)
 		for _, term := range terms {
 			m, termInfo, err := parseTermMatcher(term, tagScope)
@@ -65,7 +59,6 @@ func parseQuery(query string, tagScope TagScope) (QueryMatcher, MatcherInfo, err
 		return nil, MatcherInfo{}, fmt.Errorf("no valid search terms")
 	}
 
-	// Combine all matchers with AND
 	return func(n *note.Note) bool {
 		for _, m := range matchers {
 			if !m(n) {
@@ -76,8 +69,7 @@ func parseQuery(query string, tagScope TagScope) (QueryMatcher, MatcherInfo, err
 	}, info, nil
 }
 
-// splitTerms splits a query part into individual terms.
-// Preserves spaced tags like #daily note#
+// splitTerms splits a query part into terms while preserving spaced tags like "#daily note#".
 func splitTerms(part string) []string {
 	var terms []string
 	var current strings.Builder
@@ -88,7 +80,6 @@ func splitTerms(part string) []string {
 
 		if ch == '#' {
 			if inSpacedTag {
-				// End of spaced tag
 				current.WriteByte(ch)
 				terms = append(terms, current.String())
 				current.Reset()
@@ -96,30 +87,22 @@ func splitTerms(part string) []string {
 				continue
 			}
 
-			// Potential start of tag
 			if current.Len() > 0 && current.String() != "!" {
 				terms = append(terms, current.String())
 				current.Reset()
 			}
 			current.WriteByte(ch)
 
-			// Check if this is a spaced tag
-			// A spaced tag is #text with spaces# where the closing # is NOT followed by a word char
-			// and NOT preceded by another #
+			// A spaced tag is #text with spaces# where the closing # isn't
+			// adjacent to a word char (which would make it a separate tag).
 			rest := part[i+1:]
 			if idx := strings.Index(rest, "#"); idx > 0 {
-				// Check if there's a space in the potential tag content
-				// AND the content doesn't contain another # before the closing one
 				potentialContent := rest[:idx]
 				hasSpace := strings.ContainsAny(potentialContent, " \t")
-				// Check what's after the closing #
 				afterClosing := ""
 				if idx+1 < len(rest) {
 					afterClosing = string(rest[idx+1])
 				}
-				// It's a spaced tag only if:
-				// 1. Has space in content
-				// 2. Closing # is NOT followed by a word char (which would make it another tag)
 				if hasSpace && (afterClosing == "" || afterClosing == " " || afterClosing == "\t") {
 					inSpacedTag = true
 				}
@@ -149,21 +132,18 @@ func splitTerms(part string) []string {
 	return terms
 }
 
-// negateMatcher wraps a matcher to invert its result.
 func negateMatcher(inner QueryMatcher) QueryMatcher {
 	return func(n *note.Note) bool {
 		return !inner(n)
 	}
 }
 
-// parseTermMatcher creates a matcher for a single search term.
 func parseTermMatcher(term string, tagScope TagScope) (QueryMatcher, MatcherInfo, error) {
 	term = strings.TrimSpace(term)
 	if term == "" {
 		return nil, MatcherInfo{}, fmt.Errorf("empty term")
 	}
 
-	// Negation: !term excludes matching notes
 	if strings.HasPrefix(term, "!") {
 		inner := term[1:]
 		if inner == "" {
@@ -179,18 +159,16 @@ func parseTermMatcher(term string, tagScope TagScope) (QueryMatcher, MatcherInfo
 	fmOnly := MatcherInfo{NeedsBody: false}
 	needsBody := MatcherInfo{NeedsBody: true}
 
-	// Date search: @YYYY-MM-DD matches against frontmatter dates field
+	// @YYYY-MM-DD matches against the frontmatter dates field.
 	if isDateTerm(term) {
-		dateStr := term[1:] // strip @
+		dateStr := term[1:]
 		return dateMatcher(dateStr), fmOnly, nil
 	}
 
-	// Tag search
 	if strings.HasPrefix(term, "#") {
 		return tagMatcher(term, tagScope), fmOnly, nil
 	}
 
-	// Check for filter prefixes (field:value)
 	if idx := strings.Index(term, ":"); idx > 0 {
 		field := strings.ToLower(term[:idx])
 		value := term[idx+1:]
@@ -209,7 +187,7 @@ func parseTermMatcher(term string, tagScope TagScope) (QueryMatcher, MatcherInfo
 			m, err := afterDateMatcher(value)
 			return m, fmOnly, err
 		case "on":
-			m, err := createdDateMatcher(value) // alias for created:
+			m, err := createdDateMatcher(value)
 			return m, fmOnly, err
 		case "between":
 			m, err := betweenDateMatcher(value)
@@ -234,15 +212,13 @@ func parseTermMatcher(term string, tagScope TagScope) (QueryMatcher, MatcherInfo
 				return nil, MatcherInfo{}, fmt.Errorf("unknown todo filter %q (use open, done, or any)", value)
 			}
 		}
-		// If not a recognized filter, fall through to text search
+		// Unrecognized filter falls through to text search.
 	}
 
-	// Text search (case-insensitive)
 	return textMatcher(term), needsBody, nil
 }
 
-// parseSort parses a sort specification string.
-// Format: field:direction[,field:direction]
+// parseSort parses "field:direction[,field:direction]".
 func parseSort(s string) ([]SortField, error) {
 	var fields []SortField
 
@@ -253,7 +229,7 @@ func parseSort(s string) ([]SortField, error) {
 			continue
 		}
 
-		field := SortField{Ascending: true} // default
+		field := SortField{Ascending: true}
 
 		if idx := strings.Index(part, ":"); idx > 0 {
 			field.Field = strings.ToLower(part[:idx])
@@ -270,10 +246,8 @@ func parseSort(s string) ([]SortField, error) {
 			field.Field = strings.ToLower(part)
 		}
 
-		// Validate field
 		switch field.Field {
 		case "created", "updated", "title", "order":
-			// valid
 		default:
 			return nil, fmt.Errorf("invalid sort field: %s (use created, updated, title, or order)", field.Field)
 		}
