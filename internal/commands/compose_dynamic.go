@@ -391,6 +391,14 @@ func (w *composeWalker) emptyResult(ref note.DynamicEmbedRef, dynInfo *dynamicIn
 }
 
 func (w *composeWalker) textResult(text string, dynInfo *dynamicInfo, depth int) *dynamicResult {
+	// Apply the same heading adjustment that Walk applies to child notes.
+	// Dynamic text generators produce headings at a base level (H1);
+	// this normalizes them to the correct depth in the tree.
+	if w.normalizeHeaders {
+		text = normalizeHeadings(text, depth+1)
+	} else {
+		text = adjustHeadings(text, depth+1)
+	}
 	tree := &composeTree{
 		Depth:    depth + 1,
 		Content:  text,
@@ -489,9 +497,9 @@ func renderSearchList(results []SearchResult) string {
 	return strings.Join(lines, "\n")
 }
 
-func renderSearchSummary(results []SearchResult, depth int) string {
+func renderSearchSummary(results []SearchResult, _ int) string {
 	var parts []string
-	headingPrefix := strings.Repeat("#", min(depth+2, 6))
+	headingPrefix := "#" // base level; textResult adjusts to correct depth
 	for _, r := range results {
 		n, err := note.Load(r.Path)
 		if err != nil {
@@ -629,9 +637,9 @@ func groupByTag(results []pickNoteResult, includeTags []string) []pickGroup {
 	return groups
 }
 
-func renderPickGroups(groups []pickGroup, depth int) string {
+func renderPickGroups(groups []pickGroup, _ int) string {
 	var parts []string
-	headingPrefix := strings.Repeat("#", min(depth+2, 6))
+	headingPrefix := "#" // base level; textResult adjusts to correct depth
 	for _, g := range groups {
 		var lines []string
 		if g.heading != "" {

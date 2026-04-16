@@ -1,16 +1,19 @@
 # Changelog
 
-## [0.3.0] - 2026-04-15
+## [0.3.0] - 2026-04-16
 
 ### Fixed
 - Omit dynamic embed fencing unless using `--edit`
 - Empty headers are omitted during dynamic embed
 - Tags inside inline code and fenced code blocks are no longer extracted
+`--normalize-headers` now applies to dynamic embed output (`![[pick:]]`, `![[search:]]`)
 
 ### Added
 - `group` options in dynamic embeds
   - group by `parent`, `tag`, `root`, `note` (default). See [`compose-advanced.md`](docs/compose-advanced.md) for more information.
-  
+- `ruin log extract` subcommand — extract and classify tags from content without creating a note 
+- `pkg/notetext` public Go package — tag extraction primitives importable by external tools
+
 ### Removed
 - **Breaking**: YML compose files and file-based bookmarks removed
   - `ruin compose --file` / `-F` flag removed

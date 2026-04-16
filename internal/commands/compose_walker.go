@@ -171,15 +171,25 @@ func (w *composeWalker) expandEmbedsInTree(tree *composeTree, content string, de
 	segments := splitByLines(lines, embedLineNums)
 	tree.Content = ""
 
+	// Track the preceding heading level so embeds nest beneath the most
+	// recent heading in the source note, not just the note's depth.
+	lastHeadingLevel := 0
 	for i, seg := range segments {
 		segText := seg
+		if lvl, ok := lastHeadingLevelInText(seg); ok {
+			lastHeadingLevel = lvl
+		}
 
 		if i < len(allEmbeds) {
 			el := allEmbeds[i]
+			// Base level at which the embed's first heading should render:
+			// one below the preceding heading, or depth+1 if none.
+			baseLevel := max(depth+1, lastHeadingLevel)
 
 			if el.isDynamic {
 				dynRef := dynEmbeds[el.dynIdx]
-				result := w.expandDynamicEmbed(dynRef, depth, tree.UUID)
+				// textResult adds +1 internally; pass baseLevel-1 so target lands at baseLevel.
+				result := w.expandDynamicEmbed(dynRef, baseLevel-1, tree.UUID)
 				if result != nil {
 					tree.Segments = append(tree.Segments, composeSegment{Text: segText})
 					tree.Segments = append(tree.Segments, result.segments...)
@@ -204,7 +214,7 @@ func (w *composeWalker) expandEmbedsInTree(tree *composeTree, content string, de
 					}
 					segText = segText + "\n" + lines[se.Line]
 				} else {
-					embedTree := w.buildEmbedTree(uuid, se.Header, depth+1)
+					embedTree := w.buildEmbedTree(uuid, se.Header, baseLevel)
 					tree.Segments = append(tree.Segments, composeSegment{
 						Text:  segText,
 						Embed: embedTree,
@@ -239,6 +249,25 @@ type embedLine struct {
 	isDynamic bool
 	staticIdx int
 	dynIdx    int
+}
+
+// lastHeadingLevelInText returns the level of the last heading line in text.
+// Tracks embed context so dynamic/static embeds nest below the preceding heading.
+func lastHeadingLevelInText(text string) (int, bool) {
+	matches := headingPattern.FindAllString(text, -1)
+	if len(matches) == 0 {
+		return 0, false
+	}
+	last := matches[len(matches)-1]
+	level := 0
+	for _, c := range last {
+		if c == '#' {
+			level++
+		} else {
+			break
+		}
+	}
+	return level, true
 }
 
 func sortEmbedLines(lines []embedLine) {

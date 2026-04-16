@@ -662,3 +662,121 @@ func TestDynamicPick_GroupByTag(t *testing.T) {
 		t.Errorf("expected 'Call Alex', got:\n%s", text)
 	}
 }
+
+func TestDynamicPick_NormalizeHeaders(t *testing.T) {
+	notes := []testNote{
+		{
+			uuid: "root-1", title: "Hub", filename: "Hub.md",
+			raw: "---\nuuid: root-1\ncreated: \"2025-01-01T10:00:00-05:00\"\nupdated: \"2025-01-01T10:00:00-05:00\"\n---\n# Hub\n\n## Section\n\n![[pick: #followup]]",
+		},
+		{
+			uuid: "note-a", title: "Tasks", filename: "Tasks.md",
+			raw: "---\nuuid: note-a\ncreated: \"2025-01-02T10:00:00-05:00\"\nupdated: \"2025-01-02T10:00:00-05:00\"\ntags:\n  - \"#work\"\ninline-tags:\n  - \"#followup\"\n---\n# Tasks\n#work\n\n- Fix bug #followup",
+		},
+	}
+
+	vlt, index, childrenMap := setupDynamicTestVault(t, notes)
+
+	// Walk with normalizeHeaders enabled
+	walker := newComposeWalker(vlt, index, childrenMap, 0, false, false, true)
+	walker.expandEmbeds = true
+	walker.expandDynamic = true
+	walker.rootUUID = "root-1"
+	tree := walker.Walk("root-1", 0)
+	if tree == nil {
+		t.Fatal("tree is nil")
+	}
+
+	text, _ := renderText(tree)
+
+	// The pick embed is preceded by `## Section` (H2), so group headings
+	// should nest beneath it at H3.
+	if !strings.Contains(text, "### Tasks") {
+		t.Errorf("expected pick group heading at ### under ## Section, got:\n%s", text)
+	}
+	if strings.Contains(text, "\n## Tasks\n") {
+		t.Errorf("pick group heading should not be H2 when nested under H2 section, got:\n%s", text)
+	}
+}
+
+func TestDynamicPick_NestedUnderMultipleSections(t *testing.T) {
+	// Reproduction of the reported bug: a root note with multiple pick
+	// embeds, each under its own ## heading. Groups should nest at H3.
+	notes := []testNote{
+		{
+			uuid: "root-1", title: "Follow Up", filename: "Follow Up.md",
+			raw: "---\nuuid: root-1\ncreated: \"2026-04-14T18:31:53-05:00\"\nupdated: \"2026-04-14T18:31:53-05:00\"\n---\n# Follow Ups\n\n## Ruin\n![[pick: #followup | filter=#ruin]]\n\n## Running\n![[pick: #followup | filter=#runner]]",
+		},
+		{
+			uuid: "r-1", title: "Ruin Daily", filename: "Ruin Daily.md",
+			raw: "---\nuuid: r-1\ncreated: \"2026-02-23T10:00:00-05:00\"\nupdated: \"2026-02-23T10:00:00-05:00\"\ntags:\n  - \"#ruin\"\ninline-tags:\n  - \"#followup\"\n---\n# Ruin Daily\n#ruin\n\n- Append mode #followup",
+		},
+		{
+			uuid: "rn-1", title: "Running Notes", filename: "Running Notes.md",
+			raw: "---\nuuid: rn-1\ncreated: \"2026-03-26T10:00:00-05:00\"\nupdated: \"2026-03-26T10:00:00-05:00\"\ntags:\n  - \"#runner\"\ninline-tags:\n  - \"#followup\"\n---\n# Running Notes\n#runner\n\n- Stats page #followup",
+		},
+	}
+
+	vlt, index, childrenMap := setupDynamicTestVault(t, notes)
+
+	walker := newComposeWalker(vlt, index, childrenMap, 0, false, false, true)
+	walker.expandEmbeds = true
+	walker.expandDynamic = true
+	walker.rootUUID = "root-1"
+	tree := walker.Walk("root-1", 0)
+	if tree == nil {
+		t.Fatal("tree is nil")
+	}
+
+	text, _ := renderText(tree)
+
+	// Source literal `## Ruin` and `## Running` stay at H2.
+	if !strings.Contains(text, "## Ruin") {
+		t.Errorf("expected ## Ruin heading from source, got:\n%s", text)
+	}
+	if !strings.Contains(text, "## Running") {
+		t.Errorf("expected ## Running heading from source, got:\n%s", text)
+	}
+	// Pick group headings should nest at H3 beneath each H2 section.
+	if !strings.Contains(text, "### Ruin Daily") {
+		t.Errorf("expected ### Ruin Daily pick group under ## Ruin, got:\n%s", text)
+	}
+	if !strings.Contains(text, "### Running Notes") {
+		t.Errorf("expected ### Running Notes pick group under ## Running, got:\n%s", text)
+	}
+	// Pick group headings should NOT collide with section heading level.
+	if strings.Contains(text, "\n## Ruin Daily") {
+		t.Errorf("pick group should not be at H2 (sibling of section), got:\n%s", text)
+	}
+}
+
+func TestDynamicSearch_NormalizeHeaders(t *testing.T) {
+	notes := []testNote{
+		{
+			uuid: "root-1", title: "Hub", filename: "Hub.md",
+			raw: "---\nuuid: root-1\ncreated: \"2025-01-01T10:00:00-05:00\"\nupdated: \"2025-01-01T10:00:00-05:00\"\ntags:\n  - \"#hub\"\n---\n# Hub\n#hub\n\n![[search: #daily | format=summary]]",
+		},
+		{
+			uuid: "note-a", title: "Day One", filename: "Day One.md",
+			raw: "---\nuuid: note-a\ncreated: \"2025-01-02T10:00:00-05:00\"\nupdated: \"2025-01-02T10:00:00-05:00\"\ntags:\n  - \"#daily\"\n---\n# Day One\n#daily\n\nDay one content.",
+		},
+	}
+
+	vlt, index, childrenMap := setupDynamicTestVault(t, notes)
+
+	walker := newComposeWalker(vlt, index, childrenMap, 0, false, false, true)
+	walker.expandEmbeds = true
+	walker.expandDynamic = true
+	walker.rootUUID = "root-1"
+	tree := walker.Walk("root-1", 0)
+	if tree == nil {
+		t.Fatal("tree is nil")
+	}
+
+	text, _ := renderText(tree)
+
+	// Summary heading should be normalized to H2 (depth 0 → target depth+1=1 → H2 for min H1)
+	if !strings.Contains(text, "## Day One") {
+		t.Errorf("expected search summary heading normalized to ##, got:\n%s", text)
+	}
+}
