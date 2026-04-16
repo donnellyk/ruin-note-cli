@@ -107,20 +107,6 @@ ruin-note-cli/
 └── 2025-01-28T10-30-00.md  # Timestamp-named note
 ```
 
-### Tag Syntax
-- Simple: `#foo`, `#bar`, `#2025/may`
-- With spaces: `#daily note#` (surrounded by `#`)
-
-### Frontmatter Fields (managed by CLI)
-- `uuid`: unique identifier
-- `created`: creation timestamp
-- `updated`: last modified timestamp
-- `tags`: global tags (tags on tag-only lines anywhere in the note)
-- `inline-tags`: inline tags (tags on lines that also contain non-tag content)
-- `parent`: UUID of parent note (optional, omitted if empty)
-- `linked-cards`: resolved UUIDs from `[[wiki links]]` (optional, omitted if empty)
-- `url`: URL for link notes (optional, auto-promoted from body by save pipeline)
-
 ## Common Commands
 
 ### Lint
@@ -150,4 +136,3 @@ Then test commands against it:
 # When testing --edit flag, use EDITOR=cat to see output without opening an editor
 EDITOR=cat ./ruin --vault /tmp/ruin-test-vault search "#daily" --edit
 ```
-
