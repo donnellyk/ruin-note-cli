@@ -1,11 +1,18 @@
 # Changelog
 
+## [0.3.1] - 2026-04-21
+
+### Fixed
+- `@date` tokens inside inline code and fenced code blocks are no longer resolved or extracted
+- Completed checkbox items are now considered `done` for the purposes of filtering and marked as so in the JSON output
+
 ## [0.3.0] - 2026-04-16
 
 ### Fixed
 - Omit dynamic embed fencing unless using `--edit`
 - Empty headers are omitted during dynamic embed
 - Tags inside inline code and fenced code blocks are no longer extracted
+- Checked checkbox lines (`- [x]`) are now reported as `done: true` in `pick --json` and are excluded by the default done filter, matching the existing `#done` tag semantics
 - `--normalize-headers` now applies to dynamic embed output (`![[pick:]]`, `![[search:]]`)
 - `compose --json` source maps are now complete for dynamic embeds
 
