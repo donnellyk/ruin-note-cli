@@ -44,6 +44,18 @@ go build -ldflags "-X main.version=$VERSION" -o "$(go env GOPATH)/bin/{{vars.bin
 echo $VERSION
 """
 
+[tasks.uninstall]
+description = "Remove the binary from $GOPATH/bin"
+run = """
+TARGET="$(go env GOPATH)/bin/{{vars.binary_name}}"
+if [ -f "$TARGET" ]; then
+  rm "$TARGET"
+  echo "Removed $TARGET"
+else
+  echo "$TARGET not found"
+fi
+"""
+
 # Test
 # EDITOR=true prevents tests from opening the user's editor (e.g. --edit flag tests)
 [tasks.test]
