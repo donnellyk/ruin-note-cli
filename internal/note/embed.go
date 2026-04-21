@@ -14,6 +14,10 @@ func FindEmbedRanges(content string) [][2]int {
 	return notetext.FindEmbedRanges(content)
 }
 
+func FindCodeRanges(content string) [][2]int {
+	return notetext.FindCodeRanges(content)
+}
+
 func InsideRanges(pos int, ranges [][2]int) bool {
 	return notetext.InsideRanges(pos, ranges)
 }

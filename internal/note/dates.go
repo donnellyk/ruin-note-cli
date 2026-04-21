@@ -26,10 +26,10 @@ func ResolveDateTokens(content string) string {
 		return content
 	}
 
-	// Find all ![[...]] ranges so we can skip @tokens inside dynamic embeds.
-	// Without this, ![[pick: #followup @today]] would resolve @today on save,
-	// turning the dynamic embed into a fixed date.
-	embedRanges := FindEmbedRanges(content)
+	// Skip @tokens inside ![[...]] embeds (so ![[pick: @today]] isn't rewritten
+	// on save into a fixed date) and inside code spans / fenced blocks (so
+	// example commands in prose aren't rewritten).
+	excludedRanges := append(FindEmbedRanges(content), FindCodeRanges(content)...)
 
 	var b strings.Builder
 	b.Grow(len(content))
@@ -43,7 +43,7 @@ func ResolveDateTokens(content string) string {
 			continue
 		}
 
-		if InsideRanges(start, embedRanges) {
+		if InsideRanges(start, excludedRanges) {
 			continue
 		}
 
@@ -72,16 +72,22 @@ func ResolveDateTokensInQuery(query string) string {
 }
 
 // ExtractDates returns @YYYY-MM-DD dates (without @ prefix), sorted and deduplicated.
+// Dates inside ![[...]] embeds and code spans / fenced blocks are ignored.
 func ExtractDates(content string) []string {
-	matches := resolvedDatePattern.FindAllStringSubmatch(content, -1)
-	if len(matches) == 0 {
+	locs := resolvedDatePattern.FindAllStringSubmatchIndex(content, -1)
+	if len(locs) == 0 {
 		return nil
 	}
 
+	excludedRanges := append(FindEmbedRanges(content), FindCodeRanges(content)...)
+
 	seen := make(map[string]bool)
 	var dates []string
-	for _, m := range matches {
-		date := m[1]
+	for _, loc := range locs {
+		if InsideRanges(loc[0], excludedRanges) {
+			continue
+		}
+		date := content[loc[2]:loc[3]]
 		if !seen[date] {
 			seen[date] = true
 			dates = append(dates, date)

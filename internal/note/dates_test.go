@@ -92,6 +92,23 @@ func TestResolveDateTokens(t *testing.T) {
 			input:  "meeting @today\n![[pick: #followup @today]]",
 			absent: "meeting @today",
 		},
+		{
+			name:    "skip @today inside inline code",
+			input:   "run `ruin pick @today` for this",
+			contain: "@today",
+			absent:  "@20",
+		},
+		{
+			name:    "skip @tomorrow inside fenced code block",
+			input:   "```\nruin pick @tomorrow\n```",
+			contain: "@tomorrow",
+			absent:  "@20",
+		},
+		{
+			name:   "resolve outside code but skip inside",
+			input:  "meeting @today and run `ruin pick @today`",
+			absent: "meeting @today",
+		},
 	}
 
 	for _, tt := range tests {
@@ -142,6 +159,11 @@ func TestExtractDates(t *testing.T) {
 			name:  "mixed content",
 			input: "# Title\n\n#followup @2026-02-20\nsome text @2026-01-10\n",
 			want:  []string{"2026-01-10", "2026-02-20"},
+		},
+		{
+			name:  "dates inside code are ignored",
+			input: "real @2026-02-20 and `example @2026-09-09` and\n```\nsample @2026-10-10\n```",
+			want:  []string{"2026-02-20"},
 		},
 	}
 
