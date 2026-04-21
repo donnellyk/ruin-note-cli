@@ -936,6 +936,66 @@ Regular content line.`,
 	})
 }
 
+func TestPick_CheckedCheckbox_DoneWithoutTodoMode(t *testing.T) {
+	// A checked checkbox line matched via tag filter should be reported as
+	// Done=true in results, independent of --todo mode, and excluded by the
+	// default doneExclude filter.
+	n := &note.Note{
+		Content: `# Tasks
+#work
+
+- [ ] Open task #followup
+- [x] Completed task #followup`,
+		Title: "Tasks",
+	}
+	n.RefreshTags()
+
+	t.Run("default excludes checked line", func(t *testing.T) {
+		matches := pickLinesFromNote(n, pickTagFilter{include: []string{"#followup"}}, nil, false, doneExclude, false)
+		if len(matches) != 1 {
+			t.Fatalf("got %d matches, want 1 (open only)", len(matches))
+		}
+		if !strings.Contains(matches[0].Content, "Open task") {
+			t.Errorf("match = %q", matches[0].Content)
+		}
+		if matches[0].Done {
+			t.Error("open line should have Done=false")
+		}
+	})
+
+	t.Run("--all reports Done=true for checked line", func(t *testing.T) {
+		matches := pickLinesFromNote(n, pickTagFilter{include: []string{"#followup"}}, nil, false, doneInclude, false)
+		if len(matches) != 2 {
+			t.Fatalf("got %d matches, want 2", len(matches))
+		}
+		var checked *PickMatch
+		for i := range matches {
+			if strings.Contains(matches[i].Content, "Completed task") {
+				checked = &matches[i]
+			}
+		}
+		if checked == nil {
+			t.Fatal("missing Completed task match")
+		}
+		if !checked.Done {
+			t.Error("expected Done=true for [x] line")
+		}
+	})
+
+	t.Run("--done keeps checked line", func(t *testing.T) {
+		matches := pickLinesFromNote(n, pickTagFilter{include: []string{"#followup"}}, nil, false, doneOnly, false)
+		if len(matches) != 1 {
+			t.Fatalf("got %d matches, want 1 (checked only)", len(matches))
+		}
+		if !strings.Contains(matches[0].Content, "Completed task") {
+			t.Errorf("match = %q", matches[0].Content)
+		}
+		if !matches[0].Done {
+			t.Error("expected Done=true")
+		}
+	})
+}
+
 func TestPick_TodoMode_WithTags(t *testing.T) {
 	n := &note.Note{
 		Content: `# Tasks

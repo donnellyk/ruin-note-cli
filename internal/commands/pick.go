@@ -79,7 +79,8 @@ to show only completed lines.
 Use @date alone to find all lines with a matching date annotation — no tags
 required. Use --todo to also match markdown checkbox lines (- [ ] / - [x]).
 When --todo or @date is provided, tags become optional. The done filter applies
-uniformly: checked checkboxes ([x]) and #done lines are both treated as "done".
+uniformly: checked checkboxes ([x]) and #done lines are both treated as "done"
+regardless of how the line was matched.
 
 Results are sorted by note creation date (newest first) by default. Use --sort
 to change the ordering (e.g., --sort title:asc, --sort updated:desc). Sort
@@ -432,9 +433,10 @@ func pickLinesFromNote(n *note.Note, tags pickTagFilter, dateRanges []dateparse.
 			}
 		}
 
-		// Done = #done tag OR checked checkbox [x].
+		// Done = #done tag OR checked checkbox [x]. Treated uniformly regardless
+		// of --todo mode so JSON results correctly report completion status.
 		doneTagNorm := note.NormalizeTag(doneTag)
-		isDone := lineTagsNorm[doneTagNorm] || (todoMode && note.IsCheckedLine(trimmed))
+		isDone := lineTagsNorm[doneTagNorm] || note.IsCheckedLine(trimmed)
 
 		switch df {
 		case doneExclude:
