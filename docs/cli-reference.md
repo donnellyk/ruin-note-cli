@@ -129,6 +129,7 @@ Date tokens in queries are resolved dynamically. In note content, they are resol
 - `title:TEXT`, `path:TEXT`
 - `parent:UUID` — notes with specific parent
 - `parent:none` — notes with no parent
+- `tags:none` — notes with no tags (respects `--global-tags`/`--inline-tags`)
 - `link:TEXT` — notes with URL containing text
 - `todo:open` — notes with unchecked checkboxes (`- [ ]`)
 - `todo:done` — notes with checked checkboxes (`- [x]`)

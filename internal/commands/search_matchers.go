@@ -76,6 +76,27 @@ func titleMatcher(text string) QueryMatcher {
 	}
 }
 
+// tagsMatcher implements the tags:VALUE filter. Currently only tags:none is
+// supported (matches notes with no tags). Scope mirrors tagMatcher: at default
+// scope a note is "tagless" only if it has no effective global tags (own +
+// inherited) and no inline tags.
+func tagsMatcher(value string, scope TagScope) (QueryMatcher, error) {
+	switch strings.ToLower(value) {
+	case "none":
+		return func(n *note.Note) bool {
+			if scope != TagScopeInline && len(n.EffectiveGlobalTags()) > 0 {
+				return false
+			}
+			if scope != TagScopeGlobal && len(n.InlineTags) > 0 {
+				return false
+			}
+			return true
+		}, nil
+	default:
+		return nil, fmt.Errorf("unknown tags filter %q (use tags:none for untagged notes; use #tag to match a tag)", value)
+	}
+}
+
 // parentMatcher: "none" matches notes with no parent; any other value matches by parent UUID.
 func parentMatcher(value string) QueryMatcher {
 	if strings.ToLower(value) == "none" {

@@ -66,6 +66,7 @@ Other filters:
   - path:TEXT        Notes with path containing text
   - parent:UUID      Notes with specific parent
   - parent:none      Notes with no parent
+  - tags:none        Notes with no tags (respects --global-tags/--inline-tags)
   - link:TEXT        Notes with URL containing text
 
 Todo filters:

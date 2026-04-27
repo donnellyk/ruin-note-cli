@@ -1,5 +1,10 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+- `tags:none` search filter — match notes with no tags. Respects `--global-tags` and `--inline-tags` to narrow scope.
+
 ## [0.3.1] - 2026-04-21
 
 ### Fixed

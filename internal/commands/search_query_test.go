@@ -136,6 +136,93 @@ func TestNegateParentUUID(t *testing.T) {
 	}
 }
 
+func TestTagsNone(t *testing.T) {
+	matcher, _, err := parseQuery("tags:none", TagScopeAll)
+	if err != nil {
+		t.Fatalf("parseQuery error: %v", err)
+	}
+
+	untagged := &note.Note{}
+	withGlobal := &note.Note{Tags: []string{"#work"}}
+	withInline := &note.Note{InlineTags: []string{"#followup"}}
+	withBoth := &note.Note{Tags: []string{"#work"}, InlineTags: []string{"#followup"}}
+	withInherited := &note.Note{InheritedTags: []string{"#project"}}
+
+	if !matcher(untagged) {
+		t.Error("expected tags:none to match note with no tags")
+	}
+	if matcher(withGlobal) {
+		t.Error("expected tags:none to NOT match note with global tags")
+	}
+	if matcher(withInline) {
+		t.Error("expected tags:none to NOT match note with inline tags")
+	}
+	if matcher(withBoth) {
+		t.Error("expected tags:none to NOT match note with both tag types")
+	}
+	if matcher(withInherited) {
+		t.Error("expected tags:none to NOT match note with inherited tags (mirrors tagMatcher scope)")
+	}
+}
+
+func TestTagsNoneGlobalScope(t *testing.T) {
+	matcher, _, err := parseQuery("tags:none", TagScopeGlobal)
+	if err != nil {
+		t.Fatalf("parseQuery error: %v", err)
+	}
+
+	noGlobalOnlyInline := &note.Note{InlineTags: []string{"#followup"}}
+	withGlobal := &note.Note{Tags: []string{"#work"}}
+
+	if !matcher(noGlobalOnlyInline) {
+		t.Error("expected tags:none (global scope) to match note with only inline tags")
+	}
+	if matcher(withGlobal) {
+		t.Error("expected tags:none (global scope) to NOT match note with global tags")
+	}
+}
+
+func TestTagsNoneInlineScope(t *testing.T) {
+	matcher, _, err := parseQuery("tags:none", TagScopeInline)
+	if err != nil {
+		t.Fatalf("parseQuery error: %v", err)
+	}
+
+	noInlineOnlyGlobal := &note.Note{Tags: []string{"#work"}}
+	withInline := &note.Note{InlineTags: []string{"#followup"}}
+
+	if !matcher(noInlineOnlyGlobal) {
+		t.Error("expected tags:none (inline scope) to match note with only global tags")
+	}
+	if matcher(withInline) {
+		t.Error("expected tags:none (inline scope) to NOT match note with inline tags")
+	}
+}
+
+func TestTagsUnknownValue(t *testing.T) {
+	_, _, err := parseQuery("tags:work", TagScopeAll)
+	if err == nil {
+		t.Error("expected error for tags:work (only tags:none is supported)")
+	}
+}
+
+func TestNegateTagsNone(t *testing.T) {
+	matcher, _, err := parseQuery("!tags:none", TagScopeAll)
+	if err != nil {
+		t.Fatalf("parseQuery error: %v", err)
+	}
+
+	untagged := &note.Note{}
+	tagged := &note.Note{Tags: []string{"#work"}}
+
+	if matcher(untagged) {
+		t.Error("expected !tags:none to NOT match untagged note")
+	}
+	if !matcher(tagged) {
+		t.Error("expected !tags:none to match tagged note")
+	}
+}
+
 func TestNegateCombined(t *testing.T) {
 	matcher, _, err := parseQuery("#project !#archived", TagScopeAll)
 	if err != nil {
