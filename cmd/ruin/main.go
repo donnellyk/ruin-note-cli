@@ -123,6 +123,7 @@ func init() {
 	rootCmd.AddCommand(commands.NewPickCmd(getVault, &jsonOut))
 	rootCmd.AddCommand(commands.NewNoteCmd(getVault, &jsonOut))
 	rootCmd.AddCommand(commands.NewLinkCmd(getVault, &jsonOut))
+	rootCmd.AddCommand(commands.NewEmbedCmd(getVault, &jsonOut))
 	rootCmd.AddCommand(commands.NewDevCmd(&jsonOut))
 }
 

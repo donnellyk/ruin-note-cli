@@ -209,6 +209,12 @@ fast lookups, then extracts matching lines from the content body.`,
 				switch {
 				case strings.HasPrefix(arg, "#"), strings.HasPrefix(arg, "!#"):
 					tagArgs = append(tagArgs, arg)
+				case strings.HasPrefix(arg, "@between:"):
+					dr, err := parsePickBetween(arg, time.Now())
+					if err != nil {
+						return err
+					}
+					dateRanges = append(dateRanges, dr)
 				case strings.HasPrefix(arg, "@"):
 					token := arg[1:]
 					dr, err := dateparse.ParseWithReference(token, time.Now())
@@ -328,6 +334,50 @@ fast lookups, then extracts matching lines from the content body.`,
 	cmd.Flags().StringVarP(&sortFlag, "sort", "s", "created:desc", "sort order (e.g., created:desc, title:asc)")
 
 	return cmd
+}
+
+// normalizePickQueryCommas collapses whitespace immediately after commas in a
+// pick embed query so `@between:today, today+6` (a natural way for a human to
+// write the embed) survives the strings.Fields tokenizer that follows. The
+// only valid use of `,` in a pick query is the @between:X,Y separator, so
+// normalizing globally is safe.
+func normalizePickQueryCommas(s string) string {
+	var b strings.Builder
+	b.Grow(len(s))
+	for i := 0; i < len(s); i++ {
+		b.WriteByte(s[i])
+		if s[i] != ',' {
+			continue
+		}
+		j := i + 1
+		for j < len(s) && (s[j] == ' ' || s[j] == '\t') {
+			j++
+		}
+		i = j - 1
+	}
+	return b.String()
+}
+
+// parsePickBetween parses an @between:D1,D2 arg into a single DateRange spanning
+// [D1.Start, D2.End). Mirrors `search between:` semantics, including the empty
+// result when D1 > D2 (since DateRange.Contains returns false for an inverted
+// range). The @-token in the line body is date-only; if @ ever gains a
+// time-of-day component, the range here must remain date-clamped.
+func parsePickBetween(arg string, ref time.Time) (dateparse.DateRange, error) {
+	value := strings.TrimPrefix(arg, "@between:")
+	parts := strings.SplitN(value, ",", 2)
+	if len(parts) != 2 {
+		return dateparse.DateRange{}, fmt.Errorf("@between requires two dates separated by comma (e.g., @between:today,today+6)")
+	}
+	startRange, err := dateparse.ParseWithReference(strings.TrimSpace(parts[0]), ref)
+	if err != nil {
+		return dateparse.DateRange{}, fmt.Errorf("invalid start date for @between: %w", err)
+	}
+	endRange, err := dateparse.ParseWithReference(strings.TrimSpace(parts[1]), ref)
+	if err != nil {
+		return dateparse.DateRange{}, fmt.Errorf("invalid end date for @between: %w", err)
+	}
+	return dateparse.DateRange{Start: startRange.Start, End: endRange.End}, nil
 }
 
 func noteHasInlineTag(n *note.Note, queryTags []string) bool {

@@ -3,6 +3,7 @@ package dateparse
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -23,24 +24,21 @@ func (r DateRange) Contains(t time.Time) bool {
 // Supports:
 //   - Exact dates: YYYY-MM-DD, YYYY-MM, YYYY
 //   - Simple helpers: today, yesterday, tomorrow
+//   - Relative arithmetic: today+N, today-N (N a non-negative integer of days)
 func Parse(s string) (DateRange, error) {
-	s = strings.TrimSpace(strings.ToLower(s))
-	now := time.Now()
-
-	if r, ok := parseNaturalLanguage(s, now); ok {
-		return r, nil
-	}
-
-	if r, ok := parseISODate(s); ok {
-		return r, nil
-	}
-
-	return DateRange{}, fmt.Errorf("unrecognized date format: %s", s)
+	return ParseWithReference(s, time.Now())
 }
 
 // ParseWithReference parses a date string relative to a reference time.
 func ParseWithReference(s string, ref time.Time) (DateRange, error) {
 	s = strings.TrimSpace(strings.ToLower(s))
+
+	if r, recognized, err := parseRelativeDate(s, ref); recognized {
+		if err != nil {
+			return DateRange{}, err
+		}
+		return r, nil
+	}
 
 	if r, ok := parseNaturalLanguage(s, ref); ok {
 		return r, nil
@@ -51,6 +49,60 @@ func ParseWithReference(s string, ref time.Time) (DateRange, error) {
 	}
 
 	return DateRange{}, fmt.Errorf("unrecognized date format: %s", s)
+}
+
+// parseRelativeDate handles today+N and today-N. The recognized flag is true
+// whenever the input begins with "today" followed by a +/- arithmetic suffix —
+// at that point we own the error message; we don't want callers to fall through
+// to "unrecognized date format" and lose context. Bare "today" is left to
+// parseNaturalLanguage.
+func parseRelativeDate(s string, now time.Time) (DateRange, bool, error) {
+	const prefix = "today"
+	if !strings.HasPrefix(s, prefix) {
+		return DateRange{}, false, nil
+	}
+	rest := s[len(prefix):]
+	if rest == "" {
+		return DateRange{}, false, nil
+	}
+
+	switch rest[0] {
+	case '+', '-':
+		// fall through to numeric parsing below
+	case ' ', '\t':
+		return DateRange{}, true, fmt.Errorf("invalid relative date %q: whitespace not allowed (use today+N or today-N)", s)
+	default:
+		// Not a relative-arithmetic form (e.g., "todayfoo"); let later stages decide.
+		return DateRange{}, false, nil
+	}
+
+	op := rest[0]
+	numStr := rest[1:]
+	if numStr == "" {
+		return DateRange{}, true, fmt.Errorf("invalid relative date %q: expected today+N or today-N", s)
+	}
+	if strings.ContainsAny(numStr, " \t") {
+		return DateRange{}, true, fmt.Errorf("invalid relative date %q: whitespace not allowed (use today+N or today-N)", s)
+	}
+	if numStr[0] == '+' || numStr[0] == '-' {
+		return DateRange{}, true, fmt.Errorf("invalid relative date %q: N must be non-negative (use today-N for past dates, today+N for future)", s)
+	}
+
+	n, err := strconv.Atoi(numStr)
+	if err != nil {
+		return DateRange{}, true, fmt.Errorf("invalid relative date %q: N must be a non-negative integer", s)
+	}
+
+	delta := n
+	if op == '-' {
+		delta = -n
+	}
+
+	target := startOfDay(now).AddDate(0, 0, delta)
+	return DateRange{
+		Start: target,
+		End:   target.AddDate(0, 0, 1),
+	}, true, nil
 }
 
 func parseNaturalLanguage(s string, now time.Time) (DateRange, bool) {

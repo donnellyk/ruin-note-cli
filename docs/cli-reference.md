@@ -123,6 +123,7 @@ Date tokens in queries are resolved dynamically. In note content, they are resol
 **Date formats** (for filters):
 - Exact: `2025-01-28`, `2025-01`, `2025`
 - Natural: `today`, `yesterday`, `tomorrow`
+- Relative arithmetic: `today+N`, `today-N` (rolling windows; N is a non-negative integer of days)
 - Periods: `this-week`, `last-week`, `next-week`, `this-month`, `last-month`, `next-month`
 
 **Other filters:**
@@ -215,11 +216,15 @@ Tags are optional when `@date` is provided — `ruin pick @today` returns all li
 
 `@date` arguments filter at the line level — lines must contain an `@YYYY-MM-DD` date that falls within the resolved date range (e.g., `@2026-03` matches any date in March 2026, `@this-week` matches dates in the current week). When `@date` is the only argument (no tags, no `--todo`), all content lines are candidates and the date filter selects matching ones. `--filter "@date"` filters at the note level — only notes whose `dates` frontmatter includes the date are searched.
 
+`@between:D1,D2` matches any line containing an `@`-tagged date token whose date falls within `[D1, D2]` inclusive. Endpoints accept all `dateparse` forms, including relative arithmetic (`today+6`, `today-30`). Mirrors `between:` in `ruin search`. Multiple date arguments AND together (a line must satisfy every range), so `@between:` mixes naturally with single `@date` arguments.
+
 Examples:
 ```
-ruin pick @today                    # All lines with today's date annotation
-ruin pick @2026-03-15               # All lines referencing March 15
-ruin pick --todo @today --all       # All checkboxes (open + done) with today's date
+ruin pick @today                                # All lines with today's date annotation
+ruin pick @2026-03-15                           # All lines referencing March 15
+ruin pick --todo @today --all                   # All checkboxes (open + done) with today's date
+ruin pick "#followup" "@between:today,today+6"  # Followups dated within the next 7 days
+ruin pick "@between:today-30,today"             # Any line dated within the last 30 days
 ```
 
 Lines containing `#done` are excluded by default, `#done` is reserved to mark a line as resolved/completed. Use `--all` to include both open and done lines, or `--done` to show only completed lines.
@@ -624,6 +629,65 @@ Without `--expand-embeds`, `![[...]]` lines pass through as-is.
 Separator lines between notes fall in gaps not covered by any entry. To map a composed line back to the original note content: `original_line = (composed_line - start_line) + 1`. With embed expansion, a note's content may be split across non-contiguous line ranges (multiple source map entries with the same UUID).
 
 **List merging**: When two adjacent sibling notes at the same depth both contain only list content (lines starting with `-`, `*`, `+`, or `1.`), they are separated by a single newline instead of a blank line. This causes the lists to merge into one contiguous list in the composed output.
+
+### embed
+
+Work with dynamic embeds.
+
+```
+ruin embed eval <embed-string>
+ruin embed eval -                          # read embed from stdin
+```
+
+`embed eval` evaluates a single dynamic embed standalone and emits its results. It accepts the canonical full-delimiter form `![[type: query | options]]` and the bare inner form (`type: query | options`). A surrounding `![[ ]]` wrapper is stripped if present; canonical examples use the full form.
+
+| Flag | Description |
+|------|-------------|
+| `--json` | Emit a typed JSON envelope instead of plain-text rendering |
+
+Default output is plain-text rendering matching what each embed produces in compose-time output (search lists, pick groupings, compose expansion). With `--json`, emits a discriminated envelope:
+
+```json
+{
+  "type": "search",
+  "query": "#daily",
+  "options": {"limit": "5"},
+  "results": [...]
+}
+```
+
+`results` shape per type:
+
+| Embed type | `results` |
+|------------|-----------|
+| `search:` | `[]SearchResult` (same as `ruin search --json`) |
+| `query:` | `[]SearchResult` (same as `ruin query run --json`) |
+| `pick:` | `[]PickResult` (same as `ruin pick --json`) |
+| `compose:` | `{ "expanded_markdown": string, "source_map": [...] }` |
+
+`compose:` always includes `source_map` so callers can attribute composed lines back to source notes (same shape as `ruin compose --json`).
+
+**Embed options in JSON mode**: Query-shaping options (`limit`, `sort`, `tag-scope`, ...) are honored identically in plain-text and JSON modes. Rendering options (`format=`) are silently ignored in `--json` mode so JSON callers receive a stable shape.
+
+**Stdin**: Pass `-` as the argument to read the embed string from stdin. Useful for long embeds where shell quoting is awkward.
+
+Examples:
+
+```bash
+# Plain-text rendering of a search embed
+ruin embed eval "![[search: #daily | limit=5]]"
+
+# Bare inner form (delimiters auto-added)
+ruin embed eval "search: #daily | limit=5"
+
+# JSON envelope for programmatic consumers
+ruin embed eval "![[search: #daily]]" --json
+
+# Read embed from stdin
+echo "![[pick: #followup]]" | ruin embed eval -
+```
+
+Errors (malformed embed, unknown type, query syntax error, missing referenced note for `compose:` or saved query for `query:`) return non-zero exit with a structured error message.
 
 ## Note Format
 

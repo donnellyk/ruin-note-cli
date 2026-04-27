@@ -91,7 +91,7 @@ func (w *composeWalker) expandDynamicSearch(ref note.DynamicEmbedRef, depth int,
 }
 
 func (w *composeWalker) expandDynamicPick(ref note.DynamicEmbedRef, depth int, parentUUID string) *dynamicResult {
-	resolved := note.ResolveDateTokensInQuery(ref.Query)
+	resolved := normalizePickQueryCommas(note.ResolveDateTokensInQuery(ref.Query))
 	tagArgs := strings.Fields(resolved)
 	var filter pickTagFilter
 	var dateRanges []dateparse.DateRange
@@ -101,6 +101,13 @@ func (w *composeWalker) expandDynamicPick(ref note.DynamicEmbedRef, depth int, p
 			filter.exclude = append(filter.exclude, note.NormalizeTag(arg[1:]))
 		case strings.HasPrefix(arg, "#"):
 			filter.include = append(filter.include, note.NormalizeTag(arg))
+		case strings.HasPrefix(arg, "@between:"):
+			dr, err := parsePickBetween(arg, time.Now())
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "warning: dynamic pick: %v\n", err)
+				continue
+			}
+			dateRanges = append(dateRanges, dr)
 		case strings.HasPrefix(arg, "@"):
 			token := arg[1:]
 			dr, err := dateparse.ParseWithReference(token, time.Now())

@@ -1,6 +1,7 @@
 package dateparse
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
@@ -195,6 +196,126 @@ func TestDateRangeContains(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := r.Contains(tt.t); got != tt.want {
 				t.Errorf("DateRange.Contains(%v) = %v, want %v", tt.t, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestParseRelativeArithmetic(t *testing.T) {
+	ref := time.Date(2025, 1, 29, 14, 30, 0, 0, time.Local)
+
+	tests := []struct {
+		input     string
+		wantStart time.Time
+		wantEnd   time.Time
+	}{
+		{
+			input:     "today+0",
+			wantStart: time.Date(2025, 1, 29, 0, 0, 0, 0, time.Local),
+			wantEnd:   time.Date(2025, 1, 30, 0, 0, 0, 0, time.Local),
+		},
+		{
+			input:     "today+1",
+			wantStart: time.Date(2025, 1, 30, 0, 0, 0, 0, time.Local),
+			wantEnd:   time.Date(2025, 1, 31, 0, 0, 0, 0, time.Local),
+		},
+		{
+			input:     "today+6",
+			wantStart: time.Date(2025, 2, 4, 0, 0, 0, 0, time.Local),
+			wantEnd:   time.Date(2025, 2, 5, 0, 0, 0, 0, time.Local),
+		},
+		{
+			input:     "today-1",
+			wantStart: time.Date(2025, 1, 28, 0, 0, 0, 0, time.Local),
+			wantEnd:   time.Date(2025, 1, 29, 0, 0, 0, 0, time.Local),
+		},
+		{
+			input:     "today-7",
+			wantStart: time.Date(2025, 1, 22, 0, 0, 0, 0, time.Local),
+			wantEnd:   time.Date(2025, 1, 23, 0, 0, 0, 0, time.Local),
+		},
+		{
+			// Crosses end-of-month boundary.
+			input:     "today-30",
+			wantStart: time.Date(2024, 12, 30, 0, 0, 0, 0, time.Local),
+			wantEnd:   time.Date(2024, 12, 31, 0, 0, 0, 0, time.Local),
+		},
+		{
+			input:     "TODAY+3",
+			wantStart: time.Date(2025, 2, 1, 0, 0, 0, 0, time.Local),
+			wantEnd:   time.Date(2025, 2, 2, 0, 0, 0, 0, time.Local),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			got, err := ParseWithReference(tt.input, ref)
+			if err != nil {
+				t.Fatalf("ParseWithReference(%q) unexpected error: %v", tt.input, err)
+			}
+			if !got.Start.Equal(tt.wantStart) {
+				t.Errorf("Start = %v, want %v", got.Start, tt.wantStart)
+			}
+			if !got.End.Equal(tt.wantEnd) {
+				t.Errorf("End = %v, want %v", got.End, tt.wantEnd)
+			}
+		})
+	}
+}
+
+func TestParseRelativeArithmeticLeapYear(t *testing.T) {
+	// 2024-02-28 + 1 day = 2024-02-29 (leap year)
+	ref := time.Date(2024, 2, 28, 12, 0, 0, 0, time.Local)
+	got, err := ParseWithReference("today+1", ref)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := time.Date(2024, 2, 29, 0, 0, 0, 0, time.Local)
+	if !got.Start.Equal(want) {
+		t.Errorf("Start = %v, want %v", got.Start, want)
+	}
+}
+
+func TestParseRelativeArithmeticErrors(t *testing.T) {
+	ref := time.Date(2025, 1, 29, 14, 30, 0, 0, time.Local)
+
+	cases := []struct {
+		input     string
+		wantInErr string
+	}{
+		{"today--7", "non-negative"},
+		{"today-+7", "non-negative"},
+		{"today + 6", "whitespace"},
+		{"today +6", "whitespace"},
+		{"today- 6", "whitespace"},
+		{"today+", "expected today+N"},
+		{"today-", "expected today+N"},
+		{"today+abc", "non-negative integer"},
+		{"today+1.5", "non-negative integer"},
+	}
+
+	for _, tt := range cases {
+		t.Run(tt.input, func(t *testing.T) {
+			_, err := ParseWithReference(tt.input, ref)
+			if err == nil {
+				t.Fatalf("ParseWithReference(%q) expected error, got nil", tt.input)
+			}
+			if !strings.Contains(err.Error(), tt.wantInErr) {
+				t.Errorf("error %q does not contain %q", err.Error(), tt.wantInErr)
+			}
+		})
+	}
+}
+
+func TestParseRejectsYesterdayTomorrowArithmetic(t *testing.T) {
+	ref := time.Date(2025, 1, 29, 14, 30, 0, 0, time.Local)
+
+	rejected := []string{"yesterday-1", "yesterday+1", "tomorrow+1", "tomorrow-1"}
+	for _, input := range rejected {
+		t.Run(input, func(t *testing.T) {
+			_, err := ParseWithReference(input, ref)
+			if err == nil {
+				t.Errorf("ParseWithReference(%q) should error (only today supports arithmetic)", input)
 			}
 		})
 	}

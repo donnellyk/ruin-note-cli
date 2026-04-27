@@ -9,9 +9,19 @@ Date tokens use the `@` prefix to reference dates in note content. They support 
 | `@today` | Current date | `@2026-02-16` |
 | `@tomorrow` | Next day | `@2026-02-17` |
 | `@yesterday` | Previous day | `@2026-02-15` |
+| `@today+N` | N days after today (in queries/filters) | `@today+6` → date 6 days from today |
+| `@today-N` | N days before today (in queries/filters) | `@today-7` → date 7 days ago |
 | `@2026-02-13` | Literal (unchanged) | `@2026-02-13` |
 
 Unrecognized tokens (e.g., `@kevin`, `@deprecated`) are left unchanged. Email addresses (`user@company.com`) are not affected.
+
+### Relative arithmetic
+
+`today+N` and `today-N` are valid in any place that accepts a date — date filters (`created:`, `updated:`, `before:`, `after:`, `between:`), `@`-token search arguments, and saved query bodies. `N` is a non-negative integer of days. Whitespace inside the expression (`today + 6`) is rejected.
+
+These forms suit rolling-window queries that don't go stale: `created:today-7` always means "7 days ago" regardless of when the query was written or when it runs.
+
+`yesterday` and `tomorrow` are bare literals — they don't accept `±N` (use `today-(N+1)` / `today+(N+1)` instead).
 
 ## Resolution
 
