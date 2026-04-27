@@ -3,7 +3,10 @@
 ## [Unreleased]
 
 ### Added
-- `tags:none` search filter — match notes with no tags. Respects `--global-tags` and `--inline-tags` to narrow scope.
+- Evalulate embeds dynamically with `ruin embed eval <embed-string>`, without needing to make a new document.
+- Relative date arithmetic in filters and `@`-tokens: `today+N` and `today-N` (`created:today-7`, `between:today,today+6`).
+- `ruin pick` between two dates with new `@between:D1,D2` argument, mirroring `search`
+- Match all notes with no tags with new `tags:none` search filter.
 
 ## [0.3.1] - 2026-04-21
 
