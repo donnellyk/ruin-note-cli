@@ -547,6 +547,82 @@ func TestNormalizeTag(t *testing.T) {
 	}
 }
 
+func TestNormalizeStored(t *testing.T) {
+	cases := []struct {
+		input, want string
+	}{
+		{"#daily", "daily"},
+		{"#Daily", "daily"},
+		{"daily", "daily"},
+		{"#meeting notes#", "meeting notes"},
+		{"#follow up#", "follow up"},
+		{"meeting notes", "meeting notes"},
+		{"#project/alpha", "project/alpha"},
+		{"", ""},
+		{"#", ""},
+		{"##", ""},
+	}
+	for _, tt := range cases {
+		t.Run(tt.input, func(t *testing.T) {
+			if got := NormalizeStored(tt.input); got != tt.want {
+				t.Errorf("NormalizeStored(%q) = %q, want %q", tt.input, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestNormalizeStored_Idempotent(t *testing.T) {
+	for _, input := range []string{"#daily", "daily", "#meeting notes#", "meeting notes", "#"} {
+		first := NormalizeStored(input)
+		second := NormalizeStored(first)
+		if first != second {
+			t.Errorf("NormalizeStored not idempotent for %q: %q -> %q", input, first, second)
+		}
+	}
+}
+
+func TestBodyForm(t *testing.T) {
+	cases := []struct {
+		input, want string
+	}{
+		{"daily", "#daily"},
+		{"Daily", "#daily"},
+		{"#daily", "#daily"},
+		{"meeting notes", "#meeting notes#"},
+		{"#meeting notes#", "#meeting notes#"},
+		{"follow up", "#follow up#"},
+		{"project/alpha", "#project/alpha"},
+		{"", ""},
+	}
+	for _, tt := range cases {
+		t.Run(tt.input, func(t *testing.T) {
+			if got := BodyForm(tt.input); got != tt.want {
+				t.Errorf("BodyForm(%q) = %q, want %q", tt.input, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestBodyForm_Idempotent(t *testing.T) {
+	for _, input := range []string{"daily", "#daily", "meeting notes", "#meeting notes#"} {
+		first := BodyForm(input)
+		second := BodyForm(first)
+		if first != second {
+			t.Errorf("BodyForm not idempotent for %q: %q -> %q", input, first, second)
+		}
+	}
+}
+
+func TestStoredBodyRoundTrip(t *testing.T) {
+	for _, body := range []string{"#daily", "#project/alpha", "#meeting notes#", "#follow up#"} {
+		stored := NormalizeStored(body)
+		back := BodyForm(stored)
+		if back != body {
+			t.Errorf("round-trip failed: %q -> %q -> %q", body, stored, back)
+		}
+	}
+}
+
 func TestIsHeaderLine(t *testing.T) {
 	tests := []struct {
 		line string

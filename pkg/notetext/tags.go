@@ -238,8 +238,44 @@ func deduplicateTags(matches []TagMatch) []string {
 }
 
 // NormalizeTag normalizes a tag for comparison (lowercase).
+//
+// Deprecated: use NormalizeStored for storage/comparison or BodyForm for
+// body-text emission. NormalizeTag will be removed in a future release once
+// all callers have been migrated.
 func NormalizeTag(tag string) string {
 	return strings.ToLower(tag)
+}
+
+// NormalizeStored returns the storage form of a tag: lowercased, with
+// leading and trailing `#` delimiters stripped if present. Idempotent.
+//
+// Use this for tag values that live in `.ruin/` indexes, frontmatter
+// `tags:` arrays, and equality comparisons. Body-text references
+// (`#tag`, `#meeting notes#`) are converted to storage form by stripping
+// the delimiters.
+func NormalizeStored(tag string) string {
+	tag = strings.ToLower(tag)
+	tag = strings.TrimPrefix(tag, "#")
+	tag = strings.TrimSuffix(tag, "#")
+	return tag
+}
+
+// BodyForm returns the body-text form of a tag: lowercased, with the
+// appropriate delimiters re-added. Tags containing whitespace (spaced
+// tags) are wrapped in `#…#`; other tags get a leading `#` only.
+//
+// Use this when emitting tags into note body content (rename rewrites,
+// EnsureLinkTag, compose tag rendering). Idempotent: input already in
+// body form round-trips.
+func BodyForm(tag string) string {
+	tag = NormalizeStored(tag)
+	if tag == "" {
+		return ""
+	}
+	if strings.ContainsAny(tag, " \t") {
+		return "#" + tag + "#"
+	}
+	return "#" + tag
 }
 
 // ClassifyTags separates tags into global tags and inline tags.

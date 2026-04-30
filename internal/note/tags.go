@@ -24,8 +24,17 @@ func IsTagOnlyLine(line string) bool {
 	return notetext.IsTagOnlyLine(line)
 }
 
+// Deprecated: use NormalizeStored or BodyForm.
 func NormalizeTag(tag string) string {
 	return notetext.NormalizeTag(tag)
+}
+
+func NormalizeStored(tag string) string {
+	return notetext.NormalizeStored(tag)
+}
+
+func BodyForm(tag string) string {
+	return notetext.BodyForm(tag)
 }
 
 func MergeTags(globalTags, inlineTags []string) []string {
