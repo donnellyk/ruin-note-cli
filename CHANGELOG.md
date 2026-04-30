@@ -8,6 +8,9 @@
 - `ruin pick` between two dates with new `@between:D1,D2` argument, mirroring `search`
 - Match all notes with no tags with new `tags:none` search filter.
 
+### Changed
+- Frontmatter parsing preserves key order, YAML comments, and scalar quote styles for keys ruin doesn't manage.
+
 ## [0.3.1] - 2026-04-21
 
 ### Fixed
