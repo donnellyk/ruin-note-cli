@@ -237,13 +237,15 @@ func deduplicateTags(matches []TagMatch) []string {
 	return result
 }
 
-// NormalizeStored returns the storage form of a tag: lowercased, with
-// leading and trailing `#` delimiters stripped if present. Idempotent.
+// NormalizeStored returns the storage form of a tag: lowercased, with one
+// leading and one trailing `#` stripped if present. Suitable for tag values
+// that live in `.ruin/` indexes, frontmatter `tags:` arrays, and equality
+// comparisons. Body-text references (`#tag`, `#meeting notes#`) are converted
+// to storage form by stripping the delimiters.
 //
-// Use this for tag values that live in `.ruin/` indexes, frontmatter
-// `tags:` arrays, and equality comparisons. Body-text references
-// (`#tag`, `#meeting notes#`) are converted to storage form by stripping
-// the delimiters.
+// Idempotent on stored-form inputs and on tags produced by ExtractTags or
+// BodyForm (both emit at most one `#` on each side). Inputs with multiple
+// stacked `#` characters are not normalized to a fixed point.
 func NormalizeStored(tag string) string {
 	tag = strings.ToLower(tag)
 	tag = strings.TrimPrefix(tag, "#")

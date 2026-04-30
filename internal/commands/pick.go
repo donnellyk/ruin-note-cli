@@ -380,27 +380,12 @@ func parsePickBetween(arg string, ref time.Time) (dateparse.DateRange, error) {
 	return dateparse.DateRange{Start: startRange.Start, End: endRange.End}, nil
 }
 
-func normalizePickFilter(tags pickTagFilter) pickTagFilter {
-	out := pickTagFilter{
-		include: make([]string, len(tags.include)),
-		exclude: make([]string, len(tags.exclude)),
-	}
-	for i, t := range tags.include {
-		out.include[i] = note.NormalizeStored(t)
-	}
-	for i, t := range tags.exclude {
-		out.exclude[i] = note.NormalizeStored(t)
-	}
-	return out
-}
-
+// noteHasInlineTag returns true if any of the note's inline tags matches one
+// of queryTags. queryTags must already be in NormalizeStored form; production
+// callers (pick, compose_dynamic, embed) normalize at parse time.
 func noteHasInlineTag(n *note.Note, queryTags []string) bool {
-	normQuery := make([]string, len(queryTags))
-	for i, q := range queryTags {
-		normQuery[i] = note.NormalizeStored(q)
-	}
 	for _, it := range n.InlineTags {
-		if slices.Contains(normQuery, note.NormalizeStored(it)) {
+		if slices.Contains(queryTags, note.NormalizeStored(it)) {
 			return true
 		}
 	}
@@ -413,11 +398,9 @@ func noteHasInlineTag(n *note.Note, queryTags []string) bool {
 // that falls within every specified date range.
 // When todoMode is true, checkbox lines (- [ ] / - [x]) are also matched.
 //
-// Filter values are renormalized to stored form so callers can pass either body
-// or stored form without thinking about it. The matcher compares stripped form
-// throughout.
+// tags.include and tags.exclude must already be in NormalizeStored form;
+// production callers normalize at parse time.
 func pickLinesFromNote(n *note.Note, tags pickTagFilter, dateRanges []dateparse.DateRange, anyMode bool, df doneFilter, todoMode bool) []PickMatch {
-	tags = normalizePickFilter(tags)
 	lines := strings.Split(n.Content, "\n")
 
 	var matches []PickMatch

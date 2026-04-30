@@ -62,16 +62,19 @@ func (n *Note) EnsureLinkTag() bool {
 		}
 	}
 
+	const linkStored = "link"
+	linkBody := BodyForm(linkStored)
+
 	hasLink := false
 	for _, t := range n.Tags {
-		if NormalizeStored(t) == "link" {
+		if NormalizeStored(t) == linkStored {
 			hasLink = true
 			break
 		}
 	}
 	if !hasLink {
 		for _, t := range n.InlineTags {
-			if NormalizeStored(t) == "link" {
+			if NormalizeStored(t) == linkStored {
 				hasLink = true
 				break
 			}
@@ -79,7 +82,7 @@ func (n *Note) EnsureLinkTag() bool {
 	}
 	if !hasLink {
 		for _, t := range ExtractTags(n.Content) {
-			if NormalizeStored(t) == "link" {
+			if NormalizeStored(t) == linkStored {
 				hasLink = true
 				break
 			}
@@ -102,7 +105,7 @@ func (n *Note) EnsureLinkTag() bool {
 			if strings.Contains(trimmed, ",") {
 				sep = ", "
 			}
-			lines[i] = line + sep + "#link"
+			lines[i] = line + sep + linkBody
 			inserted = true
 			break
 		}
@@ -119,11 +122,11 @@ func (n *Note) EnsureLinkTag() bool {
 		if insertIdx >= 0 {
 			newLines := make([]string, 0, len(lines)+2)
 			newLines = append(newLines, lines[:insertIdx+1]...)
-			newLines = append(newLines, "", "#link")
+			newLines = append(newLines, "", linkBody)
 			newLines = append(newLines, lines[insertIdx+1:]...)
 			lines = newLines
 		} else {
-			lines = append(lines, "", "#link")
+			lines = append(lines, "", linkBody)
 		}
 	}
 

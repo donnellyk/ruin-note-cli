@@ -12,6 +12,9 @@
 - Frontmatter parsing preserves key order, YAML comments, and scalar quote styles for keys ruin doesn't manage.
 - `ruin init` indexes folders with existing files with prompt
 
+### Removed
+- **Breaking**: `pkg/notetext.NormalizeTag` (and its `internal/note.NormalizeTag` shim) replaced by two clearer functions: `NormalizeStored` (storage form: lowercased, `#` delimiters stripped) for comparison and indexing, and `BodyForm` (lowercased, delimiters re-added based on whitespace) for emitting tags into note body content. Downstream Go consumers importing `pkg/notetext` must migrate calls.
+
 ## [0.3.1] - 2026-04-21
 
 ### Fixed

@@ -109,7 +109,7 @@ Review the budget.  #todo
 	}
 	n.RefreshTags()
 
-	queryTags := []string{"#followup"}
+	queryTags := []string{"followup"}
 	matches := pickLinesFromNote(n, pickTagFilter{include: queryTags}, nil, false, doneExclude, false)
 
 	if len(matches) != 1 {
@@ -137,7 +137,7 @@ Added unit tests. #followup`,
 	}
 	n.RefreshTags()
 
-	queryTags := []string{"#followup", "#urgent"}
+	queryTags := []string{"followup", "urgent"}
 	matches := pickLinesFromNote(n, pickTagFilter{include: queryTags}, nil, false, doneExclude, false)
 
 	if len(matches) != 1 {
@@ -161,7 +161,7 @@ Added unit tests. #todo`,
 	}
 	n.RefreshTags()
 
-	queryTags := []string{"#followup", "#todo"}
+	queryTags := []string{"followup", "todo"}
 	matches := pickLinesFromNote(n, pickTagFilter{include: queryTags}, nil, true, doneExclude, false)
 
 	if len(matches) != 2 {
@@ -179,7 +179,7 @@ Just a regular day.`,
 	}
 	n.RefreshTags()
 
-	queryTags := []string{"#followup"}
+	queryTags := []string{"followup"}
 	matches := pickLinesFromNote(n, pickTagFilter{include: queryTags}, nil, false, doneExclude, false)
 
 	if len(matches) != 0 {
@@ -200,7 +200,7 @@ Content here.
 	n.RefreshTags()
 
 	// #meeting is a global tag (after H1), should not be picked
-	queryTags := []string{"#meeting"}
+	queryTags := []string{"meeting"}
 	matches := pickLinesFromNote(n, pickTagFilter{include: queryTags}, nil, false, doneExclude, false)
 
 	if len(matches) != 0 {
@@ -208,7 +208,7 @@ Content here.
 	}
 
 	// #done is a trailing global tag, should not be picked
-	queryTags = []string{"#done"}
+	queryTags = []string{"done"}
 	matches = pickLinesFromNote(n, pickTagFilter{include: queryTags}, nil, false, doneExclude, false)
 
 	if len(matches) != 0 {
@@ -231,7 +231,7 @@ More content. #followup`,
 	n.RefreshTags()
 
 	// #wip appears on a tag-only line in the inline zone -- should be excluded
-	queryTags := []string{"#wip"}
+	queryTags := []string{"wip"}
 	matches := pickLinesFromNote(n, pickTagFilter{include: queryTags}, nil, false, doneExclude, false)
 
 	if len(matches) != 0 {
@@ -239,7 +239,7 @@ More content. #followup`,
 	}
 
 	// #followup on a content line should still match
-	queryTags = []string{"#followup"}
+	queryTags = []string{"followup"}
 	matches = pickLinesFromNote(n, pickTagFilter{include: queryTags}, nil, false, doneExclude, false)
 
 	if len(matches) != 1 {
@@ -257,7 +257,7 @@ Fix bug. #followup #urgent #p1`,
 	}
 	n.RefreshTags()
 
-	queryTags := []string{"#followup"}
+	queryTags := []string{"followup"}
 	matches := pickLinesFromNote(n, pickTagFilter{include: queryTags}, nil, false, doneExclude, false)
 
 	if len(matches) != 1 {
@@ -272,18 +272,18 @@ Fix bug. #followup #urgent #p1`,
 
 func TestNoteHasInlineTag(t *testing.T) {
 	n := &note.Note{
-		InlineTags: []string{"#followup", "#todo"},
+		InlineTags: []string{"followup", "todo"},
 	}
 
-	if !noteHasInlineTag(n, []string{"#followup"}) {
+	if !noteHasInlineTag(n, []string{"followup"}) {
 		t.Error("expected match for #followup")
 	}
 
-	if !noteHasInlineTag(n, []string{"#missing", "#todo"}) {
+	if !noteHasInlineTag(n, []string{"missing", "todo"}) {
 		t.Error("expected match when at least one tag matches")
 	}
 
-	if noteHasInlineTag(n, []string{"#missing"}) {
+	if noteHasInlineTag(n, []string{"missing"}) {
 		t.Error("expected no match for #missing")
 	}
 }
@@ -325,7 +325,7 @@ Fix the bug. #followup`,
 	}
 	n.RefreshTags()
 
-	queryTags := []string{"#followup"}
+	queryTags := []string{"followup"}
 	matches := pickLinesFromNote(n, pickTagFilter{include: queryTags}, nil, false, doneExclude, false)
 
 	if len(matches) != 2 {
@@ -354,7 +354,7 @@ Fix the bug. #followup`,
 	}
 	n.RefreshTags()
 
-	queryTags := []string{"#followup"}
+	queryTags := []string{"followup"}
 	matches := pickLinesFromNote(n, pickTagFilter{include: queryTags}, nil, false, doneInclude, false)
 
 	if len(matches) != 3 {
@@ -389,7 +389,7 @@ Fix the bug. #followup`,
 	}
 	n.RefreshTags()
 
-	queryTags := []string{"#followup"}
+	queryTags := []string{"followup"}
 	matches := pickLinesFromNote(n, pickTagFilter{include: queryTags}, nil, false, doneOnly, false)
 
 	if len(matches) != 1 {
@@ -417,7 +417,7 @@ Done item. #followup #done`,
 	}
 	n.RefreshTags()
 
-	queryTags := []string{"#followup"}
+	queryTags := []string{"followup"}
 	matches := pickLinesFromNote(n, pickTagFilter{include: queryTags}, nil, false, doneInclude, false)
 
 	if len(matches) != 2 {
@@ -449,7 +449,7 @@ Review contract @2026-03-15. #followup #urgent`,
 	}
 	n.RefreshTags()
 
-	queryTags := []string{"#followup"}
+	queryTags := []string{"followup"}
 
 	t.Run("filters to lines with exact date", func(t *testing.T) {
 		dr := dateparse.DateRange{
@@ -951,7 +951,7 @@ func TestPick_CheckedCheckbox_DoneWithoutTodoMode(t *testing.T) {
 	n.RefreshTags()
 
 	t.Run("default excludes checked line", func(t *testing.T) {
-		matches := pickLinesFromNote(n, pickTagFilter{include: []string{"#followup"}}, nil, false, doneExclude, false)
+		matches := pickLinesFromNote(n, pickTagFilter{include: []string{"followup"}}, nil, false, doneExclude, false)
 		if len(matches) != 1 {
 			t.Fatalf("got %d matches, want 1 (open only)", len(matches))
 		}
@@ -964,7 +964,7 @@ func TestPick_CheckedCheckbox_DoneWithoutTodoMode(t *testing.T) {
 	})
 
 	t.Run("--all reports Done=true for checked line", func(t *testing.T) {
-		matches := pickLinesFromNote(n, pickTagFilter{include: []string{"#followup"}}, nil, false, doneInclude, false)
+		matches := pickLinesFromNote(n, pickTagFilter{include: []string{"followup"}}, nil, false, doneInclude, false)
 		if len(matches) != 2 {
 			t.Fatalf("got %d matches, want 2", len(matches))
 		}
@@ -983,7 +983,7 @@ func TestPick_CheckedCheckbox_DoneWithoutTodoMode(t *testing.T) {
 	})
 
 	t.Run("--done keeps checked line", func(t *testing.T) {
-		matches := pickLinesFromNote(n, pickTagFilter{include: []string{"#followup"}}, nil, false, doneOnly, false)
+		matches := pickLinesFromNote(n, pickTagFilter{include: []string{"followup"}}, nil, false, doneOnly, false)
 		if len(matches) != 1 {
 			t.Fatalf("got %d matches, want 1 (checked only)", len(matches))
 		}
@@ -1009,7 +1009,7 @@ func TestPick_TodoMode_WithTags(t *testing.T) {
 	n.RefreshTags()
 
 	t.Run("checkboxes filtered by tag", func(t *testing.T) {
-		queryTags := []string{"#followup"}
+		queryTags := []string{"followup"}
 		matches := pickLinesFromNote(n, pickTagFilter{include: queryTags}, nil, false, doneExclude, true)
 		if len(matches) != 1 {
 			t.Fatalf("got %d matches, want 1 (checkbox with #followup, excluding done)", len(matches))
@@ -1030,7 +1030,7 @@ Call Bob about contract. #followup`,
 			Title: "Tasks",
 		}
 		n2.RefreshTags()
-		queryTags := []string{"#followup"}
+		queryTags := []string{"followup"}
 		matches := pickLinesFromNote(n2, pickTagFilter{include: queryTags}, nil, false, doneExclude, true)
 		// Should match both the checkbox (without tag filter) and the tagged line
 		// Actually, with tags provided, checkbox must ALSO have the tag. So only the tagged line matches.
