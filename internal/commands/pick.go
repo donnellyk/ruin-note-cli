@@ -266,6 +266,15 @@ fast lookups, then extracts matching lines from the content body.`,
 				return fmt.Errorf("failed to list notes: %w", err)
 			}
 
+			titlesIndex, err := vlt.LoadTitles()
+			if err != nil {
+				return fmt.Errorf("failed to load titles index: %w", err)
+			}
+			pathToUUID := make(map[string]string, len(titlesIndex.Titles))
+			for uuid, entry := range titlesIndex.Titles {
+				pathToUUID[entry.Path] = uuid
+			}
+
 			var results []PickResult
 
 			for _, path := range notePaths {
@@ -277,6 +286,7 @@ fast lookups, then extracts matching lines from the content body.`,
 				if err != nil {
 					continue
 				}
+				hydrateNoteTagsFromIndex(fast, titlesIndex, pathToUUID, path, false)
 
 				if len(tagFilter.include) > 0 && !noteHasInlineTag(fast, tagFilter.include) {
 					continue
@@ -504,10 +514,17 @@ func pickLinesFromNote(n *note.Note, tags pickTagFilter, dateRanges []dateparse.
 			}
 		}
 
+		// JSON contract (v0.4.0): tag arrays are stored form. Internal callers
+		// that need body form (compose, rewrite) get it from ExtractTags directly.
+		storedTags := make([]string, len(lineTags))
+		for ti, t := range lineTags {
+			storedTags[ti] = note.NormalizeStored(t)
+		}
+
 		matches = append(matches, PickMatch{
 			Line:    i + 1,
 			Content: trimmed,
-			Tags:    lineTags,
+			Tags:    storedTags,
 			Done:    isDone,
 		})
 	}

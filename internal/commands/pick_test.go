@@ -14,6 +14,28 @@ import (
 	"github.com/donnellyk/ruin-note-cli/internal/vault"
 )
 
+// seedPickTitles populates titles.json with stored-form tag mirrors for tests
+// that bypass setupPickVault. From v0.4.0 the pick command reads inline tags
+// from titles.json (via hydrateNoteTagsFromIndex), so each note in a pick test
+// vault must have its tag fields seeded before NewPickCmd is invoked.
+func seedPickTitles(t *testing.T, vlt *vault.Vault, entries []pickTitleSeed) {
+	t.Helper()
+	for _, e := range entries {
+		if err := vlt.UpdateTitleEntryFull(e.uuid, e.title, e.path, e.parent, e.tags, e.inlineTags, nil); err != nil {
+			t.Fatalf("seed titles for %s: %v", e.uuid, err)
+		}
+	}
+}
+
+type pickTitleSeed struct {
+	uuid       string
+	title      string
+	path       string
+	parent     string
+	tags       []string
+	inlineTags []string
+}
+
 func setupPickVault(t *testing.T) *vault.Vault {
 	t.Helper()
 
@@ -91,6 +113,29 @@ Just a regular day, no inline tags here.`,
 			t.Fatalf("failed to write test note: %v", err)
 		}
 	}
+
+	// Seed titles index with stored-form tag mirrors so the pick command
+	// (which reads inline tags from titles.json via hydrateNoteTagsFromIndex)
+	// can find inline-tag matches.
+	seedPickTitles(t, vlt, []pickTitleSeed{
+		{
+			uuid: "uuid-meeting", title: "Meeting Notes",
+			path:       filepath.Join(tmpDir, "meeting.md"),
+			tags:       []string{"meeting"},
+			inlineTags: []string{"followup", "todo"},
+		},
+		{
+			uuid: "uuid-code", title: "Code Review",
+			path:       filepath.Join(tmpDir, "code.md"),
+			tags:       []string{"code"},
+			inlineTags: []string{"followup", "urgent"},
+		},
+		{
+			uuid: "uuid-daily", title: "Daily Log",
+			path: filepath.Join(tmpDir, "daily.md"),
+			tags: []string{"daily"},
+		},
+	})
 
 	return vlt
 }
@@ -538,6 +583,9 @@ Send report soon. #followup
 	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
 		t.Fatalf("failed to write test note: %v", err)
 	}
+	seedPickTitles(t, vlt, []pickTitleSeed{
+		{uuid: "uuid-dated", title: "Dated Note", path: path, tags: []string{"work"}, inlineTags: []string{"followup"}},
+	})
 
 	t.Run("inline date filters lines", func(t *testing.T) {
 		jsonOut := false
@@ -662,6 +710,10 @@ Send the report. #followup
 			t.Fatalf("failed to write test note: %v", err)
 		}
 	}
+	seedPickTitles(t, vlt, []pickTitleSeed{
+		{uuid: "uuid-dated", title: "Dated Note", path: filepath.Join(tmpDir, "dated.md"), tags: []string{"work"}, inlineTags: []string{"followup"}},
+		{uuid: "uuid-nodated", title: "No Date Note", path: filepath.Join(tmpDir, "nodated.md"), tags: []string{"work"}, inlineTags: []string{"followup"}},
+	})
 
 	t.Run("with matching date", func(t *testing.T) {
 		jsonOut := false
@@ -766,6 +818,10 @@ Ship the feature. #followup
 			t.Fatalf("failed to write test note: %v", err)
 		}
 	}
+	seedPickTitles(t, vlt, []pickTitleSeed{
+		{uuid: "uuid-jan", title: "January Note", path: filepath.Join(tmpDir, "jan.md"), inlineTags: []string{"followup"}},
+		{uuid: "uuid-mar", title: "March Note", path: filepath.Join(tmpDir, "mar.md"), inlineTags: []string{"followup"}},
+	})
 
 	t.Run("created filter matches", func(t *testing.T) {
 		jsonOut := false
@@ -1264,11 +1320,11 @@ Buy groceries tomorrow. #followup
 		if err := os.WriteFile(path, []byte(n.content), 0644); err != nil {
 			t.Fatalf("failed to write %s: %v", n.filename, err)
 		}
-		index.Titles[n.uuid] = vault.TitleEntry{
-			Title:  strings.TrimSuffix(n.filename, ".md"),
-			Path:   path,
-			Parent: n.parent,
+		loaded, lerr := note.Load(path)
+		if lerr != nil {
+			t.Fatalf("failed to load %s: %v", n.filename, lerr)
 		}
+		index.Titles[n.uuid] = vault.MakeTitleEntry(strings.TrimSuffix(n.filename, ".md"), path, n.parent, loaded.Tags, loaded.InlineTags, loaded.InheritedTags)
 	}
 
 	if err := vlt.SaveTitles(index); err != nil {
@@ -1755,6 +1811,10 @@ Ship the feature. #followup
 			t.Fatalf("failed to write test note: %v", err)
 		}
 	}
+	seedPickTitles(t, vlt, []pickTitleSeed{
+		{uuid: "uuid-older", title: "Older Note", path: filepath.Join(tmpDir, "older.md"), inlineTags: []string{"followup"}},
+		{uuid: "uuid-newer", title: "Newer Note", path: filepath.Join(tmpDir, "newer.md"), inlineTags: []string{"followup"}},
+	})
 
 	t.Run("default sort is created:desc", func(t *testing.T) {
 		jsonOut := true
@@ -1869,6 +1929,10 @@ Task from zeta. #followup
 			t.Fatalf("failed to write test note: %v", err)
 		}
 	}
+	seedPickTitles(t, vlt, []pickTitleSeed{
+		{uuid: "uuid-alpha", title: "Alpha Note", path: filepath.Join(tmpDir, "alpha.md"), inlineTags: []string{"followup"}},
+		{uuid: "uuid-zeta", title: "Zeta Note", path: filepath.Join(tmpDir, "zeta.md"), inlineTags: []string{"followup"}},
+	})
 
 	t.Run("title:asc sorts alphabetically", func(t *testing.T) {
 		jsonOut := true
@@ -2192,6 +2256,10 @@ Send report. #followup
 			t.Fatalf("failed to write test note: %v", err)
 		}
 	}
+	seedPickTitles(t, vlt, []pickTitleSeed{
+		{uuid: "uuid-archived", title: "Archived Note", path: filepath.Join(tmpDir, "archived.md"), tags: []string{"archived"}, inlineTags: []string{"followup"}},
+		{uuid: "uuid-active", title: "Active Note", path: filepath.Join(tmpDir, "active.md"), tags: []string{"work"}, inlineTags: []string{"followup"}},
+	})
 
 	jsonOut := true
 	cmd := NewPickCmd(func() *vault.Vault { return vlt }, &jsonOut)

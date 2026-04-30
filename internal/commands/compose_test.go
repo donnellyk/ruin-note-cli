@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/donnellyk/ruin-note-cli/internal/note"
 	"github.com/donnellyk/ruin-note-cli/internal/vault"
 )
 
@@ -166,11 +167,14 @@ func setupComposeTestVault(t *testing.T, notes []testNote) (*vault.Vault, *vault
 		if err := os.WriteFile(path, []byte(n.raw), 0644); err != nil {
 			t.Fatalf("failed to write %s: %v", n.filename, err)
 		}
-		index.Titles[n.uuid] = vault.TitleEntry{
-			Title:  n.title,
-			Path:   path,
-			Parent: n.parent,
+		// Load from disk so the titles entry mirrors body-classified tags —
+		// hot-path matchers from v0.4.0 read tags from titles.json, not from
+		// frontmatter on every search.
+		loaded, lerr := note.Load(path)
+		if lerr != nil {
+			t.Fatalf("failed to load %s: %v", n.filename, lerr)
 		}
+		index.Titles[n.uuid] = vault.MakeTitleEntry(n.title, path, n.parent, loaded.Tags, loaded.InlineTags, loaded.InheritedTags)
 	}
 
 	if err := vlt.SaveTitles(index); err != nil {

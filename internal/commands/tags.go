@@ -146,15 +146,13 @@ See also:
 				return fmt.Errorf("vault not configured")
 			}
 
-			oldTag := args[0]
-			newTag := args[1]
-
-			if !strings.HasPrefix(oldTag, "#") {
-				oldTag = "#" + oldTag
-			}
-			if !strings.HasPrefix(newTag, "#") {
-				newTag = "#" + newTag
-			}
+			oldStored := note.NormalizeStored(args[0])
+			newStored := note.NormalizeStored(args[1])
+			oldBody := note.BodyForm(oldStored)
+			newBody := note.BodyForm(newStored)
+			// Display values keep the # prefix for human readability.
+			oldTag := oldBody
+			newTag := newBody
 
 			notePaths, err := vlt.ListNotes()
 			if err != nil {
@@ -168,7 +166,7 @@ See also:
 					continue
 				}
 				for _, t := range n.AllTags() {
-					if strings.EqualFold(t, oldTag) {
+					if note.NormalizeStored(t) == oldStored {
 						toUpdate = append(toUpdate, path)
 						break
 					}
@@ -221,13 +219,19 @@ See also:
 				oldGlobalTags := make([]string, len(n.Tags))
 				copy(oldGlobalTags, n.Tags)
 
-				n.Content = replaceTag(n.Content, oldTag, newTag)
+				n.Content = replaceTag(n.Content, oldBody, newBody)
 				n.RefreshTags()
 				n.SetTimestamps()
 
 				if err := n.Save(); err != nil {
 					errors = append(errors, fmt.Sprintf("Failed to save %s: %v", path, err))
 					continue
+				}
+
+				// Refresh the titles.json mirror so subsequent cascades and
+				// hot-path matchers see the renamed tag immediately.
+				if err := vlt.UpdateTitleEntryFull(n.UUID, n.Title, n.FilePath, n.Parent, n.Tags, n.InlineTags, n.InheritedTags); err != nil {
+					errors = append(errors, fmt.Sprintf("Failed to update titles mirror for %s: %v", path, err))
 				}
 
 				if !normalizedTagsEqual(oldGlobalTags, n.Tags) {
@@ -307,11 +311,9 @@ See also:
 				return fmt.Errorf("vault not configured")
 			}
 
-			tag := args[0]
-
-			if !strings.HasPrefix(tag, "#") {
-				tag = "#" + tag
-			}
+			stored := note.NormalizeStored(args[0])
+			body := note.BodyForm(stored)
+			tag := body
 
 			notePaths, err := vlt.ListNotes()
 			if err != nil {
@@ -325,7 +327,7 @@ See also:
 					continue
 				}
 				for _, t := range n.AllTags() {
-					if strings.EqualFold(t, tag) {
+					if note.NormalizeStored(t) == stored {
 						toUpdate = append(toUpdate, path)
 						break
 					}
@@ -378,13 +380,17 @@ See also:
 				oldGlobalTags := make([]string, len(n.Tags))
 				copy(oldGlobalTags, n.Tags)
 
-				n.Content = removeTag(n.Content, tag)
+				n.Content = removeTag(n.Content, body)
 				n.RefreshTags()
 				n.SetTimestamps()
 
 				if err := n.Save(); err != nil {
 					errors = append(errors, fmt.Sprintf("Failed to save %s: %v", path, err))
 					continue
+				}
+
+				if err := vlt.UpdateTitleEntryFull(n.UUID, n.Title, n.FilePath, n.Parent, n.Tags, n.InlineTags, n.InheritedTags); err != nil {
+					errors = append(errors, fmt.Sprintf("Failed to update titles mirror for %s: %v", path, err))
 				}
 
 				if !normalizedTagsEqual(oldGlobalTags, n.Tags) {

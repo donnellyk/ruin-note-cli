@@ -7,11 +7,11 @@ import (
 	"github.com/donnellyk/ruin-note-cli/internal/note"
 )
 
+// ensureHashPrefix is retained as a thin wrapper around note.BodyForm so
+// callers expressing intent ("the user typed a tag, render it for body
+// insertion") read clearly. Spaced tags get `#…#` delimiters.
 func ensureHashPrefix(tag string) string {
-	if !strings.HasPrefix(tag, "#") {
-		return "#" + tag
-	}
-	return tag
+	return note.BodyForm(tag)
 }
 
 func noteHasTag(n *note.Note, tag string) bool {

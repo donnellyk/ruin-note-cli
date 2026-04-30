@@ -242,14 +242,14 @@ More content here.
 
 	globalTags, inlineTags := ClassifyTags(content, "My Note")
 
-	// Global tags: those right after title and at the end
-	expectedGlobal := []string{"#global1", "#global2", "#endtag"}
+	// Global tags: those right after title and at the end (stored form, no `#`)
+	expectedGlobal := []string{"global1", "global2", "endtag"}
 	if !reflect.DeepEqual(globalTags, expectedGlobal) {
 		t.Errorf("globalTags = %v, want %v", globalTags, expectedGlobal)
 	}
 
-	// Inline tags: within content
-	expectedInline := []string{"#inline"}
+	// Inline tags: within content (stored form, no `#`)
+	expectedInline := []string{"inline"}
 	if !reflect.DeepEqual(inlineTags, expectedInline) {
 		t.Errorf("inlineTags = %v, want %v", inlineTags, expectedInline)
 	}
@@ -295,12 +295,12 @@ Some content with #inline here.
 
 	globalTags, inlineTags := ClassifyTags(content, "Ruin Log")
 
-	expectedGlobal := []string{"#log", "#ruin"}
+	expectedGlobal := []string{"log", "ruin"}
 	if !reflect.DeepEqual(globalTags, expectedGlobal) {
 		t.Errorf("globalTags = %v, want %v", globalTags, expectedGlobal)
 	}
 
-	expectedInline := []string{"#inline"}
+	expectedInline := []string{"inline"}
 	if !reflect.DeepEqual(inlineTags, expectedInline) {
 		t.Errorf("inlineTags = %v, want %v", inlineTags, expectedInline)
 	}
@@ -320,12 +320,12 @@ More content.
 
 	globalTags, inlineTags := ClassifyTags(content, "Note")
 
-	expectedGlobal := []string{"#top", "#middle", "#bottom"}
+	expectedGlobal := []string{"top", "middle", "bottom"}
 	if !reflect.DeepEqual(globalTags, expectedGlobal) {
 		t.Errorf("globalTags = %v, want %v", globalTags, expectedGlobal)
 	}
 
-	expectedInline := []string{"#inline"}
+	expectedInline := []string{"inline"}
 	if !reflect.DeepEqual(inlineTags, expectedInline) {
 		t.Errorf("inlineTags = %v, want %v", inlineTags, expectedInline)
 	}

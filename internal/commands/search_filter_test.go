@@ -26,6 +26,12 @@ func TestSearchCmd_DateSearch(t *testing.T) {
 		t.Fatalf("failed to create test note: %v", err)
 	}
 
+	// Seed titles index with stored-form tag mirror so hot-path tag matchers
+	// can resolve `#followup` from titles.json (the v0.4.0 contract).
+	if err := vlt.UpdateTitleEntryFull("uuid-date-1", "Follow Up", path, "", []string{"followup"}, nil, nil); err != nil {
+		t.Fatalf("failed to seed titles: %v", err)
+	}
+
 	// Search by exact date
 	matcher, info, err := parseQuery("@2026-03-15", TagScopeAll)
 	if err != nil {

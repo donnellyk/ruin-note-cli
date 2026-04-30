@@ -298,12 +298,22 @@ func evalEmbedPick(vlt *vault.Vault, ref note.DynamicEmbedRef) ([]PickResult, er
 		return nil, fmt.Errorf("pick: %w", err)
 	}
 
+	titlesIndex, err := vlt.LoadTitles()
+	if err != nil {
+		return nil, fmt.Errorf("pick: failed to load titles: %w", err)
+	}
+	pathToUUID := make(map[string]string, len(titlesIndex.Titles))
+	for uuid, entry := range titlesIndex.Titles {
+		pathToUUID[entry.Path] = uuid
+	}
+
 	var results []PickResult
 	for _, path := range notePaths {
 		fast, err := note.LoadFrontmatterOnly(path)
 		if err != nil {
 			continue
 		}
+		hydrateNoteTagsFromIndex(fast, titlesIndex, pathToUUID, path, false)
 		if len(filter.include) > 0 && !noteHasInlineTag(fast, filter.include) {
 			continue
 		}

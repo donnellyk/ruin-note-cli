@@ -126,6 +126,11 @@ Out of range late @2026-05-10. #followup
 	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
 		t.Fatalf("failed to write test note: %v", err)
 	}
+	// Seed titles index with stored-form tag mirror so the pick command can
+	// resolve `#followup` from titles.json (the v0.4.0 contract).
+	if err := vlt.UpdateTitleEntryFull("uuid-week", "Week View", path, "", []string{"work"}, []string{"followup"}, nil); err != nil {
+		t.Fatalf("failed to seed titles: %v", err)
+	}
 
 	t.Run("absolute window matches inclusive both endpoints", func(t *testing.T) {
 		jsonOut := false

@@ -275,6 +275,9 @@ func BodyForm(tag string) string {
 // Global tags are those on tag-only lines (lines containing only tags and
 // separator characters like commas/whitespace), regardless of position.
 // Inline tags are those on lines that also contain non-tag content.
+//
+// Returns stored form (no `#` prefix or suffix) — the form expected by
+// note.Note.Tags / note.Note.InlineTags from v0.4.0 onward.
 func ClassifyTags(content string, title string) (globalTags []string, inlineTags []string) {
 	lines := strings.Split(content, "\n")
 
@@ -304,12 +307,12 @@ func ClassifyTags(content string, title string) (globalTags []string, inlineTags
 		if tagOnlyLines[lineIdx] {
 			if !seenGlobal[normalized] {
 				seenGlobal[normalized] = true
-				globalTags = append(globalTags, match.Tag)
+				globalTags = append(globalTags, normalized)
 			}
 		} else {
 			if !seenInline[normalized] {
 				seenInline[normalized] = true
-				inlineTags = append(inlineTags, match.Tag)
+				inlineTags = append(inlineTags, normalized)
 			}
 		}
 	}

@@ -369,7 +369,8 @@ Content.`
 	if len(fm.InheritedTags) != 2 {
 		t.Fatalf("InheritedTags = %v, want 2 items", fm.InheritedTags)
 	}
-	if fm.InheritedTags[0] != "#from-parent" || fm.InheritedTags[1] != "#from-grandparent" {
+	// Frontmatter parses tags into stored form (no `#`).
+	if fm.InheritedTags[0] != "from-parent" || fm.InheritedTags[1] != "from-grandparent" {
 		t.Errorf("InheritedTags = %v", fm.InheritedTags)
 	}
 
@@ -403,8 +404,9 @@ func TestFrontmatter_InheritedTagsRoundTrip(t *testing.T) {
 		t.Fatalf("ParseFrontmatter() error = %v", err)
 	}
 
-	if len(parsed.InheritedTags) != 1 || parsed.InheritedTags[0] != "#from-parent" {
-		t.Errorf("round-trip InheritedTags = %v, want [#from-parent]", parsed.InheritedTags)
+	// Frontmatter parses tags into stored form (no `#`).
+	if len(parsed.InheritedTags) != 1 || parsed.InheritedTags[0] != "from-parent" {
+		t.Errorf("round-trip InheritedTags = %v, want [from-parent]", parsed.InheritedTags)
 	}
 }
 

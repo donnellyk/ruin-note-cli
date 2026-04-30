@@ -20,11 +20,11 @@ func TestClassifyTags_Smoke(t *testing.T) {
 	content := "#global\n\nText with #inline here."
 	global, inline := ClassifyTags(content, "")
 
-	if !reflect.DeepEqual(global, []string{"#global"}) {
-		t.Errorf("global = %v, want [#global]", global)
+	if !reflect.DeepEqual(global, []string{"global"}) {
+		t.Errorf("global = %v, want [global]", global)
 	}
-	if !reflect.DeepEqual(inline, []string{"#inline"}) {
-		t.Errorf("inline = %v, want [#inline]", inline)
+	if !reflect.DeepEqual(inline, []string{"inline"}) {
+		t.Errorf("inline = %v, want [inline]", inline)
 	}
 }
 

@@ -122,11 +122,11 @@ func parseFrontmatterYAML(yamlContent string) (*Frontmatter, error) {
 		case "updated":
 			fm.Updated = valueNode.Value
 		case "tags":
-			fm.Tags = decodeStringSlice(valueNode)
+			fm.Tags = normalizeTagSlice(decodeStringSlice(valueNode))
 		case "inline-tags":
-			fm.InlineTags = decodeStringSlice(valueNode)
+			fm.InlineTags = normalizeTagSlice(decodeStringSlice(valueNode))
 		case "inherited-tags":
-			fm.InheritedTags = decodeStringSlice(valueNode)
+			fm.InheritedTags = normalizeTagSlice(decodeStringSlice(valueNode))
 		case "dates":
 			fm.Dates = decodeStringSlice(valueNode)
 		case "parent":
@@ -150,6 +150,85 @@ func parseFrontmatterYAML(yamlContent string) (*Frontmatter, error) {
 	fm.originalExtra = cloneAnyMap(fm.Extra)
 
 	return fm, nil
+}
+
+// HasLegacyTagFrontmatter returns true if the file's frontmatter uses the
+// pre-v0.4.0 tag format: any `#`-prefixed entry in `tags:` or
+// `inherited-tags:`, or the presence of an `inline-tags:` key. Used by doctor
+// to detect notes that need a tag-format migration rewrite.
+//
+// Operates on the raw file bytes since parseFrontmatterYAML strips the legacy
+// `#` prefix on read (so the parsed Frontmatter no longer reveals the
+// on-disk form).
+func HasLegacyTagFrontmatter(content string) bool {
+	content = strings.TrimLeft(content, "\n\r")
+	if !strings.HasPrefix(content, frontmatterDelimiter) {
+		return false
+	}
+	rest := content[len(frontmatterDelimiter):]
+	before, _, ok := strings.Cut(rest, "\n"+frontmatterDelimiter)
+	if !ok {
+		return false
+	}
+	scanner := strings.Split(before, "\n")
+	currentKey := ""
+	for _, line := range scanner {
+		stripped := strings.TrimRight(line, "\r")
+		trimmed := strings.TrimSpace(stripped)
+		if trimmed == "" {
+			continue
+		}
+		if strings.HasPrefix(trimmed, "inline-tags:") {
+			return true
+		}
+		isList := strings.HasPrefix(stripped, " ") || strings.HasPrefix(stripped, "\t")
+		if !isList {
+			currentKey = ""
+			colon := strings.IndexByte(trimmed, ':')
+			if colon <= 0 {
+				continue
+			}
+			key := strings.TrimSpace(trimmed[:colon])
+			value := strings.TrimSpace(trimmed[colon+1:])
+			if key == "tags" || key == "inherited-tags" {
+				if strings.HasPrefix(value, "[") {
+					if strings.Contains(value, "#") {
+						return true
+					}
+					continue
+				}
+				if value != "" {
+					if strings.Contains(strings.Trim(value, `"' `), "#") {
+						return true
+					}
+					continue
+				}
+				currentKey = key
+			}
+			continue
+		}
+		if currentKey != "" && strings.HasPrefix(trimmed, "- ") {
+			val := strings.TrimSpace(trimmed[2:])
+			val = strings.Trim(val, `"'`)
+			if strings.HasPrefix(val, "#") {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// normalizeTagSlice strips the `#` prefix/suffix and lowercases each entry,
+// accepting both pre-v0.4.0 (`#tag`) and v0.4.0 (`tag`) on-disk forms.
+func normalizeTagSlice(in []string) []string {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]string, len(in))
+	for i, s := range in {
+		out[i] = NormalizeStored(s)
+	}
+	return out
 }
 
 func decodeStringSlice(n *yaml.Node) []string {
@@ -211,9 +290,7 @@ func (fm *Frontmatter) serializeFromMap() (string, error) {
 	if len(fm.Tags) > 0 {
 		data["tags"] = fm.Tags
 	}
-	if len(fm.InlineTags) > 0 {
-		data["inline-tags"] = fm.InlineTags
-	}
+	// inline-tags is never written: stored form lives in titles.json from v0.4.0.
 	if len(fm.InheritedTags) > 0 {
 		data["inherited-tags"] = fm.InheritedTags
 	}
@@ -257,7 +334,9 @@ func (fm *Frontmatter) serializeFromNode() (string, error) {
 	setOrRemoveScalar(node, "created", fm.Created)
 	setOrRemoveScalar(node, "updated", fm.Updated)
 	setOrRemoveStringSlice(node, "tags", fm.Tags)
-	setOrRemoveStringSlice(node, "inline-tags", fm.InlineTags)
+	// inline-tags is never written: stored form lives in titles.json from v0.4.0.
+	// Passing nil here strips the key from the source mapping.
+	setOrRemoveStringSlice(node, "inline-tags", nil)
 	setOrRemoveStringSlice(node, "inherited-tags", fm.InheritedTags)
 	setOrRemoveStringSlice(node, "dates", fm.Dates)
 	setOrRemoveScalar(node, "parent", fm.Parent)

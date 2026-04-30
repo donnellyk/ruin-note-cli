@@ -25,17 +25,70 @@ func searchNotes(vlt *vault.Vault, matcher QueryMatcher, info MatcherInfo) ([]Se
 	return searchNotesWithOptions(vlt, matcher, info, SearchOptions{})
 }
 
+// hydrateNoteTagsFromIndex replaces the Note's tag fields with the cached
+// mirror from titles.json. From v0.4.0, LoadFrontmatterOnly returns nil tag
+// fields and the index is authoritative for hot-path matchers. When fullLoad
+// is true the body-derived tags are kept (Note.Tags/InlineTags) and only
+// InheritedTags is overlaid — the index mirror reflects the post-cascade
+// inherited state, which the body cannot derive.
+//
+// If the note is not in the titles index (e.g., a file added since the last
+// doctor scan), falls back to a full body-classification load so tag queries
+// still find the note. This trades the fast-path win for correctness on
+// out-of-sync vaults.
+func hydrateNoteTagsFromIndex(n *note.Note, titles *vault.TitlesIndex, pathToUUID map[string]string, path string, fullLoad bool) {
+	if n == nil {
+		return
+	}
+	uuid := n.UUID
+	if uuid == "" {
+		uuid = pathToUUID[path]
+	}
+	entry, ok := titles.Titles[uuid]
+	if !ok {
+		if fullLoad {
+			return
+		}
+		full, err := note.Load(path)
+		if err != nil {
+			return
+		}
+		n.Tags = full.Tags
+		n.InlineTags = full.InlineTags
+		n.InheritedTags = full.InheritedTags
+		return
+	}
+	if !fullLoad {
+		if n.Tags == nil {
+			n.Tags = entry.Tags
+		}
+		if n.InlineTags == nil {
+			n.InlineTags = entry.InlineTags
+		}
+	}
+	if len(entry.InheritedTags) > 0 {
+		n.InheritedTags = entry.InheritedTags
+	}
+}
+
 func searchNotesWithOptions(vlt *vault.Vault, matcher QueryMatcher, info MatcherInfo, opts SearchOptions) ([]SearchResult, error) {
 	notePaths, err := vlt.ListNotes()
 	if err != nil {
 		return nil, err
 	}
 
+	// Load the titles index once so workers can hydrate Note.Tags/InlineTags/
+	// InheritedTags from the cached mirror without a per-note frontmatter read.
+	titles, err := vlt.LoadTitles()
+	if err != nil {
+		return nil, fmt.Errorf("failed to load titles index: %w", err)
+	}
+	pathToUUID := make(map[string]string, len(titles.Titles))
+	for uuid, entry := range titles.Titles {
+		pathToUUID[entry.Path] = uuid
+	}
+
 	if len(opts.UUIDs) > 0 {
-		titles, err := vlt.LoadTitles()
-		if err != nil {
-			return nil, fmt.Errorf("failed to load titles for UUID filter: %w", err)
-		}
 		allowedPaths := make(map[string]bool, len(opts.UUIDs))
 		for _, uuid := range opts.UUIDs {
 			if entry, ok := titles.Titles[uuid]; ok {
@@ -77,6 +130,14 @@ func searchNotesWithOptions(vlt *vault.Vault, matcher QueryMatcher, info Matcher
 			if loadErr != nil {
 				continue
 			}
+
+			// Hydrate tag fields from the titles index. From v0.4.0 the index is
+			// the source of truth for hot-path tag matching; LoadFrontmatterOnly
+			// no longer carries Tags/InlineTags/InheritedTags. Full Load already
+			// populates them from body classification, but we still overlay the
+			// titles entry's inherited mirror so cascade state reaches matchers
+			// even when the on-disk file is mid-cascade.
+			hydrateNoteTagsFromIndex(n, titles, pathToUUID, path, info.NeedsBody)
 
 			if matcher(n) {
 				if !info.NeedsBody && opts.NeedFullNote {

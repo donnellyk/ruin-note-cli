@@ -151,6 +151,11 @@ func (w *composeWalker) expandDynamicPick(ref note.DynamicEmbedRef, depth int, p
 		return nil
 	}
 
+	pathToUUID := make(map[string]string, len(w.index.Titles))
+	for uuid, entry := range w.index.Titles {
+		pathToUUID[entry.Path] = uuid
+	}
+
 	var pickResults []pickNoteResult
 
 	for _, path := range notePaths {
@@ -158,6 +163,7 @@ func (w *composeWalker) expandDynamicPick(ref note.DynamicEmbedRef, depth int, p
 		if err != nil {
 			continue
 		}
+		hydrateNoteTagsFromIndex(fast, w.index, pathToUUID, path, false)
 
 		if fast.UUID == w.rootUUID || fast.UUID == parentUUID {
 			continue

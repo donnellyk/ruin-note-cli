@@ -200,11 +200,12 @@ func TestLogCmd_UpdatesTagsIndex(t *testing.T) {
 		tagNames[tag.Name] = true
 	}
 
-	if !tagNames["#tag1"] {
-		t.Error("tags index should contain #tag1")
+	// tags.yml Name field stores stripped form (no `#`) from v0.4.0.
+	if !tagNames["tag1"] {
+		t.Error("tags index should contain tag1")
 	}
-	if !tagNames["#tag2"] {
-		t.Error("tags index should contain #tag2")
+	if !tagNames["tag2"] {
+		t.Error("tags index should contain tag2")
 	}
 }
 

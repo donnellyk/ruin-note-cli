@@ -39,8 +39,8 @@ Some content here.
 		t.Fatalf("failed to write note: %v", err)
 	}
 
-	// Seed the tags index with the existing tag
-	if err := vlt.UpdateTagsIndex([]string{"#daily"}, nil); err != nil {
+	// Seed the tags index with the existing tag (stored form, no `#`).
+	if err := vlt.UpdateTagsIndex([]string{"daily"}, nil); err != nil {
 		t.Fatalf("failed to seed tags index: %v", err)
 	}
 
@@ -125,15 +125,16 @@ func TestDoctorCmd_SingleFile_AddTag(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to load tags: %v", err)
 	}
+	// tags.yml Name field stores stripped form (no `#`) from v0.4.0.
 	tagMap := make(map[string]int)
 	for _, te := range tagsIndex.Tags {
 		tagMap[strings.ToLower(te.Name)] = te.Count
 	}
-	if tagMap["#daily"] != 1 {
-		t.Errorf("tags index #daily count = %d, want 1", tagMap["#daily"])
+	if tagMap["daily"] != 1 {
+		t.Errorf("tags index daily count = %d, want 1", tagMap["daily"])
 	}
-	if tagMap["#newtag"] != 1 {
-		t.Errorf("tags index #newtag count = %d, want 1", tagMap["#newtag"])
+	if tagMap["newtag"] != 1 {
+		t.Errorf("tags index newtag count = %d, want 1", tagMap["newtag"])
 	}
 
 	// Verify titles index was updated
@@ -213,9 +214,10 @@ Some content here, no tags anymore.
 	if err != nil {
 		t.Fatalf("failed to load tags: %v", err)
 	}
+	// tags.yml Name field stores stripped form (no `#`) from v0.4.0.
 	for _, te := range tagsIndex.Tags {
-		if strings.ToLower(te.Name) == "#daily" {
-			t.Errorf("tags index still contains #daily with count %d, want removed", te.Count)
+		if strings.ToLower(te.Name) == "daily" {
+			t.Errorf("tags index still contains daily with count %d, want removed", te.Count)
 		}
 	}
 }
@@ -277,8 +279,9 @@ func TestDoctorCmd_SingleFile_DryRun(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to load tags: %v", err)
 	}
+	// tags.yml Name field stores stripped form (no `#`) from v0.4.0.
 	for _, te := range tagsIndex.Tags {
-		if strings.ToLower(te.Name) == "#newtag" {
+		if strings.ToLower(te.Name) == "newtag" {
 			t.Error("dry-run updated the tags index")
 		}
 	}
@@ -504,8 +507,9 @@ Some child content.
 	if err != nil {
 		t.Fatalf("failed to load child: %v", err)
 	}
-	if len(child.InheritedTags) != 1 || child.InheritedTags[0] != "#project" {
-		t.Errorf("child.InheritedTags = %v, want [#project]", child.InheritedTags)
+	// Note.InheritedTags stores stripped form (no `#`) from v0.4.0.
+	if len(child.InheritedTags) != 1 || child.InheritedTags[0] != "project" {
+		t.Errorf("child.InheritedTags = %v, want [project]", child.InheritedTags)
 	}
 }
 

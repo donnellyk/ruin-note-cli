@@ -51,17 +51,18 @@ func TestLogExtract_BasicTags(t *testing.T) {
 	if !strings.Contains(out, "global:") {
 		t.Error("output should contain 'global:' section")
 	}
-	if !strings.Contains(out, "#global1") {
-		t.Errorf("output should contain #global1, got: %s", out)
+	// log extract emits ClassifyTags output, which is stored form (no `#`).
+	if !strings.Contains(out, "global1") {
+		t.Errorf("output should contain global1, got: %s", out)
 	}
-	if !strings.Contains(out, "#global2") {
-		t.Errorf("output should contain #global2, got: %s", out)
+	if !strings.Contains(out, "global2") {
+		t.Errorf("output should contain global2, got: %s", out)
 	}
 	if !strings.Contains(out, "inline:") {
 		t.Error("output should contain 'inline:' section")
 	}
-	if !strings.Contains(out, "#inline") {
-		t.Errorf("output should contain #inline, got: %s", out)
+	if !strings.Contains(out, "inline") {
+		t.Errorf("output should contain inline, got: %s", out)
 	}
 }
 
@@ -80,11 +81,12 @@ func TestLogExtract_JSONOutput(t *testing.T) {
 		t.Fatalf("failed to parse JSON: %v\noutput: %s", err, out)
 	}
 
-	if len(result.Global) != 1 || result.Global[0] != "#global" {
-		t.Errorf("global = %v, want [#global]", result.Global)
+	// log extract emits ClassifyTags output, which is stored form (no `#`).
+	if len(result.Global) != 1 || result.Global[0] != "global" {
+		t.Errorf("global = %v, want [global]", result.Global)
 	}
-	if len(result.Inline) != 1 || result.Inline[0] != "#inline" {
-		t.Errorf("inline = %v, want [#inline]", result.Inline)
+	if len(result.Inline) != 1 || result.Inline[0] != "inline" {
+		t.Errorf("inline = %v, want [inline]", result.Inline)
 	}
 }
 
@@ -133,11 +135,12 @@ func TestLogExtract_WithTitle(t *testing.T) {
 		t.Fatalf("Execute() error = %v", err)
 	}
 
-	if !strings.Contains(out, "#tag1") {
-		t.Errorf("output should contain #tag1, got: %s", out)
+	// log extract emits ClassifyTags output, which is stored form (no `#`).
+	if !strings.Contains(out, "tag1") {
+		t.Errorf("output should contain tag1, got: %s", out)
 	}
-	if !strings.Contains(out, "#tag2") {
-		t.Errorf("output should contain #tag2, got: %s", out)
+	if !strings.Contains(out, "tag2") {
+		t.Errorf("output should contain tag2, got: %s", out)
 	}
 }
 

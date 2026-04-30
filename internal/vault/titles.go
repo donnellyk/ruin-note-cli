@@ -6,20 +6,55 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 )
 
 const titlesFile = "titles.json"
 
+// titlesSchemaVersion is the on-disk schema version for titles.json.
+// v0.4.0 introduced version: 2 (tag fields). Older or missing version
+// triggers migration via doctor.
+const titlesSchemaVersion = 2
+
 type TitleEntry struct {
-	Title  string `json:"title"`
-	Path   string `json:"path"`
-	Parent string `json:"parent,omitempty"`
+	Title         string   `json:"title"`
+	Path          string   `json:"path"`
+	Parent        string   `json:"parent,omitempty"`
+	Tags          []string `json:"tags,omitempty"`
+	InlineTags    []string `json:"inline_tags,omitempty"`
+	InheritedTags []string `json:"inherited_tags,omitempty"`
 }
 
 // TitlesIndex is a JSON-based index for O(1) UUID lookups.
 type TitlesIndex struct {
-	Titles map[string]TitleEntry `json:"titles"`
+	Version int                   `json:"version,omitempty"`
+	Titles  map[string]TitleEntry `json:"titles"`
+}
+
+// sortedCopy returns a sorted copy of in suitable for stable serialization.
+// Returns nil for empty input so JSON omitempty works.
+func sortedCopy(in []string) []string {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]string, len(in))
+	copy(out, in)
+	sort.Strings(out)
+	return out
+}
+
+// MakeTitleEntry constructs a TitleEntry with sorted tag arrays. Use this
+// instead of struct literals so cached tag fields stay diff-stable on disk.
+func MakeTitleEntry(title, path, parent string, tags, inlineTags, inheritedTags []string) TitleEntry {
+	return TitleEntry{
+		Title:         title,
+		Path:          path,
+		Parent:        parent,
+		Tags:          sortedCopy(tags),
+		InlineTags:    sortedCopy(inlineTags),
+		InheritedTags: sortedCopy(inheritedTags),
+	}
 }
 
 func (v *Vault) TitlesFile() string {
@@ -30,7 +65,7 @@ func (v *Vault) LoadTitles() (*TitlesIndex, error) {
 	data, err := os.ReadFile(v.TitlesFile())
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return &TitlesIndex{Titles: make(map[string]TitleEntry)}, nil
+			return &TitlesIndex{Version: titlesSchemaVersion, Titles: make(map[string]TitleEntry)}, nil
 		}
 		return nil, fmt.Errorf("failed to read titles file: %w", err)
 	}
@@ -38,6 +73,10 @@ func (v *Vault) LoadTitles() (*TitlesIndex, error) {
 	var index TitlesIndex
 	if err := json.Unmarshal(data, &index); err != nil {
 		return nil, fmt.Errorf("failed to parse titles file: %w", err)
+	}
+
+	if index.Version > titlesSchemaVersion {
+		return nil, fmt.Errorf("titles.json version %d is newer than this binary supports (max %d); upgrade ruin", index.Version, titlesSchemaVersion)
 	}
 
 	if index.Titles == nil {
@@ -48,6 +87,9 @@ func (v *Vault) LoadTitles() (*TitlesIndex, error) {
 }
 
 func (v *Vault) SaveTitles(index *TitlesIndex) error {
+	if index.Version == 0 {
+		index.Version = titlesSchemaVersion
+	}
 	data, err := json.MarshalIndent(index, "", "  ")
 	if err != nil {
 		return fmt.Errorf("failed to marshal titles: %w", err)
@@ -66,12 +108,46 @@ func (v *Vault) UpdateTitleEntry(uuid, title, path, parent string) error {
 		return err
 	}
 
-	index.Titles[uuid] = TitleEntry{
-		Title:  title,
-		Path:   path,
-		Parent: parent,
+	// Preserve existing tag fields when callers don't supply them. Doctor and
+	// the explicit tag-aware writer below populate them; the simple updater
+	// (used by tests, parent reassignment, etc.) leaves them untouched.
+	existing := index.Titles[uuid]
+	existing.Title = title
+	existing.Path = path
+	existing.Parent = parent
+	index.Titles[uuid] = existing
+
+	return v.SaveTitles(index)
+}
+
+// UpdateTitleEntryFull writes a complete entry, including the tag mirror
+// fields. SaveNote and CreateNote use this so titles.json stays the source of
+// truth for hot-path tag matchers.
+func (v *Vault) UpdateTitleEntryFull(uuid, title, path, parent string, tags, inlineTags, inheritedTags []string) error {
+	index, err := v.LoadTitles()
+	if err != nil {
+		return err
 	}
 
+	index.Titles[uuid] = MakeTitleEntry(title, path, parent, tags, inlineTags, inheritedTags)
+	return v.SaveTitles(index)
+}
+
+// UpdateTitleEntryInheritedTags updates only the inherited_tags mirror for a
+// single entry. Used by CascadeInheritedTags so descendants stay in sync with
+// parent tag changes without rewriting other fields.
+func (v *Vault) UpdateTitleEntryInheritedTags(uuid string, inheritedTags []string) error {
+	index, err := v.LoadTitles()
+	if err != nil {
+		return err
+	}
+
+	entry, ok := index.Titles[uuid]
+	if !ok {
+		return nil
+	}
+	entry.InheritedTags = sortedCopy(inheritedTags)
+	index.Titles[uuid] = entry
 	return v.SaveTitles(index)
 }
 
@@ -86,7 +162,7 @@ func (v *Vault) RemoveTitleEntry(uuid string) error {
 }
 
 func (v *Vault) RebuildTitlesIndex(entries map[string]TitleEntry) error {
-	index := &TitlesIndex{Titles: entries}
+	index := &TitlesIndex{Version: titlesSchemaVersion, Titles: entries}
 	return v.SaveTitles(index)
 }
 

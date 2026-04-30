@@ -354,6 +354,15 @@ func countMatches(vlt *vault.Vault, matcher QueryMatcher, info MatcherInfo) (int
 		return 0, err
 	}
 
+	titles, err := vlt.LoadTitles()
+	if err != nil {
+		return 0, fmt.Errorf("failed to load titles index: %w", err)
+	}
+	pathToUUID := make(map[string]string, len(titles.Titles))
+	for uuid, entry := range titles.Titles {
+		pathToUUID[entry.Path] = uuid
+	}
+
 	count := 0
 	for _, path := range notePaths {
 		var n *note.Note
@@ -365,6 +374,7 @@ func countMatches(vlt *vault.Vault, matcher QueryMatcher, info MatcherInfo) (int
 		if err != nil {
 			continue
 		}
+		hydrateNoteTagsFromIndex(n, titles, pathToUUID, path, info.NeedsBody)
 
 		if matcher(n) {
 			count++

@@ -43,11 +43,12 @@ Body content here.
 	if fm.Updated != "2025-01-15T11:00:00-05:00" {
 		t.Errorf("Updated = %q, want %q", fm.Updated, "2025-01-15T11:00:00-05:00")
 	}
-	if len(fm.Tags) != 2 || fm.Tags[0] != "#daily" || fm.Tags[1] != "#work" {
-		t.Errorf("Tags = %v, want [#daily, #work]", fm.Tags)
+	// ParseFrontmatterFast normalizes tags to stored form (no `#`).
+	if len(fm.Tags) != 2 || fm.Tags[0] != "daily" || fm.Tags[1] != "work" {
+		t.Errorf("Tags = %v, want [daily, work]", fm.Tags)
 	}
-	if len(fm.InlineTags) != 2 || fm.InlineTags[0] != "#todo" || fm.InlineTags[1] != "#followup" {
-		t.Errorf("InlineTags = %v, want [#todo, #followup]", fm.InlineTags)
+	if len(fm.InlineTags) != 2 || fm.InlineTags[0] != "todo" || fm.InlineTags[1] != "followup" {
+		t.Errorf("InlineTags = %v, want [todo, followup]", fm.InlineTags)
 	}
 	if fm.Parent != "parent-uuid" {
 		t.Errorf("Parent = %q, want %q", fm.Parent, "parent-uuid")
@@ -80,11 +81,12 @@ linked-cards: ["card-1"]
 		t.Fatalf("ParseFrontmatterFast() error = %v", err)
 	}
 
-	if len(fm.Tags) != 2 || fm.Tags[0] != "#daily" || fm.Tags[1] != "#work" {
-		t.Errorf("Tags = %v, want [#daily, #work]", fm.Tags)
+	// ParseFrontmatterFast normalizes tags to stored form (no `#`).
+	if len(fm.Tags) != 2 || fm.Tags[0] != "daily" || fm.Tags[1] != "work" {
+		t.Errorf("Tags = %v, want [daily, work]", fm.Tags)
 	}
-	if len(fm.InlineTags) != 2 || fm.InlineTags[0] != "#todo" || fm.InlineTags[1] != "#followup" {
-		t.Errorf("InlineTags = %v, want [#todo, #followup]", fm.InlineTags)
+	if len(fm.InlineTags) != 2 || fm.InlineTags[0] != "todo" || fm.InlineTags[1] != "followup" {
+		t.Errorf("InlineTags = %v, want [todo, followup]", fm.InlineTags)
 	}
 	if len(fm.LinkedCards) != 1 || fm.LinkedCards[0] != "card-1" {
 		t.Errorf("LinkedCards = %v, want [card-1]", fm.LinkedCards)
@@ -114,8 +116,9 @@ Body
 	if fm.Parent != "single-quoted" {
 		t.Errorf("Parent = %q, want %q", fm.Parent, "single-quoted")
 	}
-	if len(fm.Tags) != 2 || fm.Tags[0] != "#daily" || fm.Tags[1] != "unquoted-tag" {
-		t.Errorf("Tags = %v, want [#daily, unquoted-tag]", fm.Tags)
+	// ParseFrontmatterFast normalizes tags to stored form (no `#`).
+	if len(fm.Tags) != 2 || fm.Tags[0] != "daily" || fm.Tags[1] != "unquoted-tag" {
+		t.Errorf("Tags = %v, want [daily, unquoted-tag]", fm.Tags)
 	}
 }
 
@@ -193,8 +196,9 @@ Body
 	if fm.UUID != "test-uuid" {
 		t.Errorf("UUID = %q, want %q", fm.UUID, "test-uuid")
 	}
-	if len(fm.Tags) != 1 || fm.Tags[0] != "#daily" {
-		t.Errorf("Tags = %v, want [#daily]", fm.Tags)
+	// ParseFrontmatterFast normalizes tags to stored form (no `#`).
+	if len(fm.Tags) != 1 || fm.Tags[0] != "daily" {
+		t.Errorf("Tags = %v, want [daily]", fm.Tags)
 	}
 	// Extra should be nil (fast path doesn't populate Extra)
 	if fm.Extra != nil {
@@ -370,11 +374,13 @@ It has multiple lines.
 	if n.FilePath != path {
 		t.Errorf("FilePath = %q, want %q", n.FilePath, path)
 	}
-	if len(n.Tags) != 2 {
-		t.Errorf("Tags = %v, want 2 tags", n.Tags)
+	// From v0.4.0, LoadFrontmatterOnly returns nil for Tags/InlineTags/
+	// InheritedTags (titles.json is the source of truth — see fastparse.go).
+	if n.Tags != nil {
+		t.Errorf("Tags = %v, want nil", n.Tags)
 	}
-	if len(n.InlineTags) != 1 {
-		t.Errorf("InlineTags = %v, want 1 tag", n.InlineTags)
+	if n.InlineTags != nil {
+		t.Errorf("InlineTags = %v, want nil", n.InlineTags)
 	}
 	if n.Parent != "parent-uuid" {
 		t.Errorf("Parent = %q, want %q", n.Parent, "parent-uuid")
@@ -473,13 +479,15 @@ More text here.
 	if !fast.Updated.Equal(full.Updated) {
 		t.Errorf("Updated: fast=%v full=%v", fast.Updated, full.Updated)
 	}
-	// Tags come from frontmatter in fast path, from body in full path
-	// They should match since frontmatter was written from body tags
-	if !slicesEqual(fast.Tags, full.Tags) {
-		t.Errorf("Tags: fast=%v full=%v", fast.Tags, full.Tags)
+	// From v0.4.0, LoadFrontmatterOnly returns nil tag fields (titles.json is
+	// the source of truth); full Load still classifies from body. The
+	// consistency invariant therefore no longer applies for these fields —
+	// callers hydrate via hydrateNoteTagsFromIndex at the worker boundary.
+	if fast.Tags != nil {
+		t.Errorf("fast.Tags = %v, want nil", fast.Tags)
 	}
-	if !slicesEqual(fast.InlineTags, full.InlineTags) {
-		t.Errorf("InlineTags: fast=%v full=%v", fast.InlineTags, full.InlineTags)
+	if fast.InlineTags != nil {
+		t.Errorf("fast.InlineTags = %v, want nil", fast.InlineTags)
 	}
 	if (fast.Order == nil) != (full.Order == nil) {
 		t.Errorf("Order nil: fast=%v full=%v", fast.Order == nil, full.Order == nil)
@@ -720,7 +728,8 @@ parent: parent-uuid
 	if len(fm.InheritedTags) != 2 {
 		t.Fatalf("InheritedTags = %v, want 2 items", fm.InheritedTags)
 	}
-	if fm.InheritedTags[0] != "#from-parent" || fm.InheritedTags[1] != "#from-grandparent" {
+	// ParseFrontmatterFast normalizes tags to stored form (no `#`).
+	if fm.InheritedTags[0] != "from-parent" || fm.InheritedTags[1] != "from-grandparent" {
 		t.Errorf("InheritedTags = %v", fm.InheritedTags)
 	}
 }
@@ -741,7 +750,8 @@ inherited-tags: ["#from-parent", "#from-grandparent"]
 	if len(fm.InheritedTags) != 2 {
 		t.Fatalf("InheritedTags = %v, want 2 items", fm.InheritedTags)
 	}
-	if fm.InheritedTags[0] != "#from-parent" || fm.InheritedTags[1] != "#from-grandparent" {
+	// ParseFrontmatterFast normalizes tags to stored form (no `#`).
+	if fm.InheritedTags[0] != "from-parent" || fm.InheritedTags[1] != "from-grandparent" {
 		t.Errorf("InheritedTags = %v", fm.InheritedTags)
 	}
 }
@@ -771,10 +781,12 @@ Content.
 		t.Fatalf("LoadFrontmatterOnly() error = %v", err)
 	}
 
-	if len(n.InheritedTags) != 1 || n.InheritedTags[0] != "#from-parent" {
-		t.Errorf("InheritedTags = %v, want [#from-parent]", n.InheritedTags)
+	// From v0.4.0, LoadFrontmatterOnly returns nil tag fields on the *Note —
+	// titles.json is the source of truth for hot-path matchers.
+	if n.InheritedTags != nil {
+		t.Errorf("InheritedTags = %v, want nil", n.InheritedTags)
 	}
-	if len(n.Tags) != 1 || n.Tags[0] != "#own" {
-		t.Errorf("Tags = %v, want [#own]", n.Tags)
+	if n.Tags != nil {
+		t.Errorf("Tags = %v, want nil", n.Tags)
 	}
 }

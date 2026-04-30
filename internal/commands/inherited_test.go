@@ -19,7 +19,8 @@ func TestComputeInheritedTags_SingleParent(t *testing.T) {
 
 	loader := func(path string) (*note.Note, error) {
 		if path == "/tmp/parent.md" {
-			return &note.Note{UUID: "parent-1", Tags: []string{"#project", "#important"}}, nil
+			// Note.Tags now stores stripped form (no `#`) from v0.4.0.
+			return &note.Note{UUID: "parent-1", Tags: []string{"project", "important"}}, nil
 		}
 		return &note.Note{}, nil
 	}
@@ -28,7 +29,8 @@ func TestComputeInheritedTags_SingleParent(t *testing.T) {
 	if len(inherited) != 2 {
 		t.Fatalf("expected 2 inherited tags, got %d: %v", len(inherited), inherited)
 	}
-	if inherited[0] != "#project" || inherited[1] != "#important" {
+	// ComputeInheritedTags returns stored form (no `#`).
+	if inherited[0] != "project" || inherited[1] != "important" {
 		t.Errorf("unexpected tags: %v", inherited)
 	}
 }
@@ -45,9 +47,10 @@ func TestComputeInheritedTags_Transitive(t *testing.T) {
 	loader := func(path string) (*note.Note, error) {
 		switch path {
 		case "/tmp/gp.md":
-			return &note.Note{UUID: "grandparent", Tags: []string{"#root"}}, nil
+			// Note.Tags now stores stripped form (no `#`) from v0.4.0.
+			return &note.Note{UUID: "grandparent", Tags: []string{"root"}}, nil
 		case "/tmp/parent.md":
-			return &note.Note{UUID: "parent-1", Tags: []string{"#mid"}}, nil
+			return &note.Note{UUID: "parent-1", Tags: []string{"mid"}}, nil
 		}
 		return &note.Note{}, nil
 	}
@@ -56,8 +59,8 @@ func TestComputeInheritedTags_Transitive(t *testing.T) {
 	if len(inherited) != 2 {
 		t.Fatalf("expected 2 inherited tags, got %d: %v", len(inherited), inherited)
 	}
-	// Parent tags come first, then grandparent
-	if inherited[0] != "#mid" || inherited[1] != "#root" {
+	// Parent tags come first, then grandparent (stored form, no `#`).
+	if inherited[0] != "mid" || inherited[1] != "root" {
 		t.Errorf("unexpected order: %v", inherited)
 	}
 }
@@ -73,18 +76,20 @@ func TestComputeInheritedTags_CycleDetection(t *testing.T) {
 	loader := func(path string) (*note.Note, error) {
 		switch path {
 		case "/tmp/a.md":
-			return &note.Note{UUID: "a", Tags: []string{"#tagA"}}, nil
+			// Note.Tags now stores stripped form (no `#`) from v0.4.0.
+			return &note.Note{UUID: "a", Tags: []string{"tagA"}}, nil
 		case "/tmp/b.md":
-			return &note.Note{UUID: "b", Tags: []string{"#tagB"}}, nil
+			return &note.Note{UUID: "b", Tags: []string{"tagB"}}, nil
 		}
 		return &note.Note{}, nil
 	}
 
 	// Should not infinite loop
 	inherited := ComputeInheritedTags("a", titlesIndex, loader)
-	// b is parent of a, and b's parent is a (cycle) — should get b's tags only
-	if len(inherited) != 1 || inherited[0] != "#tagB" {
-		t.Errorf("expected [#tagB], got %v", inherited)
+	// b is parent of a, and b's parent is a (cycle) — should get b's tags only.
+	// ComputeInheritedTags returns stored form (lowercased, no `#`).
+	if len(inherited) != 1 || inherited[0] != "tagb" {
+		t.Errorf("expected [tagb], got %v", inherited)
 	}
 }
 
@@ -179,10 +184,12 @@ Some child content.
 		t.Fatalf("failed to write child: %v", err)
 	}
 
-	// Set up titles index
+	// Set up titles index. Seed parent's Tags mirror (stored form, no `#`)
+	// so ComputeInheritedTags can read it without falling back to the loader,
+	// which from v0.4.0 returns nil tag fields via LoadFrontmatterOnly.
 	titlesIndex := &vault.TitlesIndex{
 		Titles: map[string]vault.TitleEntry{
-			"parent-uuid": {Title: "Parent Note", Path: parentPath, Parent: ""},
+			"parent-uuid": {Title: "Parent Note", Path: parentPath, Parent: "", Tags: []string{"project"}},
 			"child-uuid":  {Title: "Child Note", Path: childPath, Parent: "parent-uuid"},
 		},
 	}
@@ -200,8 +207,9 @@ Some child content.
 	if err != nil {
 		t.Fatalf("failed to reload child: %v", err)
 	}
-	if len(child.InheritedTags) != 1 || child.InheritedTags[0] != "#project" {
-		t.Errorf("child.InheritedTags = %v, want [#project]", child.InheritedTags)
+	// Note.InheritedTags stores stripped form (no `#`) from v0.4.0.
+	if len(child.InheritedTags) != 1 || child.InheritedTags[0] != "project" {
+		t.Errorf("child.InheritedTags = %v, want [project]", child.InheritedTags)
 	}
 }
 
@@ -230,10 +238,12 @@ Some parent content.
 		t.Fatalf("failed to write parent: %v", err)
 	}
 
-	// Add parent to titles index so it can be looked up
+	// Add parent to titles index so it can be looked up. Seed Tags mirror
+	// (stored form, no `#`) so ComputeInheritedTags can read it without
+	// falling back to the loader, which from v0.4.0 returns nil tag fields.
 	titlesIndex := &vault.TitlesIndex{
 		Titles: map[string]vault.TitleEntry{
-			"parent-uuid": {Title: "Parent Note", Path: parentPath, Parent: ""},
+			"parent-uuid": {Title: "Parent Note", Path: parentPath, Parent: "", Tags: []string{"project"}},
 		},
 	}
 	if err := vlt.SaveTitles(titlesIndex); err != nil {
@@ -254,8 +264,9 @@ Some parent content.
 	if err != nil {
 		t.Fatalf("failed to reload child: %v", err)
 	}
-	if len(reloaded.InheritedTags) != 1 || reloaded.InheritedTags[0] != "#project" {
-		t.Errorf("child inherited-tags = %v, want [#project]", reloaded.InheritedTags)
+	// Note.InheritedTags stores stripped form (no `#`) from v0.4.0.
+	if len(reloaded.InheritedTags) != 1 || reloaded.InheritedTags[0] != "project" {
+		t.Errorf("child inherited-tags = %v, want [project]", reloaded.InheritedTags)
 	}
 }
 

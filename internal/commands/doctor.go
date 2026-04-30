@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/donnellyk/ruin-note-cli/internal/note"
 	"github.com/donnellyk/ruin-note-cli/internal/vault"
@@ -18,6 +19,7 @@ type DoctorOutput struct {
 	LinkedCardsReindexed  []string `json:"linked_cards_reindexed,omitempty"`
 	InheritedTagsUpdated  []string `json:"inherited_tags_updated,omitempty"`
 	InheritedTagsStripped []string `json:"inherited_tags_stripped,omitempty"`
+	TagFormatMigrated     []string `json:"tag_format_migrated,omitempty"`
 	TagsYMLUpdated        bool     `json:"tags_yml_updated"`
 	TitlesUpdated         bool     `json:"titles_updated"`
 	OrphanedParents       []string `json:"orphaned_parents,omitempty"`
@@ -123,7 +125,8 @@ func doctorFiles(vlt *vault.Vault, paths []string, dryRun bool, jsonOutput bool)
 			fmt.Fprintf(os.Stderr, "%swarning: failed to read %s: %v\n", prefix, path, err)
 			continue
 		}
-		rawFM, _, _ := note.ParseFrontmatter(string(rawBytes))
+		rawContent := string(rawBytes)
+		rawFM, _, _ := note.ParseFrontmatter(rawContent)
 
 		n, err := note.Load(path)
 		if err != nil {
@@ -136,6 +139,11 @@ func doctorFiles(vlt *vault.Vault, paths []string, dryRun bool, jsonOutput bool)
 		if n.UUID == "" {
 			n.EnsureUUID()
 			output.UUIDGenerated = append(output.UUIDGenerated, path)
+			needsSave = true
+		}
+
+		if note.HasLegacyTagFrontmatter(rawContent) {
+			output.TagFormatMigrated = append(output.TagFormatMigrated, path)
 			needsSave = true
 		}
 
@@ -181,8 +189,11 @@ func doctorFiles(vlt *vault.Vault, paths []string, dryRun bool, jsonOutput bool)
 
 		var newInherited []string
 		if vlt.TagInheritanceEnabled() && n.Parent != "" {
+			// note.Load (full body classification) since v0.4.0 — fast-path
+			// LoadFrontmatterOnly returns nil tag fields and would cause
+			// inherited-tag computation to silently yield empty.
 			loader := func(p string) (*note.Note, error) {
-				return note.LoadFrontmatterOnly(p)
+				return note.Load(p)
 			}
 			newInherited = ComputeInheritedTags(n.UUID, titlesIndex, loader)
 		}
@@ -225,6 +236,9 @@ func doctorFiles(vlt *vault.Vault, paths []string, dryRun bool, jsonOutput bool)
 	}
 
 	if !dryRun {
+		if migrated := len(output.TagFormatMigrated); migrated > 0 {
+			vlt.Commit(fmt.Sprintf("ruin v0.4.0: tag-format migration (%d notes)", migrated))
+		}
 		repaired := len(output.UUIDGenerated) + len(output.TagsReindexed) + len(output.LinkedCardsReindexed) + len(output.InheritedTagsUpdated) + len(output.InheritedTagsStripped)
 		if repaired > 0 {
 			vlt.Commit(fmt.Sprintf("ruin doctor: Repair %d notes", repaired))
@@ -270,7 +284,8 @@ func RunDoctorFullScan(vlt *vault.Vault, dryRun bool) (*DoctorOutput, error) {
 			fmt.Fprintf(os.Stderr, "%swarning: failed to read %s: %v\n", prefix, path, err)
 			continue
 		}
-		rawFM, _, _ := note.ParseFrontmatter(string(rawBytes))
+		rawContent := string(rawBytes)
+		rawFM, _, _ := note.ParseFrontmatter(rawContent)
 
 		n, err := note.Load(path)
 		if err != nil {
@@ -283,6 +298,14 @@ func RunDoctorFullScan(vlt *vault.Vault, dryRun bool) (*DoctorOutput, error) {
 		if n.UUID == "" {
 			n.EnsureUUID()
 			output.UUIDGenerated = append(output.UUIDGenerated, path)
+			needsSave = true
+		}
+
+		// Pre-v0.4.0 frontmatter: any `#` in tags:/inherited-tags: arrays or
+		// any inline-tags: key. Force a rewrite via Serialize so the new
+		// (stripped) form replaces the legacy one.
+		if note.HasLegacyTagFrontmatter(rawContent) {
+			output.TagFormatMigrated = append(output.TagFormatMigrated, path)
 			needsSave = true
 		}
 
@@ -315,11 +338,7 @@ func RunDoctorFullScan(vlt *vault.Vault, dryRun bool) (*DoctorOutput, error) {
 			inlineTagSet[t] = true
 		}
 
-		titleEntries[n.UUID] = vault.TitleEntry{
-			Title:  n.Title,
-			Path:   path,
-			Parent: n.Parent,
-		}
+		titleEntries[n.UUID] = vault.MakeTitleEntry(n.Title, path, n.Parent, n.Tags, n.InlineTags, n.InheritedTags)
 
 		if needsSave && !dryRun {
 			if err := n.Save(); err != nil {
@@ -448,6 +467,12 @@ func RunDoctorFullScan(vlt *vault.Vault, dryRun bool) (*DoctorOutput, error) {
 				fmt.Fprintf(os.Stderr, "%swarning: failed to save inherited tags for %s: %v\n", prefix, n.FilePath, err)
 			}
 		}
+
+		// Keep titleEntries in sync with any tag changes so the titles.json
+		// rebuild below reflects the final post-cascade state.
+		if inheritedChanged || contentChanged {
+			titleEntries[n.UUID] = vault.MakeTitleEntry(n.Title, n.FilePath, n.Parent, n.Tags, n.InlineTags, n.InheritedTags)
+		}
 	}
 
 	if !dryRun {
@@ -490,6 +515,9 @@ func RunDoctorFullScan(vlt *vault.Vault, dryRun bool) (*DoctorOutput, error) {
 	}
 
 	if !dryRun {
+		if migrated := len(output.TagFormatMigrated); migrated > 0 {
+			vlt.Commit(fmt.Sprintf("ruin v0.4.0: tag-format migration (%d notes)", migrated))
+		}
 		repaired := len(output.UUIDGenerated) + len(output.TagsReindexed) + len(output.LinkedCardsReindexed) + len(output.InheritedTagsUpdated) + len(output.InheritedTagsStripped)
 		if repaired > 0 {
 			vlt.Commit(fmt.Sprintf("ruin doctor: Repair %d notes", repaired))
@@ -507,6 +535,14 @@ func doctorPrintOutput(output *DoctorOutput, prefix string, jsonOutput bool) err
 	}
 
 	fmt.Fprintf(os.Stderr, "%sScanned %d notes\n", prefix, output.Scanned)
+	if len(output.TagFormatMigrated) > 0 {
+		if strings.Contains(prefix, "dry-run") {
+			fmt.Fprintf(os.Stderr, "  %d notes: %swill migrate from pre-v0.4.0 tag format\n", len(output.TagFormatMigrated), prefix)
+			fmt.Fprintf(os.Stderr, "  Hint: This vault uses the pre-v0.4.0 tag format. Run without --dry-run to migrate.\n")
+		} else {
+			fmt.Fprintf(os.Stderr, "  %d notes: migrated from pre-v0.4.0 tag format\n", len(output.TagFormatMigrated))
+		}
+	}
 	if len(output.UUIDGenerated) > 0 {
 		fmt.Fprintf(os.Stderr, "  %d notes: %sgenerated missing UUID\n", len(output.UUIDGenerated), prefix)
 	}

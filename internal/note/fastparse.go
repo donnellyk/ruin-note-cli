@@ -58,6 +58,12 @@ func ParseFrontmatterFast(data []byte) (*Frontmatter, int, error) {
 		return nil, 0, err
 	}
 
+	// Block-scalar lists are appended raw inside parseFMLines (currentList path).
+	// Normalize after the fact so both flow and block forms strip the `#` prefix.
+	fm.Tags = normalizeTagSlice(fm.Tags)
+	fm.InlineTags = normalizeTagSlice(fm.InlineTags)
+	fm.InheritedTags = normalizeTagSlice(fm.InheritedTags)
+
 	return fm, bodyOffset, nil
 }
 
@@ -100,11 +106,11 @@ func parseFMLines(data []byte, fm *Frontmatter) error {
 			list := parseFlowList(value)
 			switch key {
 			case "tags":
-				fm.Tags = list
+				fm.Tags = normalizeTagSlice(list)
 			case "inline-tags":
-				fm.InlineTags = list
+				fm.InlineTags = normalizeTagSlice(list)
 			case "inherited-tags":
-				fm.InheritedTags = list
+				fm.InheritedTags = normalizeTagSlice(list)
 			case "dates":
 				fm.Dates = list
 			case "linked-cards":
@@ -224,17 +230,19 @@ func LoadFrontmatterOnly(path string) (*Note, error) {
 		return nil, err
 	}
 
+	// Tags/InlineTags/InheritedTags are intentionally not populated here from
+	// v0.4.0 onward. The titles.json mirror is the source of truth for hot-path
+	// tag matchers; callers that need tags hydrate via hydrateNoteTagsFromIndex
+	// at the worker boundary. Frontmatter values are still parsed (for doctor's
+	// migration-detection scan) but discarded on the returned *Note.
 	note := &Note{
-		UUID:          fm.UUID,
-		Parent:        fm.Parent,
-		Order:         fm.Order,
-		LinkedCards:   fm.LinkedCards,
-		URL:           fm.URL,
-		Tags:          fm.Tags,
-		InlineTags:    fm.InlineTags,
-		InheritedTags: fm.InheritedTags,
-		Dates:         fm.Dates,
-		FilePath:      path,
+		UUID:        fm.UUID,
+		Parent:      fm.Parent,
+		Order:       fm.Order,
+		LinkedCards: fm.LinkedCards,
+		URL:         fm.URL,
+		Dates:       fm.Dates,
+		FilePath:    path,
 	}
 
 	if fm.Created != "" {

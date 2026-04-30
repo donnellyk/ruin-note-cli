@@ -48,7 +48,9 @@ ruin init [path]
 
 Creates `.ruin/` directory with `tags.yml` and `queries.yml`. Initializes a git repository for automatic version history (unless `--no-git`). If path provided, updates config. Use `--config` to also create the config directory and file when initializing in the current directory (no path argument).
 
-If the target directory already contains markdown notes (e.g., when migrating from Obsidian), init offers to run `ruin doctor` to build the tags and titles indices. Doctor may rewrite frontmatter — adding a `uuid` to notes that don't have one, normalizing tags (a leading `#` is added if missing), and rebuilding the `inline-tags` and `dates` fields from note bodies. Other frontmatter fields, key order, and comments are preserved. Decline the prompt to skip; run `ruin doctor` later when ready. `--force` skips the prompt and always runs doctor. Non-interactive invocations (no TTY) require `--force` to opt in.
+If the target directory already contains markdown notes (e.g., when migrating from Obsidian), init offers to run `ruin doctor` to build the tags and titles indices. Doctor may rewrite frontmatter — adding a `uuid` to notes that don't have one, migrating pre-v0.4.0 tag form (stripping `#` from `tags:` / `inherited-tags:`, dropping the `inline-tags:` field), and rebuilding the `dates` field from note bodies. Other frontmatter fields, key order, and comments are preserved. Decline the prompt to skip; run `ruin doctor` later when ready. `--force` skips the prompt and always runs doctor. Non-interactive invocations (no TTY) require `--force` to opt in.
+
+See [`docs/breaking-changes/v0.4.0-tag-format.md`](breaking-changes/v0.4.0-tag-format.md) for the full v0.4.0 migration walkthrough — what changes on disk, JSON output contract, downstream consumer checklist, and rollback notes.
 
 ### log
 
@@ -712,9 +714,15 @@ dates:
 Content with #tags inline and a date reference @2025-02-03.
 ```
 
-**Managed fields** (set by CLI): `uuid`, `created`, `updated`, `tags` (global only), `inline-tags` (inline only), `inherited-tags` (global tags from ancestor notes), `dates` (referenced dates), `parent`, `order`, `linked-cards`
+**Managed fields** (set by CLI): `uuid`, `created`, `updated`, `tags` (global only, stored without `#` prefix from v0.4.0), `inherited-tags` (global tags from ancestor notes, stripped form), `dates` (referenced dates), `parent`, `order`, `linked-cards`
 
 **User fields**: Any other YAML keys are preserved.
+
+> **v0.4.0 contract change**: stored tag values drop the `#` prefix.
+> `tags: [daily]` instead of `tags: ["#daily"]`. The `inline-tags:`
+> field is no longer written to frontmatter — inline tags live in
+> `.ruin/titles.json`. Body markdown (`#tag`, `#meeting notes#`) is
+> unchanged. See [`breaking-changes/v0.4.0-tag-format.md`](breaking-changes/v0.4.0-tag-format.md).
 
 ## Tag Syntax
 
@@ -727,12 +735,13 @@ Content with #tags inline and a date reference @2025-02-03.
 When a note has a parent, the parent's global tags (and grandparent's, etc.) are automatically propagated to the child's `inherited-tags` frontmatter field. This is transitive — the entire ancestor chain is walked.
 
 - `inherited-tags` is computed on save (`log`, `search --edit`, `update`, `note set/append/merge`)
-- When a parent's global tags change, all descendants are cascade-updated
+- When a parent's global tags change, all descendants are cascade-updated, and the inherited-tags mirror in `.ruin/titles.json` is updated in the same pass
 - `doctor` recomputes inherited tags for all notes and strips redundant inherited tags from content (tag-only lines)
 - `search` matches inherited tags (via `EffectiveGlobalTags`)
-- JSON output includes both `tags` (own + inherited merged) and `inherited_tags` (inherited only)
+- JSON output includes both `tags` (own + inherited merged) and `inherited_tags` (inherited only). From v0.4.0 both arrays carry stored form (no `#`).
 - Inherited tags are NOT counted in `tags.yml` (the parent already counts them)
 - `AllTags()` (used for tag index) excludes inherited tags
+- From v0.4.0, `inherited-tags` in frontmatter stores tags without the `#` prefix; `.ruin/titles.json` mirrors the same data per entry for hot-path matchers.
 
 ## Wiki Links
 

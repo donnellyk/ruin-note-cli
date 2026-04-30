@@ -112,6 +112,33 @@ This note references a non-existent parent.`,
 		}
 	}
 
+	// Seed the titles index with stored-form tag mirrors so hot-path tag
+	// matchers can read tags from titles.json (the v0.4.0 contract). We
+	// populate the tag fields directly rather than running a doctor full
+	// scan to avoid triggering the inherited-tag cascade — these tests
+	// assert pre-cascade match counts (e.g. #daily matches only the two
+	// notes that own that tag, not their descendants).
+	titlesSeed := []struct {
+		uuid       string
+		title      string
+		filename   string
+		parent     string
+		tags       []string
+		inlineTags []string
+	}{
+		{"uuid-1", "Daily Note 1", "note1.md", "", []string{"daily", "work"}, nil},
+		{"uuid-2", "Daily Note 2", "note2.md", "", []string{"daily", "personal"}, nil},
+		{"uuid-3", "Project Alpha", "note3.md", "uuid-1", []string{"project", "work"}, nil},
+		{"uuid-4", "Alpha Sub-task", "note4.md", "uuid-3", []string{"project"}, nil},
+		{"uuid-5", "Orphan Idea", "note5.md", "uuid-nonexistent", []string{"idea"}, nil},
+	}
+	for _, e := range titlesSeed {
+		path := filepath.Join(tmpDir, e.filename)
+		if err := vlt.UpdateTitleEntryFull(e.uuid, e.title, path, e.parent, e.tags, e.inlineTags, nil); err != nil {
+			t.Fatalf("seed titles for %s: %v", e.uuid, err)
+		}
+	}
+
 	return vlt
 }
 

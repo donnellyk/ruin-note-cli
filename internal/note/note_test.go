@@ -289,14 +289,14 @@ func TestNote_RefreshTags(t *testing.T) {
 
 	note.RefreshTags()
 
-	// Should now have 1 global tag
-	if len(note.Tags) != 1 || note.Tags[0] != "#old" {
-		t.Errorf("Tags = %v, want [#old]", note.Tags)
+	// Should now have 1 global tag (stored form, no `#`)
+	if len(note.Tags) != 1 || note.Tags[0] != "old" {
+		t.Errorf("Tags = %v, want [old]", note.Tags)
 	}
 
-	// #new should be inline
-	if len(note.InlineTags) != 1 || note.InlineTags[0] != "#new" {
-		t.Errorf("InlineTags = %v, want [#new]", note.InlineTags)
+	// new should be inline (stored form, no `#`)
+	if len(note.InlineTags) != 1 || note.InlineTags[0] != "new" {
+		t.Errorf("InlineTags = %v, want [new]", note.InlineTags)
 	}
 
 	// AllTags should have both (own global + inline, NOT inherited)
@@ -307,40 +307,40 @@ func TestNote_RefreshTags(t *testing.T) {
 
 func TestNote_EffectiveGlobalTags(t *testing.T) {
 	n := &Note{
-		Tags:          []string{"#own"},
-		InheritedTags: []string{"#inherited", "#own"}, // #own overlaps
+		Tags:          []string{"own"},
+		InheritedTags: []string{"inherited", "own"}, // own overlaps
 	}
 
 	effective := n.EffectiveGlobalTags()
 	if len(effective) != 2 {
 		t.Fatalf("EffectiveGlobalTags() = %v, want 2 tags", effective)
 	}
-	if effective[0] != "#own" || effective[1] != "#inherited" {
-		t.Errorf("EffectiveGlobalTags() = %v, want [#own, #inherited]", effective)
+	if effective[0] != "own" || effective[1] != "inherited" {
+		t.Errorf("EffectiveGlobalTags() = %v, want [own, inherited]", effective)
 	}
 }
 
 func TestNote_EffectiveGlobalTags_NoInherited(t *testing.T) {
 	n := &Note{
-		Tags: []string{"#own"},
+		Tags: []string{"own"},
 	}
 
 	effective := n.EffectiveGlobalTags()
-	if len(effective) != 1 || effective[0] != "#own" {
-		t.Errorf("EffectiveGlobalTags() = %v, want [#own]", effective)
+	if len(effective) != 1 || effective[0] != "own" {
+		t.Errorf("EffectiveGlobalTags() = %v, want [own]", effective)
 	}
 }
 
 func TestNote_AllTags_ExcludesInherited(t *testing.T) {
 	n := &Note{
-		Tags:          []string{"#global"},
-		InlineTags:    []string{"#inline"},
-		InheritedTags: []string{"#inherited"},
+		Tags:          []string{"global"},
+		InlineTags:    []string{"inline"},
+		InheritedTags: []string{"inherited"},
 	}
 
 	all := n.AllTags()
 	for _, tag := range all {
-		if tag == "#inherited" {
+		if tag == "inherited" {
 			t.Error("AllTags() should not include inherited tags")
 		}
 	}

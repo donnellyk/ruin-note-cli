@@ -58,7 +58,7 @@ func (v *Vault) Commit(msg string) {
 func (v *Vault) SaveNote(n *note.Note, oldGlobalTags, oldInlineTags []string, commitMsg string) {
 	v.DecrementTagsIndex(oldGlobalTags, oldInlineTags)
 	v.UpdateTagsIndex(n.Tags, n.InlineTags)
-	v.UpdateTitleEntry(n.UUID, n.Title, n.FilePath, n.Parent)
+	v.UpdateTitleEntryFull(n.UUID, n.Title, n.FilePath, n.Parent, n.Tags, n.InlineTags, n.InheritedTags)
 	v.Commit(commitMsg)
 }
 
@@ -79,7 +79,7 @@ func (v *Vault) CreateNote(n *note.Note, commitMsg string) {
 	if err := v.UpdateTagsIndex(n.Tags, n.InlineTags); err != nil {
 		fmt.Fprintf(os.Stderr, "warning: failed to update tags index: %v\n", err)
 	}
-	if err := v.UpdateTitleEntry(n.UUID, n.Title, n.FilePath, n.Parent); err != nil {
+	if err := v.UpdateTitleEntryFull(n.UUID, n.Title, n.FilePath, n.Parent, n.Tags, n.InlineTags, n.InheritedTags); err != nil {
 		fmt.Fprintf(os.Stderr, "warning: failed to update titles index: %v\n", err)
 	}
 	v.Commit(commitMsg)
@@ -125,22 +125,22 @@ func (v *Vault) Initialize(force bool) (*InitResult, error) {
 	}
 
 	tagsPath := v.TagsFile()
-	if err := v.initMetadataFile(tagsPath, &TagsIndex{Tags: []TagEntry{}}, force, result); err != nil {
+	if err := v.initMetadataFile(tagsPath, &TagsIndex{Version: indexSchemaVersion, Tags: []TagEntry{}}, force, result); err != nil {
 		return nil, err
 	}
 
 	queriesPath := v.QueriesFile()
-	if err := v.initMetadataFile(queriesPath, &QueriesIndex{Queries: []QueryEntry{}}, force, result); err != nil {
+	if err := v.initMetadataFile(queriesPath, &QueriesIndex{Version: indexSchemaVersion, Queries: []QueryEntry{}}, force, result); err != nil {
 		return nil, err
 	}
 
 	parentsPath := v.ParentsFile()
-	if err := v.initMetadataFile(parentsPath, &ParentsIndex{Parents: []ParentEntry{}}, force, result); err != nil {
+	if err := v.initMetadataFile(parentsPath, &ParentsIndex{Version: indexSchemaVersion, Parents: []ParentEntry{}}, force, result); err != nil {
 		return nil, err
 	}
 
 	titlesPath := v.TitlesFile()
-	if err := v.initJSONFile(titlesPath, &TitlesIndex{Titles: make(map[string]TitleEntry)}, force, result); err != nil {
+	if err := v.initJSONFile(titlesPath, &TitlesIndex{Version: titlesSchemaVersion, Titles: make(map[string]TitleEntry)}, force, result); err != nil {
 		return nil, err
 	}
 
@@ -235,6 +235,12 @@ const (
 	ScopeInline = "inline"
 )
 
+// indexSchemaVersion is the on-disk schema version for the `.ruin/` YAML
+// indexes. v0.4.0 introduced version: 2 alongside the tag-format migration.
+// Older binaries reading a v0.4.0 vault see the unknown version and refuse
+// rather than silently giving wrong answers.
+const indexSchemaVersion = 2
+
 type TagEntry struct {
 	Name  string   `yaml:"name" json:"name"`
 	Count int      `yaml:"count" json:"count"`
@@ -242,14 +248,22 @@ type TagEntry struct {
 }
 
 type TagsIndex struct {
-	Tags []TagEntry `yaml:"tags"`
+	Version int        `yaml:"version,omitempty"`
+	Tags    []TagEntry `yaml:"tags"`
+}
+
+func checkIndexVersion(file string, version int) error {
+	if version > indexSchemaVersion {
+		return fmt.Errorf("%s version %d is newer than this binary supports (max %d); upgrade ruin", file, version, indexSchemaVersion)
+	}
+	return nil
 }
 
 func (v *Vault) LoadTags() (*TagsIndex, error) {
 	data, err := os.ReadFile(v.TagsFile())
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return &TagsIndex{Tags: []TagEntry{}}, nil
+			return &TagsIndex{Version: indexSchemaVersion, Tags: []TagEntry{}}, nil
 		}
 		return nil, fmt.Errorf("failed to read tags file: %w", err)
 	}
@@ -258,11 +272,17 @@ func (v *Vault) LoadTags() (*TagsIndex, error) {
 	if err := yaml.Unmarshal(data, &index); err != nil {
 		return nil, fmt.Errorf("failed to parse tags file: %w", err)
 	}
+	if err := checkIndexVersion("tags.yml", index.Version); err != nil {
+		return nil, err
+	}
 
 	return &index, nil
 }
 
 func (v *Vault) SaveTags(index *TagsIndex) error {
+	if index.Version == 0 {
+		index.Version = indexSchemaVersion
+	}
 	data, err := yaml.Marshal(index)
 	if err != nil {
 		return fmt.Errorf("failed to marshal tags: %w", err)
@@ -409,7 +429,7 @@ func (v *Vault) DecrementTagsIndex(globalTags, inlineTags []string) error {
 // is the deduped per-note count; globalTags and inlineTags indicate which
 // scopes each tag has been seen in.
 func (v *Vault) RebuildTagsIndex(totalCounts map[string]int, globalTags, inlineTags map[string]bool) error {
-	index := &TagsIndex{Tags: make([]TagEntry, 0, len(totalCounts))}
+	index := &TagsIndex{Version: indexSchemaVersion, Tags: make([]TagEntry, 0, len(totalCounts))}
 
 	for tag, count := range totalCounts {
 		if count > 0 {
@@ -430,6 +450,7 @@ type QueryEntry struct {
 }
 
 type QueriesIndex struct {
+	Version int          `yaml:"version,omitempty"`
 	Queries []QueryEntry `yaml:"queries"`
 }
 
@@ -437,7 +458,7 @@ func (v *Vault) LoadQueries() (*QueriesIndex, error) {
 	data, err := os.ReadFile(v.QueriesFile())
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return &QueriesIndex{Queries: []QueryEntry{}}, nil
+			return &QueriesIndex{Version: indexSchemaVersion, Queries: []QueryEntry{}}, nil
 		}
 		return nil, fmt.Errorf("failed to read queries file: %w", err)
 	}
@@ -446,11 +467,17 @@ func (v *Vault) LoadQueries() (*QueriesIndex, error) {
 	if err := yaml.Unmarshal(data, &index); err != nil {
 		return nil, fmt.Errorf("failed to parse queries file: %w", err)
 	}
+	if err := checkIndexVersion("queries.yml", index.Version); err != nil {
+		return nil, err
+	}
 
 	return &index, nil
 }
 
 func (v *Vault) SaveQueries(index *QueriesIndex) error {
+	if index.Version == 0 {
+		index.Version = indexSchemaVersion
+	}
 	data, err := yaml.Marshal(index)
 	if err != nil {
 		return fmt.Errorf("failed to marshal queries: %w", err)
@@ -469,6 +496,7 @@ type ParentEntry struct {
 }
 
 type ParentsIndex struct {
+	Version int           `yaml:"version,omitempty"`
 	Parents []ParentEntry `yaml:"parents"`
 }
 
@@ -476,7 +504,7 @@ func (v *Vault) LoadParents() (*ParentsIndex, error) {
 	data, err := os.ReadFile(v.ParentsFile())
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return &ParentsIndex{Parents: []ParentEntry{}}, nil
+			return &ParentsIndex{Version: indexSchemaVersion, Parents: []ParentEntry{}}, nil
 		}
 		return nil, fmt.Errorf("failed to read parents file: %w", err)
 	}
@@ -485,11 +513,17 @@ func (v *Vault) LoadParents() (*ParentsIndex, error) {
 	if err := yaml.Unmarshal(data, &index); err != nil {
 		return nil, fmt.Errorf("failed to parse parents file: %w", err)
 	}
+	if err := checkIndexVersion("parents.yml", index.Version); err != nil {
+		return nil, err
+	}
 
 	return &index, nil
 }
 
 func (v *Vault) SaveParents(index *ParentsIndex) error {
+	if index.Version == 0 {
+		index.Version = indexSchemaVersion
+	}
 	data, err := yaml.Marshal(index)
 	if err != nil {
 		return fmt.Errorf("failed to marshal parents: %w", err)

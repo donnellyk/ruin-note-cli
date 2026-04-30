@@ -46,8 +46,11 @@ func createNote(n *note.Note, vlt *vault.Vault, titleFlag string, useH1 bool) er
 		// The note isn't in the titles index yet (CreateNote adds it later),
 		// so add a temporary entry so ComputeInheritedTags can find the parent.
 		titlesIndex.Titles[n.UUID] = vault.TitleEntry{Parent: n.Parent}
+		// Full Load fallback — LoadFrontmatterOnly no longer returns tag
+		// fields after v0.4.0. The titles entry is the fast path; the loader
+		// is the authoritative fallback when a parent's mirror is empty.
 		loader := func(path string) (*note.Note, error) {
-			return note.LoadFrontmatterOnly(path)
+			return note.Load(path)
 		}
 		n.InheritedTags = ComputeInheritedTags(n.UUID, titlesIndex, loader)
 	}
@@ -96,6 +99,11 @@ func saveWithIndexUpdate(n *note.Note, vlt *vault.Vault) error {
 	}
 
 	if !normalizedTagsEqual(oldGlobalTags, n.Tags) {
+		// Refresh the titles mirror BEFORE cascade so descendants compute
+		// inheritance against the just-saved tag set, not the pre-edit one.
+		if err := vlt.UpdateTitleEntryFull(n.UUID, n.Title, n.FilePath, n.Parent, n.Tags, n.InlineTags, n.InheritedTags); err != nil {
+			fmt.Fprintf(os.Stderr, "warning: failed to update titles mirror before cascade: %v\n", err)
+		}
 		if titlesIndex, err := vlt.LoadTitles(); err == nil {
 			if err := CascadeInheritedTags(n.UUID, vlt, titlesIndex); err != nil {
 				fmt.Fprintf(os.Stderr, "warning: failed to cascade inherited tags: %v\n", err)

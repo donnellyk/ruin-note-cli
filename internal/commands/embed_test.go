@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/donnellyk/ruin-note-cli/internal/note"
 	"github.com/donnellyk/ruin-note-cli/internal/vault"
 )
 
@@ -150,7 +151,11 @@ Hub-level notes.`,
 		if err := os.WriteFile(path, []byte(n.content), 0644); err != nil {
 			t.Fatalf("failed to write %s: %v", n.filename, err)
 		}
-		entries[n.uuid] = vault.TitleEntry{Title: n.title, Path: path}
+		loaded, lerr := note.Load(path)
+		if lerr != nil {
+			t.Fatalf("failed to load %s: %v", n.filename, lerr)
+		}
+		entries[n.uuid] = vault.MakeTitleEntry(n.title, path, "", loaded.Tags, loaded.InlineTags, loaded.InheritedTags)
 	}
 
 	if err := vlt.RebuildTitlesIndex(entries); err != nil {

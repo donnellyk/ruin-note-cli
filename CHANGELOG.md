@@ -11,9 +11,36 @@
 ### Changed
 - Frontmatter parsing preserves key order, YAML comments, and scalar quote styles for keys ruin doesn't manage.
 - `ruin init` indexes folders with existing files with prompt
+- **Breaking**: tag storage form changed. Stored tags drop the `#` prefix
+  (`tags: [daily]` instead of `tags: ["#daily"]`). Affects frontmatter
+  `tags:` / `inherited-tags:`, the `.ruin/tags.yml` index keys, and JSON
+  output. CLI input (`ruin search "#daily"`) and body markdown (`#tag`,
+  `#meeting notes#`) are unchanged. Migration is automatic on the first
+  `ruin doctor` after upgrade and is recoverable via auto-version git
+  history. See [`docs/breaking-changes/v0.4.0-tag-format.md`](docs/breaking-changes/v0.4.0-tag-format.md).
+- **Breaking**: JSON output (`ruin search --json`, `ruin pick --json`,
+  `ruin tags --json`, `ruin embed eval --json`, `ruin --bulk`) emits
+  `tags`, `inline_tags`, and `inherited_tags` arrays without the `#`
+  prefix. Downstream consumers must update.
+- **Breaking**: `.ruin/` index files gain a per-file `version: 2` key
+  (`tags.yml`, `queries.yml`, `parents.yml`, `titles.json`). Old binaries
+  reading a v0.4.0 vault refuse with a clear "newer ruin required" error
+  rather than silently giving wrong answers.
 
 ### Removed
 - **Breaking**: `pkg/notetext.NormalizeTag` (and its `internal/note.NormalizeTag` shim) replaced by two clearer functions: `NormalizeStored` (storage form: lowercased, `#` delimiters stripped) for comparison and indexing, and `BodyForm` (lowercased, delimiters re-added based on whitespace) for emitting tags into note body content. Downstream Go consumers importing `pkg/notetext` must migrate calls.
+- **Breaking**: `inline-tags:` field removed from frontmatter; the data is
+  relocated to `.ruin/titles.json` as a fast-lookup cache. `inherited-tags:`
+  remains in frontmatter (in stripped form) as durable user-visible
+  metadata, with a mirror in `titles.json` for hot-path access.
+- **Breaking**: `Frontmatter.InlineTags` is no longer emitted by
+  `(*Frontmatter).Serialize`. The struct field stays for migration
+  detection but is never written.
+- **Breaking**: `note.LoadFrontmatterOnly` no longer populates
+  `Tags` / `InlineTags` / `InheritedTags` on the returned `*Note`. The
+  `.ruin/titles.json` mirror is the source of truth for hot-path tag
+  matching; downstream callers needing tags should query the titles
+  index or call `note.Load` for body classification.
 
 ## [0.3.1] - 2026-04-21
 
