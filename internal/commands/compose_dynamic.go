@@ -98,9 +98,9 @@ func (w *composeWalker) expandDynamicPick(ref note.DynamicEmbedRef, depth int, p
 	for _, arg := range tagArgs {
 		switch {
 		case strings.HasPrefix(arg, "!#"):
-			filter.exclude = append(filter.exclude, note.NormalizeTag(arg[1:]))
+			filter.exclude = append(filter.exclude, note.NormalizeStored(arg[1:]))
 		case strings.HasPrefix(arg, "#"):
-			filter.include = append(filter.include, note.NormalizeTag(arg))
+			filter.include = append(filter.include, note.NormalizeStored(arg))
 		case strings.HasPrefix(arg, "@between:"):
 			dr, err := parsePickBetween(arg, time.Now())
 			if err != nil {
@@ -117,7 +117,7 @@ func (w *composeWalker) expandDynamicPick(ref note.DynamicEmbedRef, depth int, p
 			}
 			dateRanges = append(dateRanges, dr)
 		default:
-			filter.include = append(filter.include, note.NormalizeTag(arg))
+			filter.include = append(filter.include, note.NormalizeStored(arg))
 		}
 	}
 
@@ -624,7 +624,7 @@ func groupByTag(results []pickNoteResult, includeTags []string) []pickGroup {
 		for _, m := range r.matches {
 			lineTagsNorm := map[string]bool{}
 			for _, lt := range m.Tags {
-				lineTagsNorm[note.NormalizeTag(lt)] = true
+				lineTagsNorm[note.NormalizeStored(lt)] = true
 			}
 			matched := false
 			for _, it := range includeTags {

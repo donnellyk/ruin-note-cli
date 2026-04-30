@@ -28,8 +28,8 @@ func TestClassifyTags_Smoke(t *testing.T) {
 	}
 }
 
-func TestNormalizeTag_Smoke(t *testing.T) {
-	if got := NormalizeTag("#Foo"); got != "#foo" {
-		t.Errorf("NormalizeTag(#Foo) = %q, want #foo", got)
+func TestNormalizeStored_Smoke(t *testing.T) {
+	if got := NormalizeStored("#Foo"); got != "foo" {
+		t.Errorf("NormalizeStored(#Foo) = %q, want foo", got)
 	}
 }

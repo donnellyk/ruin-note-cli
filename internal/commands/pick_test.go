@@ -2027,8 +2027,8 @@ Fix the bug. #followup`,
 	n.RefreshTags()
 
 	tags := pickTagFilter{
-		include: []string{note.NormalizeTag("#followup")},
-		exclude: []string{note.NormalizeTag("#done")},
+		include: []string{note.NormalizeStored("#followup")},
+		exclude: []string{note.NormalizeStored("#done")},
 	}
 	matches := pickLinesFromNote(n, tags, nil, false, doneInclude, false)
 
@@ -2058,8 +2058,8 @@ Active item. #task #active`,
 	n.RefreshTags()
 
 	tags := pickTagFilter{
-		include: []string{note.NormalizeTag("#task")},
-		exclude: []string{note.NormalizeTag("#done"), note.NormalizeTag("#deferred")},
+		include: []string{note.NormalizeStored("#task")},
+		exclude: []string{note.NormalizeStored("#done"), note.NormalizeStored("#deferred")},
 	}
 	matches := pickLinesFromNote(n, tags, nil, false, doneInclude, false)
 
@@ -2094,8 +2094,8 @@ Send report. #todo #archived`,
 	n.RefreshTags()
 
 	tags := pickTagFilter{
-		include: []string{note.NormalizeTag("#followup"), note.NormalizeTag("#todo")},
-		exclude: []string{note.NormalizeTag("#archived")},
+		include: []string{note.NormalizeStored("#followup"), note.NormalizeStored("#todo")},
+		exclude: []string{note.NormalizeStored("#archived")},
 	}
 	// anyMode=true: match lines with ANY include tag, but no exclude tags
 	matches := pickLinesFromNote(n, tags, nil, true, doneExclude, false)
@@ -2131,7 +2131,7 @@ func TestPickNegateOnlyExclude(t *testing.T) {
 	// todoMode=true with only exclude tags (no include tags)
 	tags := pickTagFilter{
 		include: nil,
-		exclude: []string{note.NormalizeTag("#done")},
+		exclude: []string{note.NormalizeStored("#done")},
 	}
 	matches := pickLinesFromNote(n, tags, nil, false, doneExclude, true)
 

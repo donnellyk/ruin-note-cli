@@ -15,9 +15,9 @@ func ensureHashPrefix(tag string) string {
 }
 
 func noteHasTag(n *note.Note, tag string) bool {
-	normalized := note.NormalizeTag(tag)
+	normalized := note.NormalizeStored(tag)
 	for _, t := range n.AllTags() {
-		if note.NormalizeTag(t) == normalized {
+		if note.NormalizeStored(t) == normalized {
 			return true
 		}
 	}
@@ -67,7 +67,7 @@ func detectSeparator(line string) string {
 }
 
 func removeTagClean(content, tag string) string {
-	normalized := note.NormalizeTag(tag)
+	normalized := note.NormalizeStored(tag)
 	lines := strings.Split(content, "\n")
 	var result []string
 
@@ -91,7 +91,7 @@ func removeTagFromLine(line, normalizedTag string) string {
 
 	var toRemove []note.TagMatch
 	for _, m := range matches {
-		if note.NormalizeTag(m.Tag) == normalizedTag {
+		if note.NormalizeStored(m.Tag) == normalizedTag {
 			toRemove = append(toRemove, m)
 		}
 	}
@@ -147,7 +147,7 @@ func removeTagFromLineNum(content, tag string, lineNum int) (string, error) {
 		return "", fmt.Errorf("--line %d out of range (note has %d content lines)", lineNum, len(lines))
 	}
 	idx := lineNum - 1
-	normalized := note.NormalizeTag(tag)
+	normalized := note.NormalizeStored(tag)
 	newLine := removeTagFromLine(lines[idx], normalized)
 	trimmed := strings.TrimSpace(newLine)
 	if trimmed == "" && note.IsTagOnlyLine(strings.TrimSpace(lines[idx])) {

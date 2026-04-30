@@ -42,7 +42,7 @@ func ComputeInheritedTags(noteUUID string, titlesIndex *vault.TitlesIndex, loade
 		}
 
 		for _, t := range parentNote.Tags {
-			norm := note.NormalizeTag(t)
+			norm := note.NormalizeStored(t)
 			if !tagSeen[norm] {
 				tagSeen[norm] = true
 				inherited = append(inherited, t)

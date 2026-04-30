@@ -160,7 +160,7 @@ func TestNoteSet_AddTag(t *testing.T) {
 	allTags := n.AllTags()
 	found := false
 	for _, tag := range allTags {
-		if note.NormalizeTag(tag) == "#urgent" {
+		if note.NormalizeStored(tag) == "urgent" {
 			found = true
 			break
 		}
@@ -238,7 +238,7 @@ func TestNoteSet_RemoveTag(t *testing.T) {
 
 	n, _ := ResolveNote(vlt, "uuid-tagged")
 	for _, tag := range n.AllTags() {
-		if note.NormalizeTag(tag) == "#work" {
+		if note.NormalizeStored(tag) == "work" {
 			t.Errorf("tag #work should have been removed, still found in: %v", n.AllTags())
 		}
 	}
@@ -394,7 +394,7 @@ func TestNoteSet_AddTagAutoPrefix(t *testing.T) {
 	n, _ := ResolveNote(vlt, "uuid-plain")
 	found := false
 	for _, tag := range n.AllTags() {
-		if note.NormalizeTag(tag) == "#newtag" {
+		if note.NormalizeStored(tag) == "newtag" {
 			found = true
 		}
 	}
@@ -499,7 +499,7 @@ func TestNoteSet_RemoveTag_LineDoesNotAffectOtherLines(t *testing.T) {
 	// #daily should still exist on the tag-only line
 	found := false
 	for _, tag := range n.Tags {
-		if note.NormalizeTag(tag) == "#daily" {
+		if note.NormalizeStored(tag) == "daily" {
 			found = true
 		}
 	}

@@ -64,14 +64,14 @@ func (n *Note) EnsureLinkTag() bool {
 
 	hasLink := false
 	for _, t := range n.Tags {
-		if NormalizeTag(t) == "#link" {
+		if NormalizeStored(t) == "link" {
 			hasLink = true
 			break
 		}
 	}
 	if !hasLink {
 		for _, t := range n.InlineTags {
-			if NormalizeTag(t) == "#link" {
+			if NormalizeStored(t) == "link" {
 				hasLink = true
 				break
 			}
@@ -79,7 +79,7 @@ func (n *Note) EnsureLinkTag() bool {
 	}
 	if !hasLink {
 		for _, t := range ExtractTags(n.Content) {
-			if NormalizeTag(t) == "#link" {
+			if NormalizeStored(t) == "link" {
 				hasLink = true
 				break
 			}

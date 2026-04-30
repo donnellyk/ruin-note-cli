@@ -478,7 +478,7 @@ func TestExtractTags_Embeds(t *testing.T) {
 				return
 			}
 			for i := range got {
-				if NormalizeTag(got[i]) != NormalizeTag(tt.want[i]) {
+				if NormalizeStored(got[i]) != NormalizeStored(tt.want[i]) {
 					t.Errorf("ExtractTags()[%d] = %q, want %q", i, got[i], tt.want[i])
 				}
 			}
@@ -492,8 +492,8 @@ func TestClassifyTags_Embeds(t *testing.T) {
 
 	// #followup and #done inside the embed should not appear
 	for _, tag := range append(global, inline...) {
-		norm := NormalizeTag(tag)
-		if norm == "#followup" || norm == "#done" {
+		norm := NormalizeStored(tag)
+		if norm == "followup" || norm == "done" {
 			t.Errorf("tag %q inside embed should not be classified, got global=%v inline=%v", tag, global, inline)
 		}
 	}
@@ -502,10 +502,10 @@ func TestClassifyTags_Embeds(t *testing.T) {
 	hasGlobal := false
 	hasAnotherGlobal := false
 	for _, tag := range global {
-		switch NormalizeTag(tag) {
-		case "#global":
+		switch NormalizeStored(tag) {
+		case "global":
 			hasGlobal = true
-		case "#another-global":
+		case "another-global":
 			hasAnotherGlobal = true
 		}
 	}
@@ -518,32 +518,12 @@ func TestClassifyTags_Embeds(t *testing.T) {
 
 	hasInline := false
 	for _, tag := range inline {
-		if NormalizeTag(tag) == "#inline" {
+		if NormalizeStored(tag) == "inline" {
 			hasInline = true
 		}
 	}
 	if !hasInline {
 		t.Errorf("expected #inline in inline tags, got %v", inline)
-	}
-}
-
-func TestNormalizeTag(t *testing.T) {
-	tests := []struct {
-		input string
-		want  string
-	}{
-		{"#Foo", "#foo"},
-		{"#BAR", "#bar"},
-		{"#already", "#already"},
-		{"#Mixed Case#", "#mixed case#"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.input, func(t *testing.T) {
-			if got := NormalizeTag(tt.input); got != tt.want {
-				t.Errorf("NormalizeTag(%q) = %q, want %q", tt.input, got, tt.want)
-			}
-		})
 	}
 }
 
@@ -698,7 +678,7 @@ func TestExtractTags_CodeBlocks(t *testing.T) {
 				return
 			}
 			for i := range got {
-				if NormalizeTag(got[i]) != NormalizeTag(tt.want[i]) {
+				if NormalizeStored(got[i]) != NormalizeStored(tt.want[i]) {
 					t.Errorf("ExtractTags()[%d] = %q, want %q", i, got[i], tt.want[i])
 				}
 			}

@@ -249,9 +249,9 @@ func evalEmbedPick(vlt *vault.Vault, ref note.DynamicEmbedRef) ([]PickResult, er
 	for _, arg := range args {
 		switch {
 		case strings.HasPrefix(arg, "!#"):
-			filter.exclude = append(filter.exclude, note.NormalizeTag(arg[1:]))
+			filter.exclude = append(filter.exclude, note.NormalizeStored(arg[1:]))
 		case strings.HasPrefix(arg, "#"):
-			filter.include = append(filter.include, note.NormalizeTag(arg))
+			filter.include = append(filter.include, note.NormalizeStored(arg))
 		case strings.HasPrefix(arg, "@between:"):
 			dr, err := parsePickBetween(arg, now)
 			if err != nil {
@@ -266,7 +266,7 @@ func evalEmbedPick(vlt *vault.Vault, ref note.DynamicEmbedRef) ([]PickResult, er
 			}
 			dateRanges = append(dateRanges, dr)
 		default:
-			filter.include = append(filter.include, note.NormalizeTag(arg))
+			filter.include = append(filter.include, note.NormalizeStored(arg))
 		}
 	}
 

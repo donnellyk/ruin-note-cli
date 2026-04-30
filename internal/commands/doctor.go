@@ -563,7 +563,7 @@ func normalizedTagsEqual(a, b []string) bool {
 		return false
 	}
 	for i := range a {
-		if note.NormalizeTag(a[i]) != note.NormalizeTag(b[i]) {
+		if note.NormalizeStored(a[i]) != note.NormalizeStored(b[i]) {
 			return false
 		}
 	}

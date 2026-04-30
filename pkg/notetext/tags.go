@@ -227,7 +227,7 @@ func deduplicateTags(matches []TagMatch) []string {
 	var result []string
 
 	for _, m := range matches {
-		normalized := NormalizeTag(m.Tag)
+		normalized := NormalizeStored(m.Tag)
 		if !seen[normalized] {
 			seen[normalized] = true
 			result = append(result, m.Tag)
@@ -235,15 +235,6 @@ func deduplicateTags(matches []TagMatch) []string {
 	}
 
 	return result
-}
-
-// NormalizeTag normalizes a tag for comparison (lowercase).
-//
-// Deprecated: use NormalizeStored for storage/comparison or BodyForm for
-// body-text emission. NormalizeTag will be removed in a future release once
-// all callers have been migrated.
-func NormalizeTag(tag string) string {
-	return strings.ToLower(tag)
 }
 
 // NormalizeStored returns the storage form of a tag: lowercased, with
@@ -306,7 +297,7 @@ func ClassifyTags(content string, title string) (globalTags []string, inlineTags
 
 	for _, match := range allMatches {
 		lineIdx := findLineIndex(match.Start, lineOffsets)
-		normalized := NormalizeTag(match.Tag)
+		normalized := NormalizeStored(match.Tag)
 
 		if tagOnlyLines[lineIdx] {
 			if !seenGlobal[normalized] {
@@ -374,7 +365,7 @@ func MergeTags(globalTags, inlineTags []string) []string {
 	var result []string
 
 	for _, tag := range globalTags {
-		normalized := NormalizeTag(tag)
+		normalized := NormalizeStored(tag)
 		if !seen[normalized] {
 			seen[normalized] = true
 			result = append(result, tag)
@@ -382,7 +373,7 @@ func MergeTags(globalTags, inlineTags []string) []string {
 	}
 
 	for _, tag := range inlineTags {
-		normalized := NormalizeTag(tag)
+		normalized := NormalizeStored(tag)
 		if !seen[normalized] {
 			seen[normalized] = true
 			result = append(result, tag)
@@ -403,7 +394,7 @@ func StripInheritedTagsFromContent(content string, inheritedTags []string) strin
 
 	inheritedSet := make(map[string]bool, len(inheritedTags))
 	for _, t := range inheritedTags {
-		inheritedSet[NormalizeTag(t)] = true
+		inheritedSet[NormalizeStored(t)] = true
 	}
 
 	lines := strings.Split(content, "\n")
@@ -430,7 +421,7 @@ func StripInheritedTagsFromContent(content string, inheritedTags []string) strin
 
 		var keepTags []string
 		for _, tm := range tags {
-			if !inheritedSet[NormalizeTag(tm.Tag)] {
+			if !inheritedSet[NormalizeStored(tm.Tag)] {
 				keepTags = append(keepTags, tm.Tag)
 			}
 		}

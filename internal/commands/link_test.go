@@ -91,7 +91,7 @@ func TestLinkNewCreatesNote(t *testing.T) {
 			// Verify it has the #link tag
 			hasLink := false
 			for _, tag := range n.AllTags() {
-				if note.NormalizeTag(tag) == "#link" {
+				if note.NormalizeStored(tag) == "link" {
 					hasLink = true
 					break
 				}
@@ -174,9 +174,9 @@ func TestLinkNewWithTags(t *testing.T) {
 			allTags := n.AllTags()
 			tagSet := make(map[string]bool)
 			for _, tag := range allTags {
-				tagSet[note.NormalizeTag(tag)] = true
+				tagSet[note.NormalizeStored(tag)] = true
 			}
-			for _, expected := range []string{"#link", "#golang", "#reading"} {
+			for _, expected := range []string{"link", "golang", "reading"} {
 				if !tagSet[expected] {
 					t.Errorf("missing expected tag #%s, got tags: %v", expected, allTags)
 				}

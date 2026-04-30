@@ -230,9 +230,9 @@ fast lookups, then extracts matching lines from the content body.`,
 			var tagFilter pickTagFilter
 			for _, arg := range tagArgs {
 				if strings.HasPrefix(arg, "!") {
-					tagFilter.exclude = append(tagFilter.exclude, note.NormalizeTag(arg[1:]))
+					tagFilter.exclude = append(tagFilter.exclude, note.NormalizeStored(arg[1:]))
 				} else {
-					tagFilter.include = append(tagFilter.include, note.NormalizeTag(arg))
+					tagFilter.include = append(tagFilter.include, note.NormalizeStored(arg))
 				}
 			}
 
@@ -380,10 +380,27 @@ func parsePickBetween(arg string, ref time.Time) (dateparse.DateRange, error) {
 	return dateparse.DateRange{Start: startRange.Start, End: endRange.End}, nil
 }
 
+func normalizePickFilter(tags pickTagFilter) pickTagFilter {
+	out := pickTagFilter{
+		include: make([]string, len(tags.include)),
+		exclude: make([]string, len(tags.exclude)),
+	}
+	for i, t := range tags.include {
+		out.include[i] = note.NormalizeStored(t)
+	}
+	for i, t := range tags.exclude {
+		out.exclude[i] = note.NormalizeStored(t)
+	}
+	return out
+}
+
 func noteHasInlineTag(n *note.Note, queryTags []string) bool {
+	normQuery := make([]string, len(queryTags))
+	for i, q := range queryTags {
+		normQuery[i] = note.NormalizeStored(q)
+	}
 	for _, it := range n.InlineTags {
-		itNorm := note.NormalizeTag(it)
-		if slices.Contains(queryTags, itNorm) {
+		if slices.Contains(normQuery, note.NormalizeStored(it)) {
 			return true
 		}
 	}
@@ -395,7 +412,12 @@ func noteHasInlineTag(n *note.Note, queryTags []string) bool {
 // If dateRanges is non-empty, lines must contain at least one @YYYY-MM-DD date
 // that falls within every specified date range.
 // When todoMode is true, checkbox lines (- [ ] / - [x]) are also matched.
+//
+// Filter values are renormalized to stored form so callers can pass either body
+// or stored form without thinking about it. The matcher compares stripped form
+// throughout.
 func pickLinesFromNote(n *note.Note, tags pickTagFilter, dateRanges []dateparse.DateRange, anyMode bool, df doneFilter, todoMode bool) []PickMatch {
+	tags = normalizePickFilter(tags)
 	lines := strings.Split(n.Content, "\n")
 
 	var matches []PickMatch
@@ -418,7 +440,7 @@ func pickLinesFromNote(n *note.Note, tags pickTagFilter, dateRanges []dateparse.
 
 		lineTagsNorm := make(map[string]bool)
 		for _, lt := range lineTags {
-			lineTagsNorm[note.NormalizeTag(lt)] = true
+			lineTagsNorm[note.NormalizeStored(lt)] = true
 		}
 
 		isCheckbox := note.IsCheckboxLine(trimmed)
@@ -485,7 +507,7 @@ func pickLinesFromNote(n *note.Note, tags pickTagFilter, dateRanges []dateparse.
 
 		// Done = #done tag OR checked checkbox [x]. Treated uniformly regardless
 		// of --todo mode so JSON results correctly report completion status.
-		doneTagNorm := note.NormalizeTag(doneTag)
+		doneTagNorm := note.NormalizeStored(doneTag)
 		isDone := lineTagsNorm[doneTagNorm] || note.IsCheckedLine(trimmed)
 
 		switch df {

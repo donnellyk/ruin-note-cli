@@ -36,18 +36,18 @@ func dateMatcher(dateStr string) QueryMatcher {
 }
 
 func tagMatcher(tag string, scope TagScope) QueryMatcher {
-	tagNorm := note.NormalizeTag(tag)
+	tagNorm := note.NormalizeStored(tag)
 	return func(n *note.Note) bool {
 		if scope != TagScopeInline {
 			for _, t := range n.EffectiveGlobalTags() {
-				if note.NormalizeTag(t) == tagNorm {
+				if note.NormalizeStored(t) == tagNorm {
 					return true
 				}
 			}
 		}
 		if scope != TagScopeGlobal {
 			for _, t := range n.InlineTags {
-				if note.NormalizeTag(t) == tagNorm {
+				if note.NormalizeStored(t) == tagNorm {
 					return true
 				}
 			}

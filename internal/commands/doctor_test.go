@@ -112,7 +112,7 @@ func TestDoctorCmd_SingleFile_AddTag(t *testing.T) {
 	}
 	foundNew := false
 	for _, tag := range n.Tags {
-		if note.NormalizeTag(tag) == "#newtag" {
+		if note.NormalizeStored(tag) == "newtag" {
 			foundNew = true
 		}
 	}
