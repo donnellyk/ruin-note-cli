@@ -10,6 +10,7 @@
 
 ### Changed
 - Frontmatter parsing preserves key order, YAML comments, and scalar quote styles for keys ruin doesn't manage.
+- `ruin init` indexes folders with existing files with prompt
 
 ## [0.3.1] - 2026-04-21
 

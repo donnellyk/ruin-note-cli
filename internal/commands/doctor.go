@@ -73,7 +73,15 @@ Does NOT update created or updated timestamps.`,
 			if len(args) > 0 {
 				return doctorFiles(vlt, args, dryRun, *jsonOutput)
 			}
-			return doctorFullScan(vlt, dryRun, *jsonOutput)
+			output, err := RunDoctorFullScan(vlt, dryRun)
+			if err != nil {
+				return err
+			}
+			prefix := ""
+			if dryRun {
+				prefix = "[dry-run] "
+			}
+			return doctorPrintOutput(output, prefix, *jsonOutput)
 		},
 	}
 
@@ -226,10 +234,13 @@ func doctorFiles(vlt *vault.Vault, paths []string, dryRun bool, jsonOutput bool)
 	return doctorPrintOutput(&output, prefix, jsonOutput)
 }
 
-func doctorFullScan(vlt *vault.Vault, dryRun bool, jsonOutput bool) error {
+// RunDoctorFullScan executes a full vault scan and returns the result. The
+// caller is responsible for printing the output. Used by both `ruin doctor`
+// (no args) and `ruin init` (when an existing notes folder is initialized).
+func RunDoctorFullScan(vlt *vault.Vault, dryRun bool) (*DoctorOutput, error) {
 	notePaths, err := vlt.ListNotes()
 	if err != nil {
-		return fmt.Errorf("failed to list notes: %w", err)
+		return nil, fmt.Errorf("failed to list notes: %w", err)
 	}
 
 	output := DoctorOutput{
@@ -485,7 +496,7 @@ func doctorFullScan(vlt *vault.Vault, dryRun bool, jsonOutput bool) error {
 		}
 	}
 
-	return doctorPrintOutput(&output, prefix, jsonOutput)
+	return &output, nil
 }
 
 func doctorPrintOutput(output *DoctorOutput, prefix string, jsonOutput bool) error {

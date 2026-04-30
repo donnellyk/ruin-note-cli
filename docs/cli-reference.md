@@ -42,11 +42,13 @@ ruin init [path]
 
 | Flag | Short | Description |
 |------|-------|-------------|
-| `--force` | `-f` | Overwrite existing metadata files |
+| `--force` | `-f` | Overwrite existing metadata files and skip the doctor confirmation prompt when notes already exist |
 | `--no-git` | | Skip git repository initialization |
 | `--config` | | Create `~/.config/ruin/` directory and `config.yml` with vault path |
 
 Creates `.ruin/` directory with `tags.yml` and `queries.yml`. Initializes a git repository for automatic version history (unless `--no-git`). If path provided, updates config. Use `--config` to also create the config directory and file when initializing in the current directory (no path argument).
+
+If the target directory already contains markdown notes (e.g., when migrating from Obsidian), init offers to run `ruin doctor` to build the tags and titles indices. Doctor may rewrite frontmatter — adding a `uuid` to notes that don't have one, normalizing tags (a leading `#` is added if missing), and rebuilding the `inline-tags` and `dates` fields from note bodies. Other frontmatter fields, key order, and comments are preserved. Decline the prompt to skip; run `ruin doctor` later when ready. `--force` skips the prompt and always runs doctor. Non-interactive invocations (no TTY) require `--force` to opt in.
 
 ### log
 

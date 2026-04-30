@@ -786,7 +786,7 @@ Overview of Project Alpha work.
 		_ = err
 	}
 
-	if err := doctorFullScan(vlt, false, false); err != nil {
+	if _, err := RunDoctorFullScan(vlt, false); err != nil {
 		return fmt.Errorf("failed to build indexes: %w", err)
 	}
 

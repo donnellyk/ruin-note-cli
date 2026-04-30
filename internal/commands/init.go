@@ -1,10 +1,13 @@
 package commands
 
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/donnellyk/ruin-note-cli/internal/config"
 	"github.com/donnellyk/ruin-note-cli/internal/vault"
@@ -13,11 +16,12 @@ import (
 )
 
 type InitOutput struct {
-	Vault   string   `json:"vault"`
-	Created []string `json:"created,omitempty"`
-	Existed []string `json:"existed,omitempty"`
-	Git     bool     `json:"git"`
-	Config  string   `json:"config,omitempty"`
+	Vault   string        `json:"vault"`
+	Created []string      `json:"created,omitempty"`
+	Existed []string      `json:"existed,omitempty"`
+	Git     bool          `json:"git"`
+	Config  string        `json:"config,omitempty"`
+	Doctor  *DoctorOutput `json:"doctor,omitempty"`
 }
 
 func NewInitCmd(jsonOutput *bool) *cobra.Command {
@@ -34,7 +38,12 @@ Creates the .ruin/ directory with metadata files (tags.yml, queries.yml).
 If no path is provided, initializes in the current directory.
 
 If a path is provided, also updates the config file to set this as the default vault.
-Use --config to create the ~/.config/ruin/ directory and config.yml even when no path is given.`,
+Use --config to create the ~/.config/ruin/ directory and config.yml even when no path is given.
+
+If the target directory already contains markdown notes (e.g., when migrating from
+Obsidian), init offers to run doctor to build the tags and titles indices. This
+may rewrite frontmatter — see the prompt for details. --force skips the prompt
+and always runs doctor.`,
 		Example: `  # Initialize in current directory
   ruin init
 
@@ -44,7 +53,7 @@ Use --config to create the ~/.config/ruin/ directory and config.yml even when no
   # Initialize and set up config directory
   ruin init --config
 
-  # Re-initialize (overwrite existing metadata)
+  # Re-initialize and rebuild indices without prompting
   ruin init --force`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -113,6 +122,11 @@ Use --config to create the ~/.config/ruin/ directory and config.yml even when no
 				}
 			}
 
+			doctorOutput, err := maybeRunDoctorOnInit(vlt, force, *jsonOutput, os.Stdin, os.Stderr)
+			if err != nil {
+				return err
+			}
+
 			if *jsonOutput {
 				output := InitOutput{
 					Vault:   vaultPath,
@@ -120,6 +134,7 @@ Use --config to create the ~/.config/ruin/ directory and config.yml even when no
 					Existed: result.Existed,
 					Git:     gitInitialized,
 					Config:  configPath,
+					Doctor:  doctorOutput,
 				}
 				enc := json.NewEncoder(os.Stdout)
 				enc.SetIndent("", "  ")
@@ -136,14 +151,68 @@ Use --config to create the ~/.config/ruin/ directory and config.yml even when no
 			if configPath != "" {
 				fmt.Printf("  Config: %s\n", configPath)
 			}
+			if doctorOutput != nil {
+				if err := doctorPrintOutput(doctorOutput, "", false); err != nil {
+					return err
+				}
+			}
 
 			return nil
 		},
 	}
 
-	cmd.Flags().BoolVarP(&force, "force", "f", false, "overwrite existing metadata files")
+	cmd.Flags().BoolVarP(&force, "force", "f", false, "overwrite existing metadata files and skip the doctor confirmation prompt when notes already exist")
 	cmd.Flags().BoolVar(&noGit, "no-git", false, "skip git repository initialization")
 	cmd.Flags().BoolVar(&setupConfig, "config", false, "create ~/.config/ruin/ directory and config.yml")
 
 	return cmd
+}
+
+// maybeRunDoctorOnInit decides whether to run the doctor full-scan when init
+// targets a folder that already contains notes. With --force or after an
+// interactive y-prompt, it runs and returns the output. Returns (nil, nil)
+// when the user declines or there are no existing notes. Errors when the
+// process is non-interactive without --force, since silently rewriting an
+// existing vault's frontmatter on first run would be a hostile default.
+func maybeRunDoctorOnInit(vlt *vault.Vault, force, jsonOutput bool, stdin io.Reader, stderr io.Writer) (*DoctorOutput, error) {
+	notePaths, err := vlt.ListNotes()
+	if err != nil {
+		return nil, fmt.Errorf("failed to list notes: %w", err)
+	}
+	if len(notePaths) == 0 {
+		return nil, nil
+	}
+
+	if !force {
+		stdinFile, isFile := stdin.(*os.File)
+		interactive := isFile && isTerminal(stdinFile)
+		if !interactive {
+			return nil, fmt.Errorf("found %d existing notes; non-interactive init requires --force to rebuild indices (this may rewrite frontmatter)", len(notePaths))
+		}
+
+		fmt.Fprintf(stderr, "Found %d existing notes. Build indices now?\n", len(notePaths))
+		fmt.Fprintln(stderr, "This may rewrite frontmatter:")
+		fmt.Fprintln(stderr, "  - Add a uuid to notes that don't have one")
+		fmt.Fprintln(stderr, "  - Normalize tags (a leading # is added if missing)")
+		fmt.Fprintln(stderr, "  - Rebuild the inline-tags and dates indices from note bodies")
+		fmt.Fprintln(stderr, "Other frontmatter fields, key order, and comments are preserved.")
+		fmt.Fprint(stderr, "[y/N] ")
+
+		reader := bufio.NewReader(stdin)
+		response, err := reader.ReadString('\n')
+		if err != nil && err != io.EOF {
+			return nil, fmt.Errorf("failed to read response: %w", err)
+		}
+		response = strings.TrimSpace(strings.ToLower(response))
+		if response != "y" && response != "yes" {
+			fmt.Fprintln(stderr, "Skipped. Run `ruin doctor` later to build indices.")
+			return nil, nil
+		}
+	}
+
+	output, err := RunDoctorFullScan(vlt, false)
+	if err != nil {
+		return nil, fmt.Errorf("doctor: %w", err)
+	}
+	return output, nil
 }
