@@ -14,6 +14,7 @@ type Config struct {
 	VaultPath      string `yaml:"vault_path"`
 	Versioning     *bool  `yaml:"versioning,omitempty"`
 	TagInheritance *bool  `yaml:"tag_inheritance,omitempty"`
+	TagFrontmatter *bool  `yaml:"tag_frontmatter,omitempty"`
 }
 
 // VersioningEnabled defaults to true. Respects RUIN_VERSIONING env var.
@@ -34,6 +35,19 @@ func (c *Config) TagInheritanceEnabled() bool {
 	}
 	if c.TagInheritance != nil {
 		return *c.TagInheritance
+	}
+	return true
+}
+
+// TagFrontmatterEnabled defaults to true. Respects RUIN_TAG_FRONTMATTER env var.
+// When false, the vault save path skips writing tags: and inline-tags: to
+// frontmatter. inherited-tags: is unaffected.
+func (c *Config) TagFrontmatterEnabled() bool {
+	if env := os.Getenv("RUIN_TAG_FRONTMATTER"); env != "" {
+		return env != "false" && env != "0"
+	}
+	if c.TagFrontmatter != nil {
+		return *c.TagFrontmatter
 	}
 	return true
 }

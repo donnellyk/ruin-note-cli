@@ -126,7 +126,7 @@ Source's children are reparented to target.`,
 					if !dryRun {
 						childNote.Parent = target.UUID
 						childNote.SetTimestamps()
-						if err := childNote.Save(); err != nil {
+						if err := saveNoteForVault(childNote, vlt); err != nil {
 							fmt.Fprintf(os.Stderr, "warning: failed to reparent %s: %v\n", entry.Path, err)
 							continue
 						}

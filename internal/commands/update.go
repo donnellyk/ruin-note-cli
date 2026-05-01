@@ -175,7 +175,7 @@ New UUIDs in the updated content are an error (use 'log' to create new notes).`,
 				n.SetTimestamps()
 
 				if !dryRun {
-					if err := n.Save(); err != nil {
+					if err := saveNoteForVault(n, vlt); err != nil {
 						errors = append(errors, fmt.Sprintf("failed to save %s: %v", path, err))
 						continue
 					}

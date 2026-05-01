@@ -152,10 +152,37 @@ func parseFrontmatterYAML(yamlContent string) (*Frontmatter, error) {
 	return fm, nil
 }
 
+// HasFrontmatterKey reports whether the file's frontmatter contains a
+// top-level mapping key with the given name. Avoids substring false
+// positives like "inherited-tags:" matching "tags:". Used by tests and
+// downstream tooling that needs to inspect on-disk frontmatter shape
+// without round-tripping through Parse.
+func HasFrontmatterKey(content, key string) bool {
+	content = strings.TrimLeft(content, "\n\r")
+	if !strings.HasPrefix(content, frontmatterDelimiter) {
+		return false
+	}
+	rest := content[len(frontmatterDelimiter):]
+	before, _, ok := strings.Cut(rest, "\n"+frontmatterDelimiter)
+	if !ok {
+		return false
+	}
+	prefix := key + ":"
+	for _, line := range strings.Split(before, "\n") {
+		if strings.HasPrefix(strings.TrimRight(line, "\r"), prefix) {
+			return true
+		}
+	}
+	return false
+}
+
 // HasLegacyTagFrontmatter returns true if the file's frontmatter uses the
-// pre-v0.4.0 tag format: any `#`-prefixed entry in `tags:` or
-// `inherited-tags:`, or the presence of an `inline-tags:` key. Used by doctor
-// to detect notes that need a tag-format migration rewrite.
+// pre-v0.4.0 tag format: any `#`-prefixed entry in `tags:`, `inline-tags:`,
+// or `inherited-tags:`. Used by doctor to detect notes that need a tag-format
+// migration rewrite.
+//
+// A bare `inline-tags: [followup]` (stripped form, with tag_frontmatter=true)
+// is current-format from v0.4.0 onward and is NOT flagged.
 //
 // Operates on the raw file bytes since parseFrontmatterYAML strips the legacy
 // `#` prefix on read (so the parsed Frontmatter no longer reveals the
@@ -178,9 +205,6 @@ func HasLegacyTagFrontmatter(content string) bool {
 		if trimmed == "" {
 			continue
 		}
-		if strings.HasPrefix(trimmed, "inline-tags:") {
-			return true
-		}
 		isList := strings.HasPrefix(stripped, " ") || strings.HasPrefix(stripped, "\t")
 		if !isList {
 			currentKey = ""
@@ -190,7 +214,7 @@ func HasLegacyTagFrontmatter(content string) bool {
 			}
 			key := strings.TrimSpace(trimmed[:colon])
 			value := strings.TrimSpace(trimmed[colon+1:])
-			if key == "tags" || key == "inherited-tags" {
+			if key == "tags" || key == "inline-tags" || key == "inherited-tags" {
 				if strings.HasPrefix(value, "[") {
 					if strings.Contains(value, "#") {
 						return true
@@ -259,23 +283,46 @@ func cloneAnyMap(in map[string]any) map[string]any {
 	return out
 }
 
+// SerializeOptions controls which own-tag mirror fields land in the output.
+// Zero value preserves the v0.4.0 default contract: tags: written when
+// non-empty, inline-tags: never written, inherited-tags: written when
+// non-empty.
+type SerializeOptions struct {
+	// SkipOwnTagMirror omits tags: and inline-tags: from output regardless of
+	// EmitInlineTags. inherited-tags: is unaffected.
+	SkipOwnTagMirror bool
+
+	// EmitInlineTags writes inline-tags: when non-empty. Vault save paths set
+	// this true when the tag_frontmatter config flag is on (the default).
+	EmitInlineTags bool
+}
+
 // Serialize converts the frontmatter to a YAML string with delimiters. Returns
-// an empty string if the frontmatter is empty.
+// an empty string if the frontmatter is empty. Equivalent to
+// SerializeWithOptions(SerializeOptions{}) — the default omits inline-tags:
+// for callers that don't go through the vault save path.
 func (fm *Frontmatter) Serialize() (string, error) {
+	return fm.SerializeWithOptions(SerializeOptions{})
+}
+
+// SerializeWithOptions is the gated form. Use it when the caller has access
+// to the vault's tag_frontmatter setting; the helper
+// commands.saveNoteForVault wires this up for production callers.
+func (fm *Frontmatter) SerializeWithOptions(opts SerializeOptions) (string, error) {
 	if fm.IsEmpty() {
 		return "", nil
 	}
 
 	if fm.originalNode != nil {
-		return fm.serializeFromNode()
+		return fm.serializeFromNode(opts)
 	}
 
-	return fm.serializeFromMap()
+	return fm.serializeFromMap(opts)
 }
 
 // serializeFromMap is the legacy path used for Frontmatters constructed in code
 // (no source YAML to preserve). Keys are sorted by yaml.v3's map encoding.
-func (fm *Frontmatter) serializeFromMap() (string, error) {
+func (fm *Frontmatter) serializeFromMap(opts SerializeOptions) (string, error) {
 	data := make(map[string]any)
 
 	if fm.UUID != "" {
@@ -287,10 +334,12 @@ func (fm *Frontmatter) serializeFromMap() (string, error) {
 	if fm.Updated != "" {
 		data["updated"] = fm.Updated
 	}
-	if len(fm.Tags) > 0 {
+	if !opts.SkipOwnTagMirror && len(fm.Tags) > 0 {
 		data["tags"] = fm.Tags
 	}
-	// inline-tags is never written: stored form lives in titles.json from v0.4.0.
+	if !opts.SkipOwnTagMirror && opts.EmitInlineTags && len(fm.InlineTags) > 0 {
+		data["inline-tags"] = fm.InlineTags
+	}
 	if len(fm.InheritedTags) > 0 {
 		data["inherited-tags"] = fm.InheritedTags
 	}
@@ -327,16 +376,23 @@ func (fm *Frontmatter) serializeFromMap() (string, error) {
 // serializeFromNode mutates the parsed mapping in place to reflect typed-field
 // and Extra changes, then marshals. Untouched keys keep their position,
 // comments, and scalar style.
-func (fm *Frontmatter) serializeFromNode() (string, error) {
+func (fm *Frontmatter) serializeFromNode(opts SerializeOptions) (string, error) {
 	node := fm.originalNode
 
 	setOrRemoveScalar(node, "uuid", fm.UUID)
 	setOrRemoveScalar(node, "created", fm.Created)
 	setOrRemoveScalar(node, "updated", fm.Updated)
-	setOrRemoveStringSlice(node, "tags", fm.Tags)
-	// inline-tags is never written: stored form lives in titles.json from v0.4.0.
-	// Passing nil here strips the key from the source mapping.
-	setOrRemoveStringSlice(node, "inline-tags", nil)
+	tagsToWrite := fm.Tags
+	if opts.SkipOwnTagMirror {
+		tagsToWrite = nil
+	}
+	setOrRemoveStringSlice(node, "tags", tagsToWrite)
+
+	var inlineToWrite []string
+	if !opts.SkipOwnTagMirror && opts.EmitInlineTags {
+		inlineToWrite = fm.InlineTags
+	}
+	setOrRemoveStringSlice(node, "inline-tags", inlineToWrite)
 	setOrRemoveStringSlice(node, "inherited-tags", fm.InheritedTags)
 	setOrRemoveStringSlice(node, "dates", fm.Dates)
 	setOrRemoveScalar(node, "parent", fm.Parent)

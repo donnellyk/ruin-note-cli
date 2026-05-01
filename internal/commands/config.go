@@ -23,7 +23,8 @@ With two arguments, sets the key to the value.
 Available keys:
   vault_path       - Path to the notes vault directory
   versioning       - Enable/disable git auto-versioning (true/false)
-  tag_inheritance  - Enable/disable inherited tags from parent notes (true/false)`,
+  tag_inheritance  - Enable/disable inherited tags from parent notes (true/false)
+  tag_frontmatter  - Write tags:/inline-tags: to note frontmatter (true/false; default true)`,
 		Example: `  # Show all config
   ruin config
 
@@ -100,6 +101,9 @@ func setConfigKey(cfg *config.Config, key, value string, jsonOut bool) error {
 	}
 
 	fmt.Printf("Set %s = %s\n", key, value)
+	if key == "tag_frontmatter" && (value == "false" || value == "0") {
+		fmt.Fprintln(os.Stderr, "Hint: existing notes still have tags:/inline-tags: in frontmatter. Run `ruin doctor` to strip them, or they will be cleaned on the next edit.")
+	}
 	return nil
 }
 
@@ -111,8 +115,10 @@ func getConfigValue(cfg *config.Config, key string) (string, error) {
 		return fmt.Sprintf("%t", cfg.VersioningEnabled()), nil
 	case "tag_inheritance":
 		return fmt.Sprintf("%t", cfg.TagInheritanceEnabled()), nil
+	case "tag_frontmatter":
+		return fmt.Sprintf("%t", cfg.TagFrontmatterEnabled()), nil
 	default:
-		return "", fmt.Errorf("unknown config key: %s (available: vault_path, versioning, tag_inheritance)", key)
+		return "", fmt.Errorf("unknown config key: %s (available: vault_path, versioning, tag_inheritance, tag_frontmatter)", key)
 	}
 }
 
@@ -135,8 +141,15 @@ func setConfigValue(cfg *config.Config, key, value string) error {
 		}
 		cfg.TagInheritance = &b
 		return nil
+	case "tag_frontmatter":
+		b, err := parseBoolValue(value)
+		if err != nil {
+			return fmt.Errorf("tag_frontmatter: %w", err)
+		}
+		cfg.TagFrontmatter = &b
+		return nil
 	default:
-		return fmt.Errorf("unknown config key: %s (available: vault_path, versioning, tag_inheritance)", key)
+		return fmt.Errorf("unknown config key: %s (available: vault_path, versioning, tag_inheritance, tag_frontmatter)", key)
 	}
 }
 

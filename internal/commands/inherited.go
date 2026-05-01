@@ -155,7 +155,7 @@ func CascadeInheritedTags(parentUUID string, vlt *vault.Vault, titlesIndex *vaul
 
 		if !normalizedTagsEqual(n.InheritedTags, newInherited) {
 			n.InheritedTags = newInherited
-			if err := n.Save(); err != nil {
+			if err := saveNoteForVault(n, vlt); err != nil {
 				return fmt.Errorf("failed to save %s: %w", entry.Path, err)
 			}
 			// Mirror the new inherited-tags into titles.json so hot-path matchers

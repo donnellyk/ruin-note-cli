@@ -20,6 +20,7 @@ type DoctorOutput struct {
 	InheritedTagsUpdated  []string `json:"inherited_tags_updated,omitempty"`
 	InheritedTagsStripped []string `json:"inherited_tags_stripped,omitempty"`
 	TagFormatMigrated     []string `json:"tag_format_migrated,omitempty"`
+	OwnTagMirrorChanged   []string `json:"own_tag_mirror_changed,omitempty"`
 	TagsYMLUpdated        bool     `json:"tags_yml_updated"`
 	TitlesUpdated         bool     `json:"titles_updated"`
 	OrphanedParents       []string `json:"orphaned_parents,omitempty"`
@@ -147,6 +148,11 @@ func doctorFiles(vlt *vault.Vault, paths []string, dryRun bool, jsonOutput bool)
 			needsSave = true
 		}
 
+		if ownTagMirrorWillChange(rawFM, n, vlt) {
+			output.OwnTagMirrorChanged = append(output.OwnTagMirrorChanged, path)
+			needsSave = true
+		}
+
 		tagsChanged := !normalizedTagsEqual(rawFM.Tags, n.Tags) || !normalizedTagsEqual(rawFM.InlineTags, n.InlineTags)
 		if tagsChanged {
 			output.TagsReindexed = append(output.TagsReindexed, path)
@@ -219,7 +225,7 @@ func doctorFiles(vlt *vault.Vault, paths []string, dryRun bool, jsonOutput bool)
 		}
 
 		if needsSave && !dryRun {
-			if err := n.Save(); err != nil {
+			if err := saveNoteForVault(n, vlt); err != nil {
 				fmt.Fprintf(os.Stderr, "%swarning: failed to save %s: %v\n", prefix, path, err)
 				continue
 			}
@@ -301,11 +307,16 @@ func RunDoctorFullScan(vlt *vault.Vault, dryRun bool) (*DoctorOutput, error) {
 			needsSave = true
 		}
 
-		// Pre-v0.4.0 frontmatter: any `#` in tags:/inherited-tags: arrays or
-		// any inline-tags: key. Force a rewrite via Serialize so the new
-		// (stripped) form replaces the legacy one.
+		// Pre-v0.4.0 frontmatter: any `#` in tags:/inline-tags:/inherited-tags:
+		// arrays. Force a rewrite via Serialize so the new (stripped) form
+		// replaces the legacy one.
 		if note.HasLegacyTagFrontmatter(rawContent) {
 			output.TagFormatMigrated = append(output.TagFormatMigrated, path)
+			needsSave = true
+		}
+
+		if ownTagMirrorWillChange(rawFM, n, vlt) {
+			output.OwnTagMirrorChanged = append(output.OwnTagMirrorChanged, path)
 			needsSave = true
 		}
 
@@ -341,7 +352,7 @@ func RunDoctorFullScan(vlt *vault.Vault, dryRun bool) (*DoctorOutput, error) {
 		titleEntries[n.UUID] = vault.MakeTitleEntry(n.Title, path, n.Parent, n.Tags, n.InlineTags, n.InheritedTags)
 
 		if needsSave && !dryRun {
-			if err := n.Save(); err != nil {
+			if err := saveNoteForVault(n, vlt); err != nil {
 				fmt.Fprintf(os.Stderr, "%swarning: failed to save %s: %v\n", prefix, path, err)
 			}
 		}
@@ -376,7 +387,7 @@ func RunDoctorFullScan(vlt *vault.Vault, dryRun bool) (*DoctorOutput, error) {
 		if changed {
 			output.LinkedCardsReindexed = append(output.LinkedCardsReindexed, n.FilePath)
 			if !dryRun {
-				if err := n.Save(); err != nil {
+				if err := saveNoteForVault(n, vlt); err != nil {
 					fmt.Fprintf(os.Stderr, "%swarning: failed to save linked-cards for %s: %v\n", prefix, n.FilePath, err)
 				}
 			}
@@ -463,7 +474,7 @@ func RunDoctorFullScan(vlt *vault.Vault, dryRun bool) (*DoctorOutput, error) {
 		}
 
 		if (inheritedChanged || contentChanged) && !dryRun {
-			if err := n.Save(); err != nil {
+			if err := saveNoteForVault(n, vlt); err != nil {
 				fmt.Fprintf(os.Stderr, "%swarning: failed to save inherited tags for %s: %v\n", prefix, n.FilePath, err)
 			}
 		}
@@ -557,6 +568,9 @@ func doctorPrintOutput(output *DoctorOutput, prefix string, jsonOutput bool) err
 	}
 	if len(output.InheritedTagsStripped) > 0 {
 		fmt.Fprintf(os.Stderr, "  %d notes: %sstripped redundant inherited tags from content\n", len(output.InheritedTagsStripped), prefix)
+	}
+	if len(output.OwnTagMirrorChanged) > 0 {
+		fmt.Fprintf(os.Stderr, "  %d notes: %sown-tag mirror changed (tag_frontmatter flip)\n", len(output.OwnTagMirrorChanged), prefix)
 	}
 	if output.TagsYMLUpdated {
 		fmt.Fprintf(os.Stderr, "%sUpdated .ruin/tags.yml\n", prefix)

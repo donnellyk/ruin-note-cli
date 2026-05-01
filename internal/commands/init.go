@@ -193,8 +193,9 @@ func maybeRunDoctorOnInit(vlt *vault.Vault, force, jsonOutput bool, stdin io.Rea
 		fmt.Fprintf(stderr, "Found %d existing notes. Build indices now?\n", len(notePaths))
 		fmt.Fprintln(stderr, "This may rewrite frontmatter:")
 		fmt.Fprintln(stderr, "  - Add a uuid to notes that don't have one")
-		fmt.Fprintln(stderr, "  - Normalize tags (a leading # is added if missing)")
-		fmt.Fprintln(stderr, "  - Rebuild the inline-tags and dates indices from note bodies")
+		fmt.Fprintln(stderr, "  - Migrate pre-v0.4.0 tag form (strip `#` from tags:/inherited-tags:)")
+		fmt.Fprintln(stderr, "  - Mirror body inline tags into inline-tags: (skip with RUIN_TAG_FRONTMATTER=false)")
+		fmt.Fprintln(stderr, "  - Rebuild the dates index from note bodies")
 		fmt.Fprintln(stderr, "Other frontmatter fields, key order, and comments are preserved.")
 		fmt.Fprint(stderr, "[y/N] ")
 

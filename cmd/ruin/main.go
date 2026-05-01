@@ -75,6 +75,7 @@ tags, and powerful search capabilities.`,
 		}
 		vlt = vault.New(expandedPath)
 		vlt.SetTagInheritance(cfg.TagInheritanceEnabled())
+		vlt.SetTagFrontmatter(cfg.TagFrontmatterEnabled())
 
 		if cfg.VersioningEnabled() && versioning.IsAvailable() {
 			g := versioning.New(expandedPath)

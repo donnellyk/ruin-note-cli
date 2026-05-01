@@ -62,7 +62,7 @@ func createNote(n *note.Note, vlt *vault.Vault, titleFlag string, useH1 bool) er
 		return fmt.Errorf("file already exists: %s", n.FilePath)
 	}
 
-	if err := n.Save(); err != nil {
+	if err := saveNoteForVault(n, vlt); err != nil {
 		return fmt.Errorf("failed to save note: %w", err)
 	}
 
@@ -94,7 +94,7 @@ func saveWithIndexUpdate(n *note.Note, vlt *vault.Vault) error {
 
 	n.SetTimestamps()
 
-	if err := n.Save(); err != nil {
+	if err := saveNoteForVault(n, vlt); err != nil {
 		return fmt.Errorf("failed to save: %w", err)
 	}
 

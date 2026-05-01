@@ -86,7 +86,8 @@ Some content with a #followup inline.
 		t.Fatalf("first run TagFormatMigrated = %v, want 1 entry", out.TagFormatMigrated)
 	}
 
-	// Frontmatter on disk: stripped tags, no inline-tags key.
+	// Frontmatter on disk: stripped tags. With tag_frontmatter=true (the
+	// default), inline-tags: is rewritten in stripped form.
 	got, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatalf("read migrated note: %v", err)
@@ -95,8 +96,8 @@ Some content with a #followup inline.
 	if strings.Contains(gotStr, `"#daily"`) || strings.Contains(gotStr, `"#work"`) {
 		t.Errorf("migrated frontmatter still contains #-prefixed tag literals:\n%s", gotStr)
 	}
-	if strings.Contains(gotStr, "inline-tags:") {
-		t.Errorf("migrated frontmatter still contains inline-tags: key:\n%s", gotStr)
+	if strings.Contains(gotStr, `"#followup"`) {
+		t.Errorf("migrated frontmatter still contains #-prefixed inline tag:\n%s", gotStr)
 	}
 	if !strings.Contains(gotStr, "inherited-tags:") {
 		t.Errorf("migrated frontmatter dropped inherited-tags:\n%s", gotStr)

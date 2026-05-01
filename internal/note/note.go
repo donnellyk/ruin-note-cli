@@ -99,6 +99,15 @@ func extractTitle(content string) string {
 }
 
 func (n *Note) Serialize() (string, error) {
+	return n.SerializeWithOptions(SerializeOptions{})
+}
+
+// SerializeWithOptions threads SerializeOptions through to the underlying
+// Frontmatter serializer. Vault-aware callers use this via
+// commands.saveNoteForVault to honor the tag_frontmatter setting; direct
+// callers (tests, downstream Go consumers) get the v0.4.0 default by passing
+// the zero value.
+func (n *Note) SerializeWithOptions(opts SerializeOptions) (string, error) {
 	fm := &Frontmatter{
 		UUID:          n.UUID,
 		Tags:          n.Tags,
@@ -119,7 +128,7 @@ func (n *Note) Serialize() (string, error) {
 		fm.Updated = n.Updated.Format(TimeFormat)
 	}
 
-	fmStr, err := fm.Serialize()
+	fmStr, err := fm.SerializeWithOptions(opts)
 	if err != nil {
 		return "", fmt.Errorf("failed to serialize frontmatter: %w", err)
 	}
@@ -128,11 +137,18 @@ func (n *Note) Serialize() (string, error) {
 }
 
 func (n *Note) Save() error {
+	return n.SaveWithOptions(SerializeOptions{})
+}
+
+// SaveWithOptions writes the note to disk with the supplied serialize options.
+// Vault save callers use commands.saveNoteForVault, which derives opts from
+// the vault's tag_frontmatter setting.
+func (n *Note) SaveWithOptions(opts SerializeOptions) error {
 	if n.FilePath == "" {
 		return fmt.Errorf("note has no file path")
 	}
 
-	content, err := n.Serialize()
+	content, err := n.SerializeWithOptions(opts)
 	if err != nil {
 		return err
 	}

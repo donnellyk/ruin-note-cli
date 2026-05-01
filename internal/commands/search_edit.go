@@ -140,7 +140,7 @@ func handleEditSingle(vlt *vault.Vault, result SearchResult, force bool, fmMode 
 		fmt.Fprintf(os.Stderr, "warning: failed to refresh inherited tags: %v\n", err)
 	}
 
-	if err := result.note.Save(); err != nil {
+	if err := saveNoteForVault(result.note, vlt); err != nil {
 		return fmt.Errorf("failed to save: %w", err)
 	}
 
@@ -337,7 +337,7 @@ func applyBulkChanges(vlt *vault.Vault, original, modified string, results []Sea
 
 		result.note.SetTimestamps()
 
-		if err := result.note.Save(); err != nil {
+		if err := saveNoteForVault(result.note, vlt); err != nil {
 			errors = append(errors, fmt.Sprintf("Failed to save %s: %v", result.Path, err))
 			continue
 		}

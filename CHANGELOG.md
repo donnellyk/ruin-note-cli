@@ -7,6 +7,13 @@
 - Relative date arithmetic in filters and `@`-tokens: `today+N` and `today-N` (`created:today-7`, `between:today,today+6`).
 - `ruin pick` between two dates with new `@between:D1,D2` argument, mirroring `search`
 - Match all notes with no tags with new `tags:none` search filter.
+- `tag_frontmatter` config flag (default `true`). Set to `false` to stop
+  writing `tags:` and `inline-tags:` to note frontmatter — useful for
+  users who want ruin to defer to Obsidian's tag-pane convention on a
+  shared vault. `inherited-tags:` is unaffected. Settable via
+  `~/.config/ruin/config.yml`, `RUIN_TAG_FRONTMATTER=false`, or
+  `ruin config tag_frontmatter false`. See
+  [`docs/obsidian-compatibility.md`](docs/obsidian-compatibility.md).
 
 ### Changed
 - Frontmatter parsing preserves key order, YAML comments, and scalar quote styles for keys ruin doesn't manage.
@@ -29,13 +36,17 @@
 
 ### Removed
 - **Breaking**: `pkg/notetext.NormalizeTag` (and its `internal/note.NormalizeTag` shim) replaced by two clearer functions: `NormalizeStored` (storage form: lowercased, `#` delimiters stripped) for comparison and indexing, and `BodyForm` (lowercased, delimiters re-added based on whitespace) for emitting tags into note body content. Downstream Go consumers importing `pkg/notetext` must migrate calls.
-- **Breaking**: `inline-tags:` field removed from frontmatter; the data is
-  relocated to `.ruin/titles.json` as a fast-lookup cache. `inherited-tags:`
-  remains in frontmatter (in stripped form) as durable user-visible
-  metadata, with a mirror in `titles.json` for hot-path access.
-- **Breaking**: `Frontmatter.InlineTags` is no longer emitted by
-  `(*Frontmatter).Serialize`. The struct field stays for migration
-  detection but is never written.
+- **Breaking**: `inline-tags:` field is now configurable. By default it is
+  written to frontmatter in stripped form (no `#`); the new
+  `tag_frontmatter=false` setting omits it (and `tags:`) entirely. In
+  all modes the field is mirrored in `.ruin/titles.json` as the
+  hot-path source of truth for matchers. `inherited-tags:` stays in
+  frontmatter (in stripped form) as durable, user-visible metadata
+  with its own titles.json mirror.
+- The no-args `(*Frontmatter).Serialize` still omits `inline-tags:` for
+  direct callers (the v0.4.0 default). Vault save paths use
+  `SerializeWithOptions` (via `commands.saveNoteForVault`) and emit it
+  when `tag_frontmatter=true` (the vault default).
 - **Breaking**: `note.LoadFrontmatterOnly` no longer populates
   `Tags` / `InlineTags` / `InheritedTags` on the returned `*Note`. The
   `.ruin/titles.json` mirror is the source of truth for hot-path tag

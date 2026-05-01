@@ -24,10 +24,11 @@ type Vault struct {
 	Path           string
 	versioning     *versioning.GitVersioning
 	tagInheritance bool
+	tagFrontmatter bool
 }
 
 func New(path string) *Vault {
-	return &Vault{Path: path, tagInheritance: true}
+	return &Vault{Path: path, tagInheritance: true, tagFrontmatter: true}
 }
 
 func (v *Vault) SetVersioning(g *versioning.GitVersioning) {
@@ -40,6 +41,14 @@ func (v *Vault) SetTagInheritance(enabled bool) {
 
 func (v *Vault) TagInheritanceEnabled() bool {
 	return v.tagInheritance
+}
+
+func (v *Vault) SetTagFrontmatter(enabled bool) {
+	v.tagFrontmatter = enabled
+}
+
+func (v *Vault) TagFrontmatterEnabled() bool {
+	return v.tagFrontmatter
 }
 
 // Commit creates a git commit if versioning is enabled. No-op if versioning is

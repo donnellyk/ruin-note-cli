@@ -223,7 +223,7 @@ See also:
 				n.RefreshTags()
 				n.SetTimestamps()
 
-				if err := n.Save(); err != nil {
+				if err := saveNoteForVault(n, vlt); err != nil {
 					errors = append(errors, fmt.Sprintf("Failed to save %s: %v", path, err))
 					continue
 				}
@@ -384,7 +384,7 @@ See also:
 				n.RefreshTags()
 				n.SetTimestamps()
 
-				if err := n.Save(); err != nil {
+				if err := saveNoteForVault(n, vlt); err != nil {
 					errors = append(errors, fmt.Sprintf("Failed to save %s: %v", path, err))
 					continue
 				}
