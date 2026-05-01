@@ -24,6 +24,9 @@ Evaluate embed strings dynamically without needing to make a new document.
 - `.ruin/` index files now have `version` key
 - `titles.yml` now stores tag information
 
+### Fixed
+- `compose --expand-embeds` no longer duplicates the results of a dynamic embed 
+
 ## [0.3.1] - 2026-04-21
 
 ### Fixed

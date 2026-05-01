@@ -449,9 +449,6 @@ func renderText(tree *composeTree) (string, []sourceEntry) {
 				}
 				if seg.Embed != nil {
 					walk(seg.Embed)
-					for _, child := range seg.Embed.Children {
-						walk(child)
-					}
 				}
 			}
 		} else if strings.TrimSpace(node.Content) != "" {
@@ -496,11 +493,7 @@ func renderJSON(tree *composeTree, includeContent bool) composeNode {
 	if len(tree.Segments) > 0 {
 		for _, seg := range tree.Segments {
 			if seg.Embed != nil {
-				embedNode := renderJSON(seg.Embed, includeContent)
-				node.Children = append(node.Children, embedNode)
-				for _, child := range seg.Embed.Children {
-					node.Children = append(node.Children, renderJSON(child, includeContent))
-				}
+				node.Children = append(node.Children, renderJSON(seg.Embed, includeContent))
 			}
 		}
 	}
@@ -537,9 +530,6 @@ func renderEditList(tree *composeTree) []SearchResult {
 			for _, seg := range node.Segments {
 				if seg.Embed != nil {
 					walk(seg.Embed)
-					for _, child := range seg.Embed.Children {
-						walk(child)
-					}
 				}
 			}
 		}
