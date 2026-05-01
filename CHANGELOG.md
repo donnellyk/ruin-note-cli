@@ -1,6 +1,6 @@
 # Changelog
 
-## [0.4.0] - UNRELEASED
+## [0.4.0] - 2026-05-01 
 
 ### Obsidian Compatibility
 This release is focused on increasing compatibility with Obsidian, specifically tags. Ruin now stores and emits tags close to Obsidian's syntax (ie. drops the `#`). A new configuration `tag_frontmatter` (defaults to true) disables ruin writing body tags to a note's frontmatter, to closer align with Obsidian's frontmatter usage. See [`docs/breaking-changes/v0.4.0-tag-format.md`](docs/breaking-changes/v0.4.0-tag-format.md) and [`docs/obsidian-compatibility.md`](docs/obsidian-compatibility.md) for more information.
