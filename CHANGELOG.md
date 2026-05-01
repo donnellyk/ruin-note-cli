@@ -1,57 +1,28 @@
 # Changelog
 
-## [Unreleased]
+## [0.4.0] - UNRELEASED
+
+### Obsidian Compatibility
+This release is focused on increasing compatibility with Obsidian, specifically tags. Ruin now stores and emits tags close to Obsidian's syntax (ie. drops the `#`). A new configuration `tag_frontmatter` (defaults to true) disables ruin writing body tags to a note's frontmatter, to closer align with Obsidian's frontmatter usage. See [`docs/breaking-changes/v0.4.0-tag-format.md`](docs/breaking-changes/v0.4.0-tag-format.md) and [`docs/obsidian-compatibility.md`](docs/obsidian-compatibility.md) for more information.
+
+### New Command `ruin embed eval`
+Evaluate embed strings dynamically without needing to make a new document.
 
 ### Added
-- Evalulate embeds dynamically with `ruin embed eval <embed-string>`, without needing to make a new document.
+- `ruin embed eval <embed-string>`
 - Relative date arithmetic in filters and `@`-tokens: `today+N` and `today-N` (`created:today-7`, `between:today,today+6`).
 - `ruin pick` between two dates with new `@between:D1,D2` argument, mirroring `search`
 - Match all notes with no tags with new `tags:none` search filter.
-- `tag_frontmatter` config flag (default `true`). Set to `false` to stop
-  writing `tags:` and `inline-tags:` to note frontmatter — useful for
-  users who want ruin to defer to Obsidian's tag-pane convention on a
-  shared vault. `inherited-tags:` is unaffected. Settable via
-  `~/.config/ruin/config.yml`, `RUIN_TAG_FRONTMATTER=false`, or
-  `ruin config tag_frontmatter false`. See
-  [`docs/obsidian-compatibility.md`](docs/obsidian-compatibility.md).
+- `tag_frontmatter` config flag
 
 ### Changed
-- Frontmatter parsing preserves key order, YAML comments, and scalar quote styles for keys ruin doesn't manage.
+- Tag-only Search / Pick performance improved by ~40%
+- Frontmatter parsing now preserves key order, YAML comments, and scalar quote styles for keys ruin doesn't manage.
 - `ruin init` indexes folders with existing files with prompt
-- **Breaking**: tag storage form changed. Stored tags drop the `#` prefix
-  (`tags: [daily]` instead of `tags: ["#daily"]`). Affects frontmatter
-  `tags:` / `inherited-tags:`, the `.ruin/tags.yml` index keys, and JSON
-  output. CLI input (`ruin search "#daily"`) and body markdown (`#tag`,
-  `#meeting notes#`) are unchanged. Migration is automatic on the first
-  `ruin doctor` after upgrade and is recoverable via auto-version git
-  history. See [`docs/breaking-changes/v0.4.0-tag-format.md`](docs/breaking-changes/v0.4.0-tag-format.md).
-- **Breaking**: JSON output (`ruin search --json`, `ruin pick --json`,
-  `ruin tags --json`, `ruin embed eval --json`, `ruin --bulk`) emits
-  `tags`, `inline_tags`, and `inherited_tags` arrays without the `#`
-  prefix. Downstream consumers must update.
-- **Breaking**: `.ruin/` index files gain a per-file `version: 2` key
-  (`tags.yml`, `queries.yml`, `parents.yml`, `titles.json`). Old binaries
-  reading a v0.4.0 vault refuse with a clear "newer ruin required" error
-  rather than silently giving wrong answers.
-
-### Removed
-- **Breaking**: `pkg/notetext.NormalizeTag` (and its `internal/note.NormalizeTag` shim) replaced by two clearer functions: `NormalizeStored` (storage form: lowercased, `#` delimiters stripped) for comparison and indexing, and `BodyForm` (lowercased, delimiters re-added based on whitespace) for emitting tags into note body content. Downstream Go consumers importing `pkg/notetext` must migrate calls.
-- **Breaking**: `inline-tags:` field is now configurable. By default it is
-  written to frontmatter in stripped form (no `#`); the new
-  `tag_frontmatter=false` setting omits it (and `tags:`) entirely. In
-  all modes the field is mirrored in `.ruin/titles.json` as the
-  hot-path source of truth for matchers. `inherited-tags:` stays in
-  frontmatter (in stripped form) as durable, user-visible metadata
-  with its own titles.json mirror.
-- The no-args `(*Frontmatter).Serialize` still omits `inline-tags:` for
-  direct callers (the v0.4.0 default). Vault save paths use
-  `SerializeWithOptions` (via `commands.saveNoteForVault`) and emit it
-  when `tag_frontmatter=true` (the vault default).
-- **Breaking**: `note.LoadFrontmatterOnly` no longer populates
-  `Tags` / `InlineTags` / `InheritedTags` on the returned `*Note`. The
-  `.ruin/titles.json` mirror is the source of truth for hot-path tag
-  matching; downstream callers needing tags should query the titles
-  index or call `note.Load` for body classification.
+- Stored tags drop `#` prefix
+- JSON output emit tag arrayed without `#` prefix
+- `.ruin/` index files now have `version` key
+- `titles.yml` now stores tag information
 
 ## [0.3.1] - 2026-04-21
 

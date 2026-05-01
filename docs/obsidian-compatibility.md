@@ -1,88 +1,48 @@
 # Obsidian Compatibility
 
-Ruin and Obsidian share a vault format — Markdown files with YAML
-frontmatter — and most things work in both tools without ceremony. This
-doc covers the common ground, the one place the two tools differ
-(where tags live), and the config flag that brings ruin in line with
-Obsidian's convention.
+Ruin was built with Obsidian-compatibility in mind. While Ruin is a WIP and stuck in the terminal, some users might find Obsidian a good companion tool. Others might be coming to Ruin with an existing, extensive Obsidian vault.
 
-## Shared ground
+## Maximum Capability
 
-Both tools read and preserve the same surface:
+> [!NOTE]
+> - Set `tag_frontmatter: false` in `~/.config/ruin/config.yml`.
+> - Don't use Ruin's `#spaced tags#` format.
 
-- **Markdown bodies** — standard CommonMark.
-- **YAML frontmatter** — between `---` delimiters at the top of the
-  file. Ruin's parser preserves key order, comments, and quote styles
-  for fields it doesn't manage.
-- **Wiki links** — `[[Note Title]]` and `[[Note Title|display]]`. Ruin
-  resolves them to UUIDs and caches the mapping in `linked-cards:` for
-  fast lookup.
-- **Embeds** — `![[Note Title]]` and `![[Note Title#section]]`. Ruin
-  expands embeds at compose time; Obsidian renders them inline.
-- **Body tags** — `#tag`, `#category/sub`, and `#multi word#` (ruin
-  extension; Obsidian doesn't parse the spaced form).
+On an existing Obsidian doc, `ruin doctor` will set up necessary indices and frontmatter ruin needs to function. **Do this on a copy of your vault first to ensure compatibility**
 
-## Where tags live
+## Differences
 
-This is the one place ruin and Obsidian use different conventions:
+### Indices
+Both Ruin and Obsidian use indices to speed up search and other operations. Obsidian's indices exist in memory when the application is open and are available via the plugin API and CLI. Ruin's indices are persistent and stored in plaintext files within the vault in the `.ruin` directory, as yml files. Every write to Ruin will update these indices as necessary and the `ruin doctor` command ensures they are up-to-date with the current vault. These indices are safe to read directly and useful for third-party tooling (ie. if you want a list of every tag used in the vault for a Raycast extension).
 
-- **Obsidian** extracts `#tag` from body content at read time and
-  surfaces them in its tag pane and search. It does not write body tags
-  back into frontmatter.
-- **Ruin** mirrors body tags into frontmatter on save: `tags:` for
-  global (tag-only line) tags, `inline-tags:` for tags on lines with
-  other content. It also mirrors them into `.ruin/titles.json` as a
-  hot-path index.
+### UUID
+Ruin generates a UUID for every file logged with the tool. This UUID is stored in the note's frontmatter with the key `uuid` and referenced in the plaintext indices. Obsidian does not do this.
 
-Both representations carry the same information; they just live in
-different places. When ruin and Obsidian share a vault, the mismatch
-shows up as ruin adding `tags:` and `inline-tags:` keys that Obsidian
-doesn't write — visible noise in Obsidian's properties panel.
+### Tags
+Ruin's tag syntax is a superset of Obsidian's. Both Obsidian and Ruin support `#tags`, `#underscored_tags`, `#dashed-tags`, and `#nested/tags`. In both applications, tags are case-insensitive.
 
-## Recommended config for shared vaults
+Ruin supports tags with spaces in them as `#tag with space#` (credit where due, taken from Bear). If strict Obsidian compatibility is important, don't use this tag format.
 
-```yaml
-# ~/.config/ruin/config.yml
-tag_frontmatter: false
-```
+As a convenience, Ruin extracts tags from the body and stores them in the frontmatter (under `tags`, `inline-tags`, and `inherited-tags`). This somewhat clashes with Obsidian's use of the `tags` field, which has no relation to the tags in the note content's body and is just another way to tag a file. **By default, on write, ruin will remove tags in frontmatter that are not present in the body**.
 
-Or per-invocation:
+If you use Obsidian frontmatter tags, you likely want to set `tag_frontmatter: false` in `~/.config/ruin/config.yml`. This will disable `tags` and `inline-tags` from being written. This will have no impact on how Ruin works. Existing `tags` will remain but will be ignored by `ruin search` and other tooling. `inherited-tags` will still be written (unless `tag_inheritance: false`, which will impact how `ruin search` works).
 
-```bash
-RUIN_TAG_FRONTMATTER=false ruin init ~/Obsidian-vault
-```
+### Frontmatter
+Broadly, Ruin uses frontmatter as a cache / index and Obsidian uses it as a convenience.
 
-With this setting, ruin reads Obsidian-style frontmatter normally but
-does **not** write `tags:` or `inline-tags:` back. Body content remains
-the source of truth for own tags; `.ruin/titles.json` carries the index
-ruin's own queries need.
+In addition to the fields mentioned above, Ruin writes `linked-cards`, `updated`, and `dates` in the frontmatter to help speed up search. If these fields are missing or malformed, they might be missed in search or extraction. `ruin doctor` deterministically rebuilds these fields and is always safe to run.
 
-## A few things ruin still adds to frontmatter
+With an existing vault, things should just work. Running `ruin doctor` will generate the necessary indices and bring the vault in line with Ruin's expectations.
 
-Even with `tag_frontmatter=false`, ruin needs a few keys to function:
+### Ruin Formatting Obsidian Doesn't Support
+- `@date` values are not supported or rendered in Obsidian by default. Certain plugins might use `@` as a special character / tag, so keep that in mind.
 
-- **`uuid:`** — required for ruin's identity model. Obsidian ignores
-  unknown frontmatter keys, so this is harmless.
-- **`inherited-tags:`** — added when a note's parent has global tags.
-  Set `RUIN_TAG_INHERITANCE=false` (or `tag_inheritance: false` in
-  config) to disable inheritance entirely.
-- **`linked-cards:`** — resolved UUIDs from `[[wiki links]]` in
-  content.
-- **`updated:`** and **`dates:`** — set on edits; not Obsidian-managed
-  but unobtrusive.
 
-## A few Obsidian conventions ruin doesn't interpret today
+### Obsidian Formatting Ruin Doesn't Support
+- **Frontmatter Aliases** (`aliases`)
+- **Inline metadata** (`key:: value` in body content)
+- **Block references** (`^block-id`)
 
-- **Aliases** (`aliases:`) — preserved as user-defined frontmatter
-  (Extra), but not used for ruin's wiki-link resolution.
-- **Inline metadata** (`key:: value` in body content) — not parsed.
-- **Daily-note plugin conventions** — not interpreted.
-- **Block references** (`^block-id`) — preserved as text in the body.
+These are ignored and have no impact on Ruin functionality. Aliases and Block references are on the roadmap and will be supported prior to 1.0. 
 
-## When in doubt
-
-If a workflow needs ruin and Obsidian to round-trip without surprise,
-start with `tag_frontmatter=false` and let the body be the only place
-tags live. Ruin's queries continue to work via `.ruin/titles.json`;
-Obsidian's tag pane continues to work via body extraction; both tools
-see the same tags without stepping on each other's writes.
+_Check this space_, as they say.

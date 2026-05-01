@@ -41,7 +41,7 @@ mise run install
 - `ruin log "A really important thing to remember"` or `cat note.txt | ruin log`
 - `ruin today --edit`
 
-See [reference](docs/cli-reference.md) for more info
+See [reference](docs/cli-reference.md) for more info. If you are coming from Obsidian or wish to use Ruin alongside Obsidian, see the [compatibility doc](docs/obsidian-compatibility.md).
 
 ## Key Features
 
