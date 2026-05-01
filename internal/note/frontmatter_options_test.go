@@ -55,6 +55,10 @@ func TestSerializeWithOptions_EmitInlineTags(t *testing.T) {
 }
 
 func TestSerializeWithOptions_SkipOwnTagMirror(t *testing.T) {
+	// SkipOwnTagMirror at the Frontmatter layer suppresses inline-tags: but
+	// writes whatever Tags the caller put on fm — Note.SerializeWithOptions
+	// is responsible for substituting FrontmatterTags so Obsidian-set
+	// `tags:` is preserved.
 	fm := &Frontmatter{
 		UUID:          "abc",
 		Tags:          []string{"daily"},
@@ -69,8 +73,8 @@ func TestSerializeWithOptions_SkipOwnTagMirror(t *testing.T) {
 	if err != nil {
 		t.Fatalf("SerializeWithOptions: %v", err)
 	}
-	if HasFrontmatterKey(out, "tags") {
-		t.Errorf("SkipOwnTagMirror=true emitted tags:\n%s", out)
+	if !HasFrontmatterKey(out, "tags") {
+		t.Errorf("SkipOwnTagMirror=true should write fm.Tags as-is:\n%s", out)
 	}
 	if HasFrontmatterKey(out, "inline-tags") {
 		t.Errorf("SkipOwnTagMirror=true emitted inline-tags:\n%s", out)
@@ -80,10 +84,32 @@ func TestSerializeWithOptions_SkipOwnTagMirror(t *testing.T) {
 	}
 }
 
+// TestSerializeWithOptions_SkipOwnTagMirror_NilTagsDropsKey — when fm.Tags is
+// empty (caller's FrontmatterTags was nil because the file had no `tags:`),
+// SkipOwnTagMirror must not introduce a `tags:` key.
+func TestSerializeWithOptions_SkipOwnTagMirror_NilTagsDropsKey(t *testing.T) {
+	fm := &Frontmatter{
+		UUID:          "abc",
+		InlineTags:    []string{"followup"},
+		InheritedTags: []string{"project"},
+	}
+
+	out, err := fm.SerializeWithOptions(SerializeOptions{
+		EmitInlineTags:   true,
+		SkipOwnTagMirror: true,
+	})
+	if err != nil {
+		t.Fatalf("SerializeWithOptions: %v", err)
+	}
+	if HasFrontmatterKey(out, "tags") {
+		t.Errorf("nil Tags + SkipOwnTagMirror should not introduce tags:\n%s", out)
+	}
+}
+
 func TestSerializeWithOptions_PreservesNodeForm(t *testing.T) {
 	// When a Frontmatter was parsed from disk, serializeFromNode is the path
-	// used. Verify EmitInlineTags adds the key, and SkipOwnTagMirror strips
-	// existing keys, against the node-based serializer.
+	// used. Verify SkipOwnTagMirror strips inline-tags: but leaves tags: as-is
+	// (Note.SerializeWithOptions handles preserving the on-disk value).
 	src := `---
 uuid: abc
 tags:
@@ -101,14 +127,12 @@ body
 		t.Fatalf("ParseFrontmatter: %v", err)
 	}
 
-	// SkipOwnTagMirror=true should drop both tags: and inline-tags: from the
-	// node, leaving inherited-tags: and custom: intact.
 	out, err := fm.SerializeWithOptions(SerializeOptions{SkipOwnTagMirror: true})
 	if err != nil {
 		t.Fatalf("SerializeWithOptions: %v", err)
 	}
-	if HasFrontmatterKey(out, "tags") {
-		t.Errorf("SkipOwnTagMirror=true did not strip tags: from node form:\n%s", out)
+	if !HasFrontmatterKey(out, "tags") {
+		t.Errorf("SkipOwnTagMirror=true should preserve tags: in node form:\n%s", out)
 	}
 	if HasFrontmatterKey(out, "inline-tags") {
 		t.Errorf("SkipOwnTagMirror=true did not strip inline-tags: from node form:\n%s", out)

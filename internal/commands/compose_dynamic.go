@@ -145,38 +145,25 @@ func (w *composeWalker) expandDynamicPick(ref note.DynamicEmbedRef, depth int, p
 		filterMatcher = m
 	}
 
-	notePaths, err := w.vault.ListNotes()
+	excludeUUIDs := map[string]bool{w.rootUUID: true, parentUUID: true}
+	candidates, err := pickCandidatePaths(w.vault, filter, nil, excludeUUIDs)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "warning: dynamic pick: %v\n", err)
 		return nil
 	}
 
-	pathToUUID := make(map[string]string, len(w.index.Titles))
-	for uuid, entry := range w.index.Titles {
-		pathToUUID[entry.Path] = uuid
-	}
-
 	var pickResults []pickNoteResult
-
-	for _, path := range notePaths {
-		fast, err := note.LoadFrontmatterOnly(path)
-		if err != nil {
-			continue
+	for _, path := range candidates {
+		if filterMatcher != nil {
+			fast, err := note.LoadFrontmatterOnly(path)
+			if err != nil {
+				continue
+			}
+			hydrateNoteTagsFromIndex(fast, w.index, path, false)
+			if !filterMatcher(fast) {
+				continue
+			}
 		}
-		hydrateNoteTagsFromIndex(fast, w.index, pathToUUID, path, false)
-
-		if fast.UUID == w.rootUUID || fast.UUID == parentUUID {
-			continue
-		}
-
-		if len(filter.include) > 0 && !noteHasInlineTag(fast, filter.include) {
-			continue
-		}
-
-		if filterMatcher != nil && !filterMatcher(fast) {
-			continue
-		}
-
 		n, err := note.Load(path)
 		if err != nil {
 			continue

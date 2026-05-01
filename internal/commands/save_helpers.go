@@ -27,6 +27,10 @@ func saveNoteForVault(n *note.Note, vlt *vault.Vault) error {
 // tag_frontmatter setting would add or remove tags:/inline-tags: keys
 // relative to what's on disk (rawFM). Used by doctor so users flipping the
 // flag see the per-note frontmatter delta in --dry-run output.
+//
+// With flag=false, `tags:` is preserved verbatim (treated as user-managed
+// surface for Obsidian compatibility), so the only delta the flag introduces
+// is on `inline-tags:`. With flag=true, ruin owns both keys.
 func ownTagMirrorWillChange(rawFM *note.Frontmatter, n *note.Note, vlt *vault.Vault) bool {
 	if rawFM == nil || n == nil {
 		return false
@@ -34,7 +38,12 @@ func ownTagMirrorWillChange(rawFM *note.Frontmatter, n *note.Note, vlt *vault.Va
 	flagOn := vlt == nil || vlt.TagFrontmatterEnabled()
 	hadTags := len(rawFM.Tags) > 0
 	hadInline := len(rawFM.InlineTags) > 0
-	willWriteTags := flagOn && len(n.Tags) > 0
+	var willWriteTags bool
+	if flagOn {
+		willWriteTags = len(n.Tags) > 0
+	} else {
+		willWriteTags = hadTags
+	}
 	willWriteInline := flagOn && len(n.InlineTags) > 0
 	return hadTags != willWriteTags || hadInline != willWriteInline
 }

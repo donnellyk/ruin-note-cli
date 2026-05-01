@@ -29,6 +29,13 @@ type Note struct {
 	Content       string
 	FilePath      string
 
+	// FrontmatterTags is the verbatim on-disk `tags:` value captured at
+	// Parse time. Used only when the vault's tag_frontmatter flag is off so
+	// existing `tags:` (potentially set by Obsidian or another external tool)
+	// survives a ruin save unchanged. Body-derived tags live in Tags; this
+	// field is the on-disk mirror, not a body-tag cache.
+	FrontmatterTags []string
+
 	// Extra preserves user-added frontmatter fields round-trip; unknown keys
 	// here are re-emitted verbatim on save.
 	Extra map[string]any
@@ -43,14 +50,15 @@ func Parse(content string) (*Note, error) {
 	}
 
 	note := &Note{
-		UUID:          fm.UUID,
-		Parent:        fm.Parent,
-		Order:         fm.Order,
-		LinkedCards:   fm.LinkedCards,
-		URL:           fm.URL,
-		InheritedTags: fm.InheritedTags,
-		Content:       body,
-		Extra:         fm.Extra,
+		UUID:            fm.UUID,
+		Parent:          fm.Parent,
+		Order:           fm.Order,
+		LinkedCards:     fm.LinkedCards,
+		URL:             fm.URL,
+		InheritedTags:   fm.InheritedTags,
+		FrontmatterTags: fm.Tags,
+		Content:         body,
+		Extra:           fm.Extra,
 	}
 
 	if fm.Created != "" {
@@ -108,9 +116,17 @@ func (n *Note) Serialize() (string, error) {
 // callers (tests, downstream Go consumers) get the v0.4.0 default by passing
 // the zero value.
 func (n *Note) SerializeWithOptions(opts SerializeOptions) (string, error) {
+	// When tag_frontmatter is off (SkipOwnTagMirror=true) the on-disk `tags:`
+	// is treated as user-managed: preserve it verbatim from FrontmatterTags so
+	// Obsidian-set entries survive. Body-derived n.Tags drives the value only
+	// when ruin owns the mirror (flag on).
+	fmTags := n.Tags
+	if opts.SkipOwnTagMirror {
+		fmTags = n.FrontmatterTags
+	}
 	fm := &Frontmatter{
 		UUID:          n.UUID,
-		Tags:          n.Tags,
+		Tags:          fmTags,
 		InlineTags:    n.InlineTags,
 		InheritedTags: n.InheritedTags,
 		Dates:         n.Dates,

@@ -99,6 +99,10 @@ Lorem ipsum dolor sit amet, consectetur adipiscing elit.
 		}
 	}
 
+	// Build the titles index so search/pick benchmarks reflect production
+	// state (a vault that's been init'd or doctor'd at least once). Without
+	// this, hot-path matchers fall back to full body classification.
+	runDoctorForBench(b, vlt)
 	return vlt
 }
 
@@ -214,6 +218,7 @@ tags:
 		}
 	}
 
+	runDoctorForBench(b, vlt)
 	return vlt
 }
 
@@ -398,6 +403,7 @@ tags:%s%s
 		}
 	}
 
+	runDoctorForBench(b, vlt)
 	return vlt
 }
 
@@ -419,6 +425,14 @@ func BenchmarkSearch_TagOnly_5000_Realistic(b *testing.B) {
 func BenchmarkSearch_TextSearch_5000_Realistic(b *testing.B) {
 	vlt := setupRealisticVault(b, 5000)
 	benchmarkTextSearch(b, vlt)
+}
+
+// BenchmarkSearch_TagOnly_50000 covers the upper-bound vault size from
+// plan §11. setupRealisticVault runs doctor at the end so titles are
+// populated before the bench loop starts.
+func BenchmarkSearch_TagOnly_50000(b *testing.B) {
+	vlt := setupRealisticVault(b, 50000)
+	benchmarkTagSearch(b, vlt)
 }
 
 // --- Parent search benchmarks ---

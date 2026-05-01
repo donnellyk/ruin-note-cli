@@ -288,8 +288,12 @@ func cloneAnyMap(in map[string]any) map[string]any {
 // non-empty, inline-tags: never written, inherited-tags: written when
 // non-empty.
 type SerializeOptions struct {
-	// SkipOwnTagMirror omits tags: and inline-tags: from output regardless of
-	// EmitInlineTags. inherited-tags: is unaffected.
+	// SkipOwnTagMirror omits inline-tags: from output (regardless of
+	// EmitInlineTags) and signals the caller is responsible for choosing the
+	// `tags:` value — the Frontmatter layer always writes whatever is in
+	// fm.Tags. Note.SerializeWithOptions uses this with FrontmatterTags so
+	// Obsidian-set `tags:` are preserved verbatim. inherited-tags: is
+	// unaffected.
 	SkipOwnTagMirror bool
 
 	// EmitInlineTags writes inline-tags: when non-empty. Vault save paths set
@@ -334,7 +338,7 @@ func (fm *Frontmatter) serializeFromMap(opts SerializeOptions) (string, error) {
 	if fm.Updated != "" {
 		data["updated"] = fm.Updated
 	}
-	if !opts.SkipOwnTagMirror && len(fm.Tags) > 0 {
+	if len(fm.Tags) > 0 {
 		data["tags"] = fm.Tags
 	}
 	if !opts.SkipOwnTagMirror && opts.EmitInlineTags && len(fm.InlineTags) > 0 {
@@ -382,11 +386,7 @@ func (fm *Frontmatter) serializeFromNode(opts SerializeOptions) (string, error) 
 	setOrRemoveScalar(node, "uuid", fm.UUID)
 	setOrRemoveScalar(node, "created", fm.Created)
 	setOrRemoveScalar(node, "updated", fm.Updated)
-	tagsToWrite := fm.Tags
-	if opts.SkipOwnTagMirror {
-		tagsToWrite = nil
-	}
-	setOrRemoveStringSlice(node, "tags", tagsToWrite)
+	setOrRemoveStringSlice(node, "tags", fm.Tags)
 
 	var inlineToWrite []string
 	if !opts.SkipOwnTagMirror && opts.EmitInlineTags {

@@ -97,7 +97,7 @@ Returns an error if no match is found.`,
 					matcher = titleMatcher(titleFilter)
 				}
 
-				results, err := searchNotesWithOptions(vlt, matcher, MatcherInfo{NeedsBody: false}, SearchOptions{NeedFullNote: true})
+				results, err := searchNotesWithOptions(vlt, matcher, MatcherInfo{NeedsBody: false, MatchableFromTitles: true}, SearchOptions{NeedFullNote: true})
 				if err != nil {
 					return fmt.Errorf("search failed: %w", err)
 				}

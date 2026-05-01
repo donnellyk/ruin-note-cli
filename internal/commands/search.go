@@ -174,6 +174,7 @@ See also:
 					return linkMatch(n) && baseMatcher(n)
 				}
 				info.NeedsBody = true
+				info.MatchableFromTitles = false // linkNoteMatcher reads URL/body, not in titles.json
 			}
 
 			return executeSearch(vlt, matcher, info, &flags, *jsonOutput, notes)

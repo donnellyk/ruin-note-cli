@@ -1,9 +1,9 @@
 package commands
 
 import (
-	"slices"
 	"testing"
 
+	"github.com/donnellyk/ruin-note-cli/internal/note"
 	"github.com/donnellyk/ruin-note-cli/internal/vault"
 )
 
@@ -37,6 +37,14 @@ func BenchmarkPick_TagOnly_10000(b *testing.B) {
 	benchmarkPickTagOnly(b, vlt)
 }
 
+// BenchmarkPick_TagOnly_50000 measures pick-style inline-tag filtering at the
+// upper end of the plan §11 vault sizes. setupRealisticVault already runs
+// doctor at the end, so titles are populated before the bench loop starts.
+func BenchmarkPick_TagOnly_50000(b *testing.B) {
+	vlt := setupRealisticVault(b, 50000)
+	benchmarkPickTagOnly(b, vlt)
+}
+
 func benchmarkPickTagOnly(b *testing.B, vlt *vault.Vault) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -46,38 +54,25 @@ func benchmarkPickTagOnly(b *testing.B, vlt *vault.Vault) {
 
 func runPickTagOnly(b *testing.B, vlt *vault.Vault) {
 	b.Helper()
-	// Mirror the inner loop of NewPickCmd's pick (#daily): enumerate notes,
-	// hydrate from titles, filter by inline-tag match. We don't render output;
-	// the cost we care about is the pre-filter pass.
-	notePaths, err := vlt.ListNotes()
+	// Mirrors NewPickCmd's main flow for `ruin pick "#daily"` (no --filter):
+	// pre-filter via titles, then full Load + line extraction for each candidate.
+	tagFilter := pickTagFilter{include: []string{"daily"}}
+	candidates, err := pickCandidatePaths(vlt, tagFilter, nil, nil)
 	if err != nil {
-		b.Fatalf("list notes: %v", err)
+		b.Fatalf("pickCandidatePaths: %v", err)
 	}
-	titlesIndex, err := vlt.LoadTitles()
-	if err != nil {
-		b.Fatalf("load titles: %v", err)
-	}
-	pathToUUID := make(map[string]string, len(titlesIndex.Titles))
-	for uuid, entry := range titlesIndex.Titles {
-		pathToUUID[entry.Path] = uuid
-	}
-	include := []string{"daily"}
-	hits := 0
-	for _, path := range notePaths {
-		entry, ok := titlesIndex.Titles[pathToUUID[path]]
-		if !ok {
+	matched := 0
+	for _, path := range candidates {
+		n, err := note.Load(path)
+		if err != nil {
 			continue
 		}
-		// In production, hydrate then call noteHasInlineTag. Inline this so
-		// the bench measures the index lookup specifically.
-		for _, t := range entry.InlineTags {
-			if slices.Contains(include, t) {
-				hits++
-				break
-			}
+		matches := pickLinesFromNote(n, tagFilter, nil, false, doneExclude, false)
+		if len(matches) > 0 {
+			matched++
 		}
 	}
-	_ = hits
+	_ = matched
 }
 
 // --- Search tags:none benchmarks ---
@@ -97,6 +92,11 @@ func BenchmarkSearch_TagsNone_5000_Realistic(b *testing.B) {
 func BenchmarkSearch_TagsNone_10000(b *testing.B) {
 	vlt := setupBenchmarkVault(b, 10000)
 	runDoctorForBench(b, vlt)
+	benchmarkTagsNone(b, vlt)
+}
+
+func BenchmarkSearch_TagsNone_50000(b *testing.B) {
+	vlt := setupRealisticVault(b, 50000)
 	benchmarkTagsNone(b, vlt)
 }
 

@@ -24,6 +24,14 @@ var bufPool = sync.Pool{
 // line-by-line scanner, avoiding yaml.Unmarshal overhead. Unknown keys are
 // silently skipped (Extra is not populated).
 func ParseFrontmatterFast(data []byte) (*Frontmatter, int, error) {
+	return parseFrontmatterFastInternal(data, true)
+}
+
+// parseFrontmatterFastInternal is the shared implementation. When
+// includeTagFields is false, tag-related keys are skipped entirely — saving
+// the slice and string allocations the hot LoadFrontmatterOnly path would
+// otherwise discard.
+func parseFrontmatterFastInternal(data []byte, includeTagFields bool) (*Frontmatter, int, error) {
 	offset := 0
 	for offset < len(data) && (data[offset] == '\n' || data[offset] == '\r') {
 		offset++
@@ -54,20 +62,22 @@ func ParseFrontmatterFast(data []byte) (*Frontmatter, int, error) {
 	}
 
 	fm := &Frontmatter{}
-	if err := parseFMLines(fmBytes, fm); err != nil {
+	if err := parseFMLines(fmBytes, fm, includeTagFields); err != nil {
 		return nil, 0, err
 	}
 
-	// Block-scalar lists are appended raw inside parseFMLines (currentList path).
-	// Normalize after the fact so both flow and block forms strip the `#` prefix.
-	fm.Tags = normalizeTagSlice(fm.Tags)
-	fm.InlineTags = normalizeTagSlice(fm.InlineTags)
-	fm.InheritedTags = normalizeTagSlice(fm.InheritedTags)
+	if includeTagFields {
+		// Block-scalar lists are appended raw inside parseFMLines (currentList
+		// path). Normalize so both flow and block forms strip the `#` prefix.
+		fm.Tags = normalizeTagSlice(fm.Tags)
+		fm.InlineTags = normalizeTagSlice(fm.InlineTags)
+		fm.InheritedTags = normalizeTagSlice(fm.InheritedTags)
+	}
 
 	return fm, bodyOffset, nil
 }
 
-func parseFMLines(data []byte, fm *Frontmatter) error {
+func parseFMLines(data []byte, fm *Frontmatter, includeTagFields bool) error {
 	var currentKey string
 	var currentList *[]string
 
@@ -101,6 +111,10 @@ func parseFMLines(data []byte, fm *Frontmatter) error {
 		value := bytes.TrimSpace(line[colonIdx+1:])
 		currentKey = key
 		currentList = nil
+
+		if !includeTagFields && (key == "tags" || key == "inline-tags" || key == "inherited-tags") {
+			continue
+		}
 
 		if len(value) > 0 && value[0] == '[' {
 			list := parseFlowList(value)
@@ -222,7 +236,10 @@ func LoadFrontmatterOnly(path string) (*Note, error) {
 	}
 	data := buf[:n]
 
-	fm, bodyOffset, err := ParseFrontmatterFast(data)
+	// Tag fields are skipped during parse — LoadFrontmatterOnly discards them
+	// anyway. The titles.json mirror is the source of truth on this path;
+	// callers hydrate via hydrateNoteTagsFromIndex at the worker boundary.
+	fm, bodyOffset, err := parseFrontmatterFastInternal(data, false)
 	if err != nil {
 		if errors.Is(err, ErrFrontmatterTruncated) {
 			return Load(path)

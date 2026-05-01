@@ -354,13 +354,42 @@ func countMatches(vlt *vault.Vault, matcher QueryMatcher, info MatcherInfo) (int
 		return 0, err
 	}
 
-	titles, err := vlt.LoadTitles()
-	if err != nil {
-		return 0, fmt.Errorf("failed to load titles index: %w", err)
+	// countMatches doesn't construct SearchResults, so it only needs titles
+	// when the matcher actually consults tag fields (fast path or hydrate).
+	// Without that need, skipping the JSON parse keeps `query save` cheap.
+	var titles *vault.TitlesIndex
+	if info.MatchableFromTitles {
+		titles, err = vlt.LoadTitles()
+		if err != nil {
+			return 0, fmt.Errorf("failed to load titles index: %w", err)
+		}
 	}
-	pathToUUID := make(map[string]string, len(titles.Titles))
-	for uuid, entry := range titles.Titles {
-		pathToUUID[entry.Path] = uuid
+
+	if info.MatchableFromTitles && titles != nil {
+		work := prefilterPathsViaTitles(matcher, titles, notePaths)
+		count := 0
+		for _, item := range work {
+			if item.preMatched {
+				count++
+				continue
+			}
+			// Unindexed path: full load + match so freshly-added files aren't
+			// silently missed.
+			var n *note.Note
+			if !info.NeedsBody {
+				n, err = note.LoadFrontmatterOnly(item.path)
+			} else {
+				n, err = note.Load(item.path)
+			}
+			if err != nil {
+				continue
+			}
+			hydrateNoteTagsFromIndex(n, titles, item.path, info.NeedsBody)
+			if matcher(n) {
+				count++
+			}
+		}
+		return count, nil
 	}
 
 	count := 0
@@ -374,7 +403,9 @@ func countMatches(vlt *vault.Vault, matcher QueryMatcher, info MatcherInfo) (int
 		if err != nil {
 			continue
 		}
-		hydrateNoteTagsFromIndex(n, titles, pathToUUID, path, info.NeedsBody)
+		if titles != nil {
+			hydrateNoteTagsFromIndex(n, titles, path, info.NeedsBody)
+		}
 
 		if matcher(n) {
 			count++

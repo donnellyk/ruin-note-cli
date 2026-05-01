@@ -25,6 +25,58 @@ func searchNotes(vlt *vault.Vault, matcher QueryMatcher, info MatcherInfo) ([]Se
 	return searchNotesWithOptions(vlt, matcher, info, SearchOptions{})
 }
 
+// pathToScan carries a candidate path through the worker pool along with a
+// flag indicating whether the matcher has already been satisfied via the
+// titles fast path. Pre-matched paths skip the matcher in the worker; only
+// the load + result construction runs.
+type pathToScan struct {
+	path       string
+	preMatched bool
+}
+
+// prefilterPathsViaTitles walks the in-memory titles index, runs the matcher
+// against a synthetic *note.Note built from each TitleEntry, and partitions
+// notePaths into:
+//   - paths that titles already proved match (preMatched = true)
+//   - paths absent from titles (preMatched = false), which must still go
+//     through the worker for full load + matcher (handles freshly added
+//     files that haven't been indexed yet)
+//
+// Indexed paths whose entries did NOT match are dropped — the matcher
+// already said no.
+func prefilterPathsViaTitles(matcher QueryMatcher, titles *vault.TitlesIndex, notePaths []string) []pathToScan {
+	indexed := make(map[string]bool, len(titles.Titles))
+	allowed := make(map[string]bool, len(notePaths))
+	for _, p := range notePaths {
+		allowed[p] = true
+	}
+	work := make([]pathToScan, 0, len(notePaths))
+	for uuid, entry := range titles.Titles {
+		indexed[entry.Path] = true
+		if !allowed[entry.Path] {
+			continue
+		}
+		n := &note.Note{
+			UUID:          uuid,
+			Title:         entry.Title,
+			FilePath:      entry.Path,
+			Parent:        entry.Parent,
+			Tags:          entry.Tags,
+			InlineTags:    entry.InlineTags,
+			InheritedTags: entry.InheritedTags,
+		}
+		if matcher(n) {
+			work = append(work, pathToScan{path: entry.Path, preMatched: true})
+		}
+	}
+	for _, p := range notePaths {
+		if !indexed[p] {
+			work = append(work, pathToScan{path: p, preMatched: false})
+		}
+	}
+	return work
+}
+
 // hydrateNoteTagsFromIndex replaces the Note's tag fields with the cached
 // mirror from titles.json. From v0.4.0, LoadFrontmatterOnly returns nil tag
 // fields and the index is authoritative for hot-path matchers. When fullLoad
@@ -32,43 +84,40 @@ func searchNotes(vlt *vault.Vault, matcher QueryMatcher, info MatcherInfo) ([]Se
 // InheritedTags is overlaid — the index mirror reflects the post-cascade
 // inherited state, which the body cannot derive.
 //
-// If the note is not in the titles index (e.g., a file added since the last
-// doctor scan), falls back to a full body-classification load so tag queries
-// still find the note. This trades the fast-path win for correctness on
-// out-of-sync vaults.
-func hydrateNoteTagsFromIndex(n *note.Note, titles *vault.TitlesIndex, pathToUUID map[string]string, path string, fullLoad bool) {
+// If the note has no UUID (rare in production — doctor populates them) or
+// the UUID isn't in the index, falls back to a full body-classification
+// load so tag queries still find the note. This trades the fast-path win
+// for correctness on unindexed notes.
+func hydrateNoteTagsFromIndex(n *note.Note, titles *vault.TitlesIndex, path string, fullLoad bool) {
 	if n == nil {
 		return
 	}
-	uuid := n.UUID
-	if uuid == "" {
-		uuid = pathToUUID[path]
+	if n.UUID != "" {
+		if entry, ok := titles.Titles[n.UUID]; ok {
+			if !fullLoad {
+				if n.Tags == nil {
+					n.Tags = entry.Tags
+				}
+				if n.InlineTags == nil {
+					n.InlineTags = entry.InlineTags
+				}
+			}
+			if len(entry.InheritedTags) > 0 {
+				n.InheritedTags = entry.InheritedTags
+			}
+			return
+		}
 	}
-	entry, ok := titles.Titles[uuid]
-	if !ok {
-		if fullLoad {
-			return
-		}
-		full, err := note.Load(path)
-		if err != nil {
-			return
-		}
-		n.Tags = full.Tags
-		n.InlineTags = full.InlineTags
-		n.InheritedTags = full.InheritedTags
+	if fullLoad {
 		return
 	}
-	if !fullLoad {
-		if n.Tags == nil {
-			n.Tags = entry.Tags
-		}
-		if n.InlineTags == nil {
-			n.InlineTags = entry.InlineTags
-		}
+	full, err := note.Load(path)
+	if err != nil {
+		return
 	}
-	if len(entry.InheritedTags) > 0 {
-		n.InheritedTags = entry.InheritedTags
-	}
+	n.Tags = full.Tags
+	n.InlineTags = full.InlineTags
+	n.InheritedTags = full.InheritedTags
 }
 
 func searchNotesWithOptions(vlt *vault.Vault, matcher QueryMatcher, info MatcherInfo, opts SearchOptions) ([]SearchResult, error) {
@@ -77,15 +126,19 @@ func searchNotesWithOptions(vlt *vault.Vault, matcher QueryMatcher, info Matcher
 		return nil, err
 	}
 
-	// Load the titles index once so workers can hydrate Note.Tags/InlineTags/
-	// InheritedTags from the cached mirror without a per-note frontmatter read.
-	titles, err := vlt.LoadTitles()
-	if err != nil {
-		return nil, fmt.Errorf("failed to load titles index: %w", err)
-	}
-	pathToUUID := make(map[string]string, len(titles.Titles))
-	for uuid, entry := range titles.Titles {
-		pathToUUID[entry.Path] = uuid
+	// Load the titles index when:
+	//   - the matcher can be resolved from titles (MatchableFromTitles), or
+	//   - the worker uses LoadFrontmatterOnly (!NeedsBody), which leaves tag
+	//     fields nil; result construction needs them via hydrate, or
+	//   - the caller constrains the search by UUID.
+	// Text and todo matchers (NeedsBody=true) full-Load each note, so body
+	// classification populates tag fields and titles isn't needed for results.
+	var titles *vault.TitlesIndex
+	if info.MatchableFromTitles || !info.NeedsBody || len(opts.UUIDs) > 0 {
+		titles, err = vlt.LoadTitles()
+		if err != nil {
+			return nil, fmt.Errorf("failed to load titles index: %w", err)
+		}
 	}
 
 	if len(opts.UUIDs) > 0 {
@@ -104,21 +157,34 @@ func searchNotesWithOptions(vlt *vault.Vault, matcher QueryMatcher, info Matcher
 		notePaths = filtered
 	}
 
-	// Cap at 8 workers to avoid excessive parallelism.
-	numWorkers := max(min(len(notePaths), min(runtime.NumCPU(), 8)), 1)
-
-	pathsChan := make(chan string, len(notePaths))
-	for _, path := range notePaths {
-		pathsChan <- path
+	// Paths absent from titles still flow through the worker with the real
+	// matcher so freshly-added unindexed files aren't silently missed.
+	var work []pathToScan
+	if info.MatchableFromTitles && titles != nil {
+		work = prefilterPathsViaTitles(matcher, titles, notePaths)
+	} else {
+		work = make([]pathToScan, len(notePaths))
+		for i, p := range notePaths {
+			work[i] = pathToScan{path: p}
+		}
 	}
-	close(pathsChan)
 
-	resultsChan := make(chan SearchResult, len(notePaths))
+	// Cap at 8 workers to avoid excessive parallelism.
+	numWorkers := max(min(len(work), min(runtime.NumCPU(), 8)), 1)
+
+	workChan := make(chan pathToScan, len(work))
+	for _, item := range work {
+		workChan <- item
+	}
+	close(workChan)
+
+	resultsChan := make(chan SearchResult, len(work))
 
 	var wg sync.WaitGroup
 	processNote := func() {
 		defer wg.Done()
-		for path := range pathsChan {
+		for item := range workChan {
+			path := item.path
 			var n *note.Note
 			var loadErr error
 
@@ -131,15 +197,17 @@ func searchNotesWithOptions(vlt *vault.Vault, matcher QueryMatcher, info Matcher
 				continue
 			}
 
-			// Hydrate tag fields from the titles index. From v0.4.0 the index is
-			// the source of truth for hot-path tag matching; LoadFrontmatterOnly
-			// no longer carries Tags/InlineTags/InheritedTags. Full Load already
-			// populates them from body classification, but we still overlay the
-			// titles entry's inherited mirror so cascade state reaches matchers
-			// even when the on-disk file is mid-cascade.
-			hydrateNoteTagsFromIndex(n, titles, pathToUUID, path, info.NeedsBody)
+			// LoadFrontmatterOnly leaves tag fields nil from v0.4.0; full Load
+			// populates them from body classification but misses the
+			// post-cascade InheritedTags overlay that titles.json carries.
+			// When titles is nil (NeedsBody=true && !MatchableFromTitles, e.g.
+			// "lorem #project" combined queries), the overlay is skipped —
+			// only matters for queries running against a vault mid-cascade.
+			if titles != nil {
+				hydrateNoteTagsFromIndex(n, titles, path, info.NeedsBody)
+			}
 
-			if matcher(n) {
+			if item.preMatched || matcher(n) {
 				if !info.NeedsBody && opts.NeedFullNote {
 					full, err := note.Load(path)
 					if err != nil {

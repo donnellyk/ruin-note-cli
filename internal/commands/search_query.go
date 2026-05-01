@@ -11,7 +11,14 @@ import (
 type QueryMatcher func(n *note.Note) bool
 
 type MatcherInfo struct {
-	NeedsBody bool // matcher requires full content (e.g., text search)
+	NeedsBody bool
+	// MatchableFromTitles is true when the matcher reads only fields that
+	// the synthetic *note.Note built by prefilterPathsViaTitles populates:
+	// UUID, Title, FilePath, Parent, Tags, InlineTags, InheritedTags.
+	// Setting this true on a matcher that reads any other field
+	// (Created, Updated, Order, Dates, URL, Content, Extra, LinkedCards)
+	// will silently mis-classify notes during the fast path.
+	MatchableFromTitles bool
 }
 
 type TagScope int
@@ -34,7 +41,9 @@ func parseQuery(query string, tagScope TagScope) (QueryMatcher, MatcherInfo, err
 
 	parts := strings.Split(query, "&&")
 	var matchers []QueryMatcher
-	info := MatcherInfo{}
+	// MatchableFromTitles starts optimistic and AND-collapses across terms:
+	// any single term that reads non-titles fields disqualifies the whole query.
+	info := MatcherInfo{MatchableFromTitles: true}
 
 	for _, part := range parts {
 		part = strings.TrimSpace(part)
@@ -51,6 +60,9 @@ func parseQuery(query string, tagScope TagScope) (QueryMatcher, MatcherInfo, err
 			matchers = append(matchers, m)
 			if termInfo.NeedsBody {
 				info.NeedsBody = true
+			}
+			if !termInfo.MatchableFromTitles {
+				info.MatchableFromTitles = false
 			}
 		}
 	}
@@ -156,7 +168,12 @@ func parseTermMatcher(term string, tagScope TagScope) (QueryMatcher, MatcherInfo
 		return negateMatcher(matcher), info, nil
 	}
 
+	// fmOnly: matcher reads frontmatter-only fields that aren't all in titles
+	// (e.g., Dates, URL, Created). Search engine still has to open files.
 	fmOnly := MatcherInfo{NeedsBody: false}
+	// titlesOnly: matcher reads only fields that titles.json carries.
+	// Search engine can pre-filter from the index without opening files.
+	titlesOnly := MatcherInfo{NeedsBody: false, MatchableFromTitles: true}
 	needsBody := MatcherInfo{NeedsBody: true}
 
 	// @YYYY-MM-DD matches against the frontmatter dates field.
@@ -166,7 +183,7 @@ func parseTermMatcher(term string, tagScope TagScope) (QueryMatcher, MatcherInfo
 	}
 
 	if strings.HasPrefix(term, "#") {
-		return tagMatcher(term, tagScope), fmOnly, nil
+		return tagMatcher(term, tagScope), titlesOnly, nil
 	}
 
 	if idx := strings.Index(term, ":"); idx > 0 {
@@ -193,14 +210,14 @@ func parseTermMatcher(term string, tagScope TagScope) (QueryMatcher, MatcherInfo
 			m, err := betweenDateMatcher(value)
 			return m, fmOnly, err
 		case "title":
-			return titleMatcher(value), fmOnly, nil
+			return titleMatcher(value), titlesOnly, nil
 		case "path":
-			return pathMatcher(value), fmOnly, nil
+			return pathMatcher(value), titlesOnly, nil
 		case "parent":
-			return parentMatcher(value), fmOnly, nil
+			return parentMatcher(value), titlesOnly, nil
 		case "tags":
 			m, err := tagsMatcher(value, tagScope)
-			return m, fmOnly, err
+			return m, titlesOnly, err
 		case "link":
 			return linkMatcher(value), fmOnly, nil
 		case "todo":

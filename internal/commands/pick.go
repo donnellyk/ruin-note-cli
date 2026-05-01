@@ -261,39 +261,35 @@ fast lookups, then extracts matching lines from the content body.`,
 				df = doneOnly
 			}
 
-			notePaths, err := vlt.ListNotes()
+			candidates, err := pickCandidatePaths(vlt, tagFilter, allowedPaths, nil)
 			if err != nil {
-				return fmt.Errorf("failed to list notes: %w", err)
+				return fmt.Errorf("failed to enumerate candidate notes: %w", err)
 			}
 
-			titlesIndex, err := vlt.LoadTitles()
-			if err != nil {
-				return fmt.Errorf("failed to load titles index: %w", err)
-			}
-			pathToUUID := make(map[string]string, len(titlesIndex.Titles))
-			for uuid, entry := range titlesIndex.Titles {
-				pathToUUID[entry.Path] = uuid
+			// filterMatcher needs frontmatter-derived fields (e.g., n.Dates from
+			// dateMatcher). LoadFrontmatterOnly populates those from frontmatter;
+			// note.Load (used below for body extraction) overrides Dates with
+			// body-extracted values. So pre-check the filter via the cheap path
+			// before the full load.
+			var titlesIndex *vault.TitlesIndex
+			if filterMatcher != nil {
+				titlesIndex, err = vlt.LoadTitles()
+				if err != nil {
+					return fmt.Errorf("failed to load titles index: %w", err)
+				}
 			}
 
 			var results []PickResult
-
-			for _, path := range notePaths {
-				if allowedPaths != nil && !allowedPaths[path] {
-					continue
-				}
-
-				fast, err := note.LoadFrontmatterOnly(path)
-				if err != nil {
-					continue
-				}
-				hydrateNoteTagsFromIndex(fast, titlesIndex, pathToUUID, path, false)
-
-				if len(tagFilter.include) > 0 && !noteHasInlineTag(fast, tagFilter.include) {
-					continue
-				}
-
-				if filterMatcher != nil && !filterMatcher(fast) {
-					continue
+			for _, path := range candidates {
+				if filterMatcher != nil {
+					fast, err := note.LoadFrontmatterOnly(path)
+					if err != nil {
+						continue
+					}
+					hydrateNoteTagsFromIndex(fast, titlesIndex, path, false)
+					if !filterMatcher(fast) {
+						continue
+					}
 				}
 
 				n, err := note.Load(path)
@@ -400,6 +396,71 @@ func noteHasInlineTag(n *note.Note, queryTags []string) bool {
 		}
 	}
 	return false
+}
+
+// pickCandidatePaths returns the subset of vault notes whose inline-tag set
+// intersects tagFilter.include — the inline-tag pre-filter for pick / embed
+// pick / dynamic pick. Walks the in-memory titles index instead of opening
+// every file. Paths absent from the index fall back to LoadFrontmatterOnly.
+//
+// excludeUUIDs is an optional set of UUIDs to drop from the result (used by
+// dynamic compose pick to skip the root and parent notes).
+//
+// When tagFilter.include is empty, returns all paths in allowedPaths (or all
+// vault paths when allowedPaths is nil) — no pre-filter applies.
+func pickCandidatePaths(vlt *vault.Vault, tagFilter pickTagFilter, allowedPaths map[string]bool, excludeUUIDs map[string]bool) ([]string, error) {
+	notePaths, err := vlt.ListNotes()
+	if err != nil {
+		return nil, err
+	}
+	if allowedPaths != nil {
+		filtered := notePaths[:0]
+		for _, p := range notePaths {
+			if allowedPaths[p] {
+				filtered = append(filtered, p)
+			}
+		}
+		notePaths = filtered
+	}
+
+	if len(tagFilter.include) == 0 && len(excludeUUIDs) == 0 {
+		return notePaths, nil
+	}
+
+	titlesIndex, err := vlt.LoadTitles()
+	if err != nil {
+		return nil, err
+	}
+
+	matcher := func(n *note.Note) bool {
+		if excludeUUIDs[n.UUID] {
+			return false
+		}
+		if len(tagFilter.include) == 0 {
+			return true
+		}
+		return noteHasInlineTag(n, tagFilter.include)
+	}
+	work := prefilterPathsViaTitles(matcher, titlesIndex, notePaths)
+
+	paths := make([]string, 0, len(work))
+	for _, item := range work {
+		if item.preMatched {
+			paths = append(paths, item.path)
+			continue
+		}
+		// Unindexed path: fall back to LoadFrontmatterOnly so notes added
+		// since the last doctor scan aren't silently missed.
+		fast, err := note.LoadFrontmatterOnly(item.path)
+		if err != nil {
+			continue
+		}
+		hydrateNoteTagsFromIndex(fast, titlesIndex, item.path, false)
+		if matcher(fast) {
+			paths = append(paths, item.path)
+		}
+	}
+	return paths, nil
 }
 
 // pickLinesFromNote extracts content lines that match the queried inline tags.

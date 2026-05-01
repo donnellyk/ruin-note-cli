@@ -293,32 +293,30 @@ func evalEmbedPick(vlt *vault.Vault, ref note.DynamicEmbedRef) ([]PickResult, er
 		filterMatcher = m
 	}
 
-	notePaths, err := vlt.ListNotes()
+	candidates, err := pickCandidatePaths(vlt, filter, nil, nil)
 	if err != nil {
 		return nil, fmt.Errorf("pick: %w", err)
 	}
 
-	titlesIndex, err := vlt.LoadTitles()
-	if err != nil {
-		return nil, fmt.Errorf("pick: failed to load titles: %w", err)
-	}
-	pathToUUID := make(map[string]string, len(titlesIndex.Titles))
-	for uuid, entry := range titlesIndex.Titles {
-		pathToUUID[entry.Path] = uuid
+	var titlesIndex *vault.TitlesIndex
+	if filterMatcher != nil {
+		titlesIndex, err = vlt.LoadTitles()
+		if err != nil {
+			return nil, fmt.Errorf("pick: failed to load titles: %w", err)
+		}
 	}
 
 	var results []PickResult
-	for _, path := range notePaths {
-		fast, err := note.LoadFrontmatterOnly(path)
-		if err != nil {
-			continue
-		}
-		hydrateNoteTagsFromIndex(fast, titlesIndex, pathToUUID, path, false)
-		if len(filter.include) > 0 && !noteHasInlineTag(fast, filter.include) {
-			continue
-		}
-		if filterMatcher != nil && !filterMatcher(fast) {
-			continue
+	for _, path := range candidates {
+		if filterMatcher != nil {
+			fast, err := note.LoadFrontmatterOnly(path)
+			if err != nil {
+				continue
+			}
+			hydrateNoteTagsFromIndex(fast, titlesIndex, path, false)
+			if !filterMatcher(fast) {
+				continue
+			}
 		}
 		n, err := note.Load(path)
 		if err != nil {
