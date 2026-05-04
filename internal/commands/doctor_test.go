@@ -609,3 +609,113 @@ Child content.
 		}
 	}
 }
+
+func TestValidateAliasCollisions_SharedAlias(t *testing.T) {
+	entries := map[string]vault.TitleEntry{
+		"uuid-1": {Title: "Note One", Aliases: []string{"Shared"}},
+		"uuid-2": {Title: "Note Two", Aliases: []string{"Shared"}},
+	}
+
+	oldStderr := os.Stderr
+	r, w, _ := os.Pipe()
+	os.Stderr = w
+
+	warnings := validateAliasCollisions(entries, "")
+
+	w.Close()
+	os.Stderr = oldStderr
+
+	if warnings != 1 {
+		t.Errorf("warnings = %d, want 1", warnings)
+	}
+
+	var buf bytes.Buffer
+	buf.ReadFrom(r)
+	output := buf.String()
+	if !strings.Contains(output, "alias \"shared\" is shared by multiple notes") {
+		t.Errorf("output missing shared alias warning: %s", output)
+	}
+	if !strings.Contains(output, "Note One") || !strings.Contains(output, "Note Two") {
+		t.Errorf("output missing note titles: %s", output)
+	}
+}
+
+func TestValidateAliasCollisions_AliasConflictsWithTitle(t *testing.T) {
+	entries := map[string]vault.TitleEntry{
+		"uuid-1": {Title: "Note One"},
+		"uuid-2": {Title: "Note Two", Aliases: []string{"Note One"}},
+	}
+
+	oldStderr := os.Stderr
+	r, w, _ := os.Pipe()
+	os.Stderr = w
+
+	warnings := validateAliasCollisions(entries, "")
+
+	w.Close()
+	os.Stderr = oldStderr
+
+	if warnings != 1 {
+		t.Errorf("warnings = %d, want 1", warnings)
+	}
+
+	var buf bytes.Buffer
+	buf.ReadFrom(r)
+	output := buf.String()
+	if !strings.Contains(output, "alias \"note one\" conflicts with title") {
+		t.Errorf("output missing alias-title conflict warning: %s", output)
+	}
+}
+
+func TestValidateAliasCollisions_AliasMatchesOwnTitle(t *testing.T) {
+	entries := map[string]vault.TitleEntry{
+		"uuid-1": {Title: "Note One", Aliases: []string{"Note One"}},
+	}
+
+	oldStderr := os.Stderr
+	r, w, _ := os.Pipe()
+	os.Stderr = w
+
+	warnings := validateAliasCollisions(entries, "")
+
+	w.Close()
+	os.Stderr = oldStderr
+
+	if warnings != 1 {
+		t.Errorf("warnings = %d, want 1", warnings)
+	}
+
+	var buf bytes.Buffer
+	buf.ReadFrom(r)
+	output := buf.String()
+	if !strings.Contains(output, "matches its own title") {
+		t.Errorf("output missing self-match warning: %s", output)
+	}
+}
+
+func TestValidateAliasCollisions_NoCollisions(t *testing.T) {
+	entries := map[string]vault.TitleEntry{
+		"uuid-1": {Title: "Note One", Aliases: []string{"Alias1"}},
+		"uuid-2": {Title: "Note Two", Aliases: []string{"Alias2"}},
+	}
+
+	oldStderr := os.Stderr
+	r, w, _ := os.Pipe()
+	os.Stderr = w
+
+	warnings := validateAliasCollisions(entries, "")
+
+	w.Close()
+	os.Stderr = oldStderr
+
+	if warnings != 0 {
+		t.Errorf("warnings = %d, want 0", warnings)
+	}
+
+	var buf bytes.Buffer
+	buf.ReadFrom(r)
+	output := buf.String()
+	if strings.TrimSpace(output) != "" {
+		t.Errorf("expected no output for clean aliases, got: %s", output)
+	}
+}

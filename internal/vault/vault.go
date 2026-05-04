@@ -67,7 +67,7 @@ func (v *Vault) Commit(msg string) {
 func (v *Vault) SaveNote(n *note.Note, oldGlobalTags, oldInlineTags []string, commitMsg string) {
 	v.DecrementTagsIndex(oldGlobalTags, oldInlineTags)
 	v.UpdateTagsIndex(n.Tags, n.InlineTags)
-	v.UpdateTitleEntryFull(n.UUID, n.Title, n.FilePath, n.Parent, n.Tags, n.InlineTags, n.InheritedTags)
+	v.UpdateTitleEntryFull(n.UUID, n.Title, n.FilePath, n.Parent, n.Tags, n.InlineTags, n.InheritedTags, n.Aliases)
 	v.Commit(commitMsg)
 }
 
@@ -88,7 +88,7 @@ func (v *Vault) CreateNote(n *note.Note, commitMsg string) {
 	if err := v.UpdateTagsIndex(n.Tags, n.InlineTags); err != nil {
 		fmt.Fprintf(os.Stderr, "warning: failed to update tags index: %v\n", err)
 	}
-	if err := v.UpdateTitleEntryFull(n.UUID, n.Title, n.FilePath, n.Parent, n.Tags, n.InlineTags, n.InheritedTags); err != nil {
+	if err := v.UpdateTitleEntryFull(n.UUID, n.Title, n.FilePath, n.Parent, n.Tags, n.InlineTags, n.InheritedTags, n.Aliases); err != nil {
 		fmt.Fprintf(os.Stderr, "warning: failed to update titles index: %v\n", err)
 	}
 	v.Commit(commitMsg)

@@ -9,7 +9,7 @@ import (
 )
 
 // ResolveNote resolves a note identifier to a loaded Note.
-// Resolution order: saved parent bookmark, exact UUID match, title substring, path substring.
+// Resolution order: saved parent bookmark, exact UUID match, title exact match, alias exact match, title substring, path substring.
 func ResolveNote(vlt *vault.Vault, identifier string) (*note.Note, error) {
 	if bookmark, ok := vlt.LookupParent(identifier); ok {
 		index, err := vlt.LoadTitles()
@@ -32,6 +32,15 @@ func ResolveNote(vlt *vault.Vault, identifier string) (*note.Note, error) {
 		n, err := note.Load(entry.Path)
 		if err != nil {
 			return nil, fmt.Errorf("found UUID %s but failed to load %s: %w", identifier, entry.Path, err)
+		}
+		return n, nil
+	}
+
+	if uuid, ok := index.FindByTitle(identifier); ok {
+		entry := index.Titles[uuid]
+		n, err := note.Load(entry.Path)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load %s: %w", entry.Path, err)
 		}
 		return n, nil
 	}

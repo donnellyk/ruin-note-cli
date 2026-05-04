@@ -26,6 +26,7 @@ type Frontmatter struct {
 	Order         *int     `yaml:"order,omitempty"`
 	LinkedCards   []string `yaml:"linked-cards,omitempty"`
 	URL           string   `yaml:"url,omitempty"`
+	Aliases       []string `yaml:"aliases,omitempty"`
 
 	Extra map[string]any `yaml:"-"`
 
@@ -55,6 +56,7 @@ var typedFieldNames = map[string]bool{
 	"order":          true,
 	"linked-cards":   true,
 	"url":            true,
+	"aliases":        true,
 }
 
 // ParseFrontmatter extracts frontmatter from markdown content. If no
@@ -139,6 +141,8 @@ func parseFrontmatterYAML(yamlContent string) (*Frontmatter, error) {
 			fm.LinkedCards = decodeStringSlice(valueNode)
 		case "url":
 			fm.URL = valueNode.Value
+		case "aliases":
+			fm.Aliases = normalizeAliases(decodeStringSliceOrScalar(valueNode))
 		default:
 			var v any
 			if err := valueNode.Decode(&v); err == nil {
@@ -255,12 +259,58 @@ func normalizeTagSlice(in []string) []string {
 	return out
 }
 
+// normalizeAliases trims whitespace, drops empty strings, and dedupes case-insensitively.
+func normalizeAliases(in []string) []string {
+	if len(in) == 0 {
+		return nil
+	}
+	seen := make(map[string]bool)
+	var result []string
+	for _, s := range in {
+		trimmed := strings.TrimSpace(s)
+		if trimmed == "" {
+			continue
+		}
+		lower := strings.ToLower(trimmed)
+		if !seen[lower] {
+			seen[lower] = true
+			result = append(result, trimmed)
+		}
+	}
+	return result
+}
+
 func decodeStringSlice(n *yaml.Node) []string {
 	if n == nil {
 		return nil
 	}
 	if n.Kind == yaml.ScalarNode && n.Tag == "!!null" {
 		return nil
+	}
+	if n.Kind != yaml.SequenceNode {
+		return nil
+	}
+	result := make([]string, 0, len(n.Content))
+	for _, child := range n.Content {
+		if child.Kind == yaml.ScalarNode {
+			result = append(result, child.Value)
+		}
+	}
+	return result
+}
+
+// decodeStringSliceOrScalar handles both sequence and scalar forms, treating
+// a single scalar as a one-element slice. Used for aliases which can be
+// `aliases: Foo` or `aliases: [Foo, Bar]` or block list form.
+func decodeStringSliceOrScalar(n *yaml.Node) []string {
+	if n == nil {
+		return nil
+	}
+	if n.Kind == yaml.ScalarNode && n.Tag == "!!null" {
+		return nil
+	}
+	if n.Kind == yaml.ScalarNode {
+		return []string{n.Value}
 	}
 	if n.Kind != yaml.SequenceNode {
 		return nil
@@ -362,6 +412,9 @@ func (fm *Frontmatter) serializeFromMap(opts SerializeOptions) (string, error) {
 	if fm.URL != "" {
 		data["url"] = fm.URL
 	}
+	if len(fm.Aliases) > 0 {
+		data["aliases"] = fm.Aliases
+	}
 
 	maps.Copy(data, fm.Extra)
 
@@ -399,6 +452,7 @@ func (fm *Frontmatter) serializeFromNode(opts SerializeOptions) (string, error) 
 	setOrRemoveOrder(node, fm.Order)
 	setOrRemoveStringSlice(node, "linked-cards", fm.LinkedCards)
 	setOrRemoveScalar(node, "url", fm.URL)
+	setOrRemoveStringSlice(node, "aliases", fm.Aliases)
 
 	syncExtraToNode(node, fm.Extra, fm.originalExtra)
 
@@ -631,6 +685,7 @@ func (fm *Frontmatter) IsEmpty() bool {
 		fm.Order == nil &&
 		len(fm.LinkedCards) == 0 &&
 		fm.URL == "" &&
+		len(fm.Aliases) == 0 &&
 		len(fm.Extra) == 0
 }
 
@@ -673,6 +728,9 @@ func (fm *Frontmatter) Merge(other *Frontmatter) {
 	}
 	if other.URL != "" {
 		fm.URL = other.URL
+	}
+	if len(other.Aliases) > 0 {
+		fm.Aliases = other.Aliases
 	}
 
 	if fm.Extra == nil {

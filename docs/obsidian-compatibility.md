@@ -34,15 +34,19 @@ In addition to the fields mentioned above, Ruin writes `linked-cards`, `updated`
 
 With an existing vault, things should just work. Running `ruin doctor` will generate the necessary indices and bring the vault in line with Ruin's expectations.
 
+### Aliases
+
+
+Ruin supports Obsidian-style frontmatter aliases, enabling notes to be resolved by alternative names in wikilinks and searches.
+
 ### Ruin Formatting Obsidian Doesn't Support
 - `@date` values are not supported or rendered in Obsidian by default. Certain plugins might use `@` as a special character / tag, so keep that in mind.
 
 
 ### Obsidian Formatting Ruin Doesn't Support
-- **Frontmatter Aliases** (`aliases`)
 - **Inline metadata** (`key:: value` in body content)
 - **Block references** (`^block-id`)
 
-These are ignored and have no impact on Ruin functionality. Aliases and Block references are on the roadmap and will be supported prior to 1.0. 
+These are ignored and have no impact on Ruin functionality. Block references are on the roadmap and will be supported prior to 1.0. 
 
 _Check this space_, as they say.

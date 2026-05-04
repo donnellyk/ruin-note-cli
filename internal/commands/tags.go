@@ -230,7 +230,7 @@ See also:
 
 				// Refresh the titles.json mirror so subsequent cascades and
 				// hot-path matchers see the renamed tag immediately.
-				if err := vlt.UpdateTitleEntryFull(n.UUID, n.Title, n.FilePath, n.Parent, n.Tags, n.InlineTags, n.InheritedTags); err != nil {
+				if err := vlt.UpdateTitleEntryFull(n.UUID, n.Title, n.FilePath, n.Parent, n.Tags, n.InlineTags, n.InheritedTags, n.Aliases); err != nil {
 					errors = append(errors, fmt.Sprintf("Failed to update titles mirror for %s: %v", path, err))
 				}
 
@@ -389,7 +389,7 @@ See also:
 					continue
 				}
 
-				if err := vlt.UpdateTitleEntryFull(n.UUID, n.Title, n.FilePath, n.Parent, n.Tags, n.InlineTags, n.InheritedTags); err != nil {
+				if err := vlt.UpdateTitleEntryFull(n.UUID, n.Title, n.FilePath, n.Parent, n.Tags, n.InlineTags, n.InheritedTags, n.Aliases); err != nil {
 					errors = append(errors, fmt.Sprintf("Failed to update titles mirror for %s: %v", path, err))
 				}
 

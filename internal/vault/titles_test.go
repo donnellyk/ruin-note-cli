@@ -110,3 +110,85 @@ func TestTitlesIndex_Upsert(t *testing.T) {
 		t.Errorf("parent = %q, want %q", idx.Titles["uuid-1"].Parent, "uuid-parent")
 	}
 }
+
+func TestTitlesIndex_FindByAlias(t *testing.T) {
+	idx := &TitlesIndex{
+		Titles: map[string]TitleEntry{
+			"uuid-1": {Title: "Note A", Aliases: []string{"OldName", "AnotherName"}},
+			"uuid-2": {Title: "Note B", Aliases: []string{"Different"}},
+			"uuid-3": {Title: "Note C", Aliases: nil},
+		},
+	}
+
+	tests := []struct {
+		name    string
+		alias   string
+		wantUUID string
+		wantOK  bool
+	}{
+		{"exact match", "OldName", "uuid-1", true},
+		{"case insensitive", "oldname", "uuid-1", true},
+		{"with spaces", "  OldName  ", "uuid-1", true},
+		{"different alias", "Different", "uuid-2", true},
+		{"not found", "NonExistent", "", false},
+		{"empty string", "", "", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			uuid, ok := idx.FindByAlias(tt.alias)
+			if ok != tt.wantOK || (ok && uuid != tt.wantUUID) {
+				t.Errorf("FindByAlias(%q) = (%q, %v), want (%q, %v)", tt.alias, uuid, ok, tt.wantUUID, tt.wantOK)
+			}
+		})
+	}
+}
+
+func TestTitlesIndex_FindByTitle_WithAliasFallback(t *testing.T) {
+	idx := &TitlesIndex{
+		Titles: map[string]TitleEntry{
+			"uuid-1": {Title: "Main Title", Aliases: []string{"Alias1"}},
+			"uuid-2": {Title: "Another", Aliases: []string{"Alias2"}},
+		},
+	}
+
+	tests := []struct {
+		name    string
+		query   string
+		wantUUID string
+		wantOK  bool
+	}{
+		{"title match", "Main Title", "uuid-1", true},
+		{"title case insensitive", "main title", "uuid-1", true},
+		{"alias fallback", "Alias1", "uuid-1", true},
+		{"alias case insensitive", "alias1", "uuid-1", true},
+		{"title takes precedence", "Another", "uuid-2", true},
+		{"not found", "Unknown", "", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			uuid, ok := idx.FindByTitle(tt.query)
+			if ok != tt.wantOK || (ok && uuid != tt.wantUUID) {
+				t.Errorf("FindByTitle(%q) = (%q, %v), want (%q, %v)", tt.query, uuid, ok, tt.wantUUID, tt.wantOK)
+			}
+		})
+	}
+}
+
+func TestMakeTitleEntryWithAliases(t *testing.T) {
+	entry := MakeTitleEntryWithAliases("Test Note", "/test.md", "parent-uuid", []string{"tag1", "tag2"}, []string{"itag1"}, nil, []string{"Alias1", "Alias2"})
+
+	if entry.Title != "Test Note" {
+		t.Errorf("Title = %q, want %q", entry.Title, "Test Note")
+	}
+	if entry.Path != "/test.md" {
+		t.Errorf("Path = %q, want %q", entry.Path, "/test.md")
+	}
+	if entry.Parent != "parent-uuid" {
+		t.Errorf("Parent = %q, want %q", entry.Parent, "parent-uuid")
+	}
+	if len(entry.Aliases) != 2 || entry.Aliases[0] != "Alias1" {
+		t.Errorf("Aliases = %v, want [Alias1 Alias2]", entry.Aliases)
+	}
+}

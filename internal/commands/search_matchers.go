@@ -65,6 +65,11 @@ func textMatcher(text string) QueryMatcher {
 		if strings.Contains(strings.ToLower(n.Title), textLower) {
 			return true
 		}
+		for _, alias := range n.Aliases {
+			if strings.Contains(strings.ToLower(alias), textLower) {
+				return true
+			}
+		}
 		return false
 	}
 }
@@ -72,7 +77,15 @@ func textMatcher(text string) QueryMatcher {
 func titleMatcher(text string) QueryMatcher {
 	textLower := strings.ToLower(text)
 	return func(n *note.Note) bool {
-		return strings.Contains(strings.ToLower(n.Title), textLower)
+		if strings.Contains(strings.ToLower(n.Title), textLower) {
+			return true
+		}
+		for _, alias := range n.Aliases {
+			if strings.Contains(strings.ToLower(alias), textLower) {
+				return true
+			}
+		}
+		return false
 	}
 }
 

@@ -24,6 +24,7 @@ type TitleEntry struct {
 	Tags          []string `json:"tags,omitempty"`
 	InlineTags    []string `json:"inline_tags,omitempty"`
 	InheritedTags []string `json:"inherited_tags,omitempty"`
+	Aliases       []string `json:"aliases,omitempty"`
 }
 
 // TitlesIndex is a JSON-based index for O(1) UUID lookups.
@@ -47,6 +48,11 @@ func sortedCopy(in []string) []string {
 // MakeTitleEntry constructs a TitleEntry with sorted tag arrays. Use this
 // instead of struct literals so cached tag fields stay diff-stable on disk.
 func MakeTitleEntry(title, path, parent string, tags, inlineTags, inheritedTags []string) TitleEntry {
+	return MakeTitleEntryWithAliases(title, path, parent, tags, inlineTags, inheritedTags, nil)
+}
+
+// MakeTitleEntryWithAliases is like MakeTitleEntry but also accepts aliases.
+func MakeTitleEntryWithAliases(title, path, parent string, tags, inlineTags, inheritedTags, aliases []string) TitleEntry {
 	return TitleEntry{
 		Title:         title,
 		Path:          path,
@@ -54,6 +60,7 @@ func MakeTitleEntry(title, path, parent string, tags, inlineTags, inheritedTags 
 		Tags:          sortedCopy(tags),
 		InlineTags:    sortedCopy(inlineTags),
 		InheritedTags: sortedCopy(inheritedTags),
+		Aliases:       sortedCopy(aliases),
 	}
 }
 
@@ -121,15 +128,15 @@ func (v *Vault) UpdateTitleEntry(uuid, title, path, parent string) error {
 }
 
 // UpdateTitleEntryFull writes a complete entry, including the tag mirror
-// fields. SaveNote and CreateNote use this so titles.json stays the source of
+// and alias fields. SaveNote and CreateNote use this so titles.json stays the source of
 // truth for hot-path tag matchers.
-func (v *Vault) UpdateTitleEntryFull(uuid, title, path, parent string, tags, inlineTags, inheritedTags []string) error {
+func (v *Vault) UpdateTitleEntryFull(uuid, title, path, parent string, tags, inlineTags, inheritedTags []string, aliases []string) error {
 	index, err := v.LoadTitles()
 	if err != nil {
 		return err
 	}
 
-	index.Titles[uuid] = MakeTitleEntry(title, path, parent, tags, inlineTags, inheritedTags)
+	index.Titles[uuid] = MakeTitleEntryWithAliases(title, path, parent, tags, inlineTags, inheritedTags, aliases)
 	return v.SaveTitles(index)
 }
 
@@ -177,7 +184,8 @@ func (idx *TitlesIndex) ChildrenMap() map[string][]string {
 	return children
 }
 
-// FindByTitle returns the UUID for a case-insensitive title match.
+// FindByTitle returns the UUID for a case-insensitive title match, or falls back
+// to alias matching if title lookup fails. Title precedence wins over alias.
 func (idx *TitlesIndex) FindByTitle(title string) (string, bool) {
 	titleLower := strings.ToLower(strings.TrimSpace(title))
 	for uuid, entry := range idx.Titles {
@@ -185,5 +193,31 @@ func (idx *TitlesIndex) FindByTitle(title string) (string, bool) {
 			return uuid, true
 		}
 	}
-	return "", false
+	return idx.FindByAlias(title)
+}
+
+// FindByAlias returns the UUID for a case-insensitive alias exact match.
+// If multiple notes share an alias, returns the earliest-created note (by path sort for determinism).
+func (idx *TitlesIndex) FindByAlias(alias string) (string, bool) {
+	aliasLower := strings.ToLower(strings.TrimSpace(alias))
+	var matches []string
+	for uuid, entry := range idx.Titles {
+		for _, a := range entry.Aliases {
+			if strings.ToLower(a) == aliasLower {
+				matches = append(matches, uuid)
+				break
+			}
+		}
+	}
+	if len(matches) == 0 {
+		return "", false
+	}
+	if len(matches) == 1 {
+		return matches[0], true
+	}
+	// Multiple matches: sort by path for determinism
+	sort.Slice(matches, func(i, j int) bool {
+		return idx.Titles[matches[i]].Path < idx.Titles[matches[j]].Path
+	})
+	return matches[0], true
 }

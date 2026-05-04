@@ -128,7 +128,7 @@ Out of range late @2026-05-10. #followup
 	}
 	// Seed titles index with stored-form tag mirror so the pick command can
 	// resolve `#followup` from titles.json (the v0.4.0 contract).
-	if err := vlt.UpdateTitleEntryFull("uuid-week", "Week View", path, "", []string{"work"}, []string{"followup"}, nil); err != nil {
+	if err := vlt.UpdateTitleEntryFull("uuid-week", "Week View", path, "", []string{"work"}, []string{"followup"}, nil, nil); err != nil {
 		t.Fatalf("failed to seed titles: %v", err)
 	}
 

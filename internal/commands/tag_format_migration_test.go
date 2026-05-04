@@ -385,7 +385,7 @@ tags:
 	if err := n.Save(); err != nil {
 		t.Fatalf("save: %v", err)
 	}
-	if err := vlt.UpdateTitleEntryFull(n.UUID, n.Title, n.FilePath, n.Parent, n.Tags, n.InlineTags, n.InheritedTags); err != nil {
+	if err := vlt.UpdateTitleEntryFull(n.UUID, n.Title, n.FilePath, n.Parent, n.Tags, n.InlineTags, n.InheritedTags, n.Aliases); err != nil {
 		t.Fatalf("update titles: %v", err)
 	}
 

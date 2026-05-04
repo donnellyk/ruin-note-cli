@@ -101,7 +101,7 @@ func saveWithIndexUpdate(n *note.Note, vlt *vault.Vault) error {
 	if !normalizedTagsEqual(oldGlobalTags, n.Tags) {
 		// Refresh the titles mirror BEFORE cascade so descendants compute
 		// inheritance against the just-saved tag set, not the pre-edit one.
-		if err := vlt.UpdateTitleEntryFull(n.UUID, n.Title, n.FilePath, n.Parent, n.Tags, n.InlineTags, n.InheritedTags); err != nil {
+		if err := vlt.UpdateTitleEntryFull(n.UUID, n.Title, n.FilePath, n.Parent, n.Tags, n.InlineTags, n.InheritedTags, n.Aliases); err != nil {
 			fmt.Fprintf(os.Stderr, "warning: failed to update titles mirror before cascade: %v\n", err)
 		}
 		if titlesIndex, err := vlt.LoadTitles(); err == nil {

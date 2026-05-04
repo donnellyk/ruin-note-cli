@@ -21,7 +21,7 @@ import (
 func seedPickTitles(t *testing.T, vlt *vault.Vault, entries []pickTitleSeed) {
 	t.Helper()
 	for _, e := range entries {
-		if err := vlt.UpdateTitleEntryFull(e.uuid, e.title, e.path, e.parent, e.tags, e.inlineTags, nil); err != nil {
+		if err := vlt.UpdateTitleEntryFull(e.uuid, e.title, e.path, e.parent, e.tags, e.inlineTags, nil, nil); err != nil {
 			t.Fatalf("seed titles for %s: %v", e.uuid, err)
 		}
 	}

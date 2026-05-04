@@ -134,7 +134,7 @@ This note references a non-existent parent.`,
 	}
 	for _, e := range titlesSeed {
 		path := filepath.Join(tmpDir, e.filename)
-		if err := vlt.UpdateTitleEntryFull(e.uuid, e.title, path, e.parent, e.tags, e.inlineTags, nil); err != nil {
+		if err := vlt.UpdateTitleEntryFull(e.uuid, e.title, path, e.parent, e.tags, e.inlineTags, nil, nil); err != nil {
 			t.Fatalf("seed titles for %s: %v", e.uuid, err)
 		}
 	}

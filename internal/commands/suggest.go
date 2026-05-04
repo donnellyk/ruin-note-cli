@@ -12,6 +12,25 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// findAliasWithPrefix searches aliases for one with a case-insensitive prefix match.
+// Returns the matched alias name or empty string if no match found.
+func findAliasWithPrefix(aliases []string, prefix string) string {
+	for _, alias := range aliases {
+		if strings.HasPrefix(strings.ToLower(alias), prefix) {
+			return alias
+		}
+	}
+	return ""
+}
+
+type suggestion struct {
+	UUID    string `json:"uuid"`
+	Title   string `json:"title"`
+	Path    string `json:"path"`
+	Parent  string `json:"parent,omitempty"`
+	Display string `json:"display"`
+}
+
 func NewSuggestCmd(getVault func() *vault.Vault, jsonOutput *bool) *cobra.Command {
 	var limit int
 
@@ -39,43 +58,37 @@ index is missing.`,
 				return suggestByVaultScan(vlt, prefix, limit, *jsonOutput)
 			}
 
-			type suggestion struct {
-				UUID   string `json:"uuid"`
-				Title  string `json:"title"`
-				Path   string `json:"path"`
-				Parent string `json:"parent,omitempty"`
-			}
-
 			var results []suggestion
+			seen := make(map[string]bool)
+
 			for uuid, entry := range index.Titles {
-				if strings.HasPrefix(strings.ToLower(entry.Title), prefix) {
+				if seen[uuid] {
+					continue
+				}
+				titleLower := strings.ToLower(entry.Title)
+
+				if strings.HasPrefix(titleLower, prefix) {
+					seen[uuid] = true
 					results = append(results, suggestion{
-						UUID:   uuid,
-						Title:  entry.Title,
-						Path:   entry.Path,
-						Parent: entry.Parent,
+						UUID:    uuid,
+						Title:   entry.Title,
+						Path:    entry.Path,
+						Parent:  entry.Parent,
+						Display: entry.Title,
+					})
+				} else if matchedAlias := findAliasWithPrefix(entry.Aliases, prefix); matchedAlias != "" {
+					seen[uuid] = true
+					results = append(results, suggestion{
+						UUID:    uuid,
+						Title:   entry.Title,
+						Path:    entry.Path,
+						Parent:  entry.Parent,
+						Display: entry.Title + " (alias: " + matchedAlias + ")",
 					})
 				}
 			}
 
-			sort.Slice(results, func(i, j int) bool {
-				return results[i].Title < results[j].Title
-			})
-
-			if limit > 0 && len(results) > limit {
-				results = results[:limit]
-			}
-
-			if *jsonOutput {
-				enc := json.NewEncoder(os.Stdout)
-				enc.SetIndent("", "  ")
-				return enc.Encode(results)
-			}
-
-			for _, r := range results {
-				fmt.Printf("%s\t%s\n", r.UUID, r.Title)
-			}
-			return nil
+			return outputSuggestions(results, limit, *jsonOutput)
 		},
 	}
 
@@ -89,29 +102,37 @@ func suggestByVaultScan(vlt *vault.Vault, prefix string, limit int, jsonOutput b
 		return err
 	}
 
-	type suggestion struct {
-		UUID  string `json:"uuid"`
-		Title string `json:"title"`
-		Path  string `json:"path"`
-	}
-
 	var results []suggestion
 	for _, path := range paths {
 		n, err := note.Load(path)
 		if err != nil {
 			continue
 		}
-		if strings.HasPrefix(strings.ToLower(n.Title), prefix) {
+		titleLower := strings.ToLower(n.Title)
+
+		if strings.HasPrefix(titleLower, prefix) {
 			results = append(results, suggestion{
-				UUID:  n.UUID,
-				Title: n.Title,
-				Path:  n.FilePath,
+				UUID:    n.UUID,
+				Title:   n.Title,
+				Path:    n.FilePath,
+				Display: n.Title,
+			})
+		} else if matchedAlias := findAliasWithPrefix(n.Aliases, prefix); matchedAlias != "" {
+			results = append(results, suggestion{
+				UUID:    n.UUID,
+				Title:   n.Title,
+				Path:    n.FilePath,
+				Display: n.Title + " (alias: " + matchedAlias + ")",
 			})
 		}
 	}
 
+	return outputSuggestions(results, limit, jsonOutput)
+}
+
+func outputSuggestions(results []suggestion, limit int, jsonOutput bool) error {
 	sort.Slice(results, func(i, j int) bool {
-		return results[i].Title < results[j].Title
+		return results[i].Display < results[j].Display
 	})
 
 	if limit > 0 && len(results) > limit {
@@ -125,7 +146,7 @@ func suggestByVaultScan(vlt *vault.Vault, prefix string, limit int, jsonOutput b
 	}
 
 	for _, r := range results {
-		fmt.Printf("%s\t%s\n", r.UUID, r.Title)
+		fmt.Printf("%s\t%s\n", r.UUID, r.Display)
 	}
 	return nil
 }

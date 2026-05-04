@@ -28,7 +28,7 @@ func TestSearchCmd_DateSearch(t *testing.T) {
 
 	// Seed titles index with stored-form tag mirror so hot-path tag matchers
 	// can resolve `#followup` from titles.json (the v0.4.0 contract).
-	if err := vlt.UpdateTitleEntryFull("uuid-date-1", "Follow Up", path, "", []string{"followup"}, nil, nil); err != nil {
+	if err := vlt.UpdateTitleEntryFull("uuid-date-1", "Follow Up", path, "", []string{"followup"}, nil, nil, nil); err != nil {
 		t.Fatalf("failed to seed titles: %v", err)
 	}
 

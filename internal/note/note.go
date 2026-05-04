@@ -25,6 +25,7 @@ type Note struct {
 	Order         *int
 	LinkedCards   []string
 	URL           string
+	Aliases       []string
 	Title         string
 	Content       string
 	FilePath      string
@@ -55,6 +56,7 @@ func Parse(content string) (*Note, error) {
 		Order:           fm.Order,
 		LinkedCards:     fm.LinkedCards,
 		URL:             fm.URL,
+		Aliases:         fm.Aliases,
 		InheritedTags:   fm.InheritedTags,
 		FrontmatterTags: fm.Tags,
 		Content:         body,
@@ -134,6 +136,7 @@ func (n *Note) SerializeWithOptions(opts SerializeOptions) (string, error) {
 		Order:         n.Order,
 		LinkedCards:   n.LinkedCards,
 		URL:           n.URL,
+		Aliases:       n.Aliases,
 		Extra:         n.Extra,
 	}
 

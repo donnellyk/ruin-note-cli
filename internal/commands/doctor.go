@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
+	"sort"
 	"strings"
 
 	"github.com/donnellyk/ruin-note-cli/internal/note"
@@ -349,7 +351,7 @@ func RunDoctorFullScan(vlt *vault.Vault, dryRun bool) (*DoctorOutput, error) {
 			inlineTagSet[t] = true
 		}
 
-		titleEntries[n.UUID] = vault.MakeTitleEntry(n.Title, path, n.Parent, n.Tags, n.InlineTags, n.InheritedTags)
+		titleEntries[n.UUID] = vault.MakeTitleEntryWithAliases(n.Title, path, n.Parent, n.Tags, n.InlineTags, n.InheritedTags, n.Aliases)
 
 		if needsSave && !dryRun {
 			if err := saveNoteForVault(n, vlt); err != nil {
@@ -482,7 +484,7 @@ func RunDoctorFullScan(vlt *vault.Vault, dryRun bool) (*DoctorOutput, error) {
 		// Keep titleEntries in sync with any tag changes so the titles.json
 		// rebuild below reflects the final post-cascade state.
 		if inheritedChanged || contentChanged {
-			titleEntries[n.UUID] = vault.MakeTitleEntry(n.Title, n.FilePath, n.Parent, n.Tags, n.InlineTags, n.InheritedTags)
+			titleEntries[n.UUID] = vault.MakeTitleEntryWithAliases(n.Title, n.FilePath, n.Parent, n.Tags, n.InlineTags, n.InheritedTags, n.Aliases)
 		}
 	}
 
@@ -495,6 +497,8 @@ func RunDoctorFullScan(vlt *vault.Vault, dryRun bool) (*DoctorOutput, error) {
 	} else {
 		output.TagsYMLUpdated = true
 	}
+
+	validateAliasCollisions(titleEntries, prefix)
 
 	if !dryRun {
 		if err := vlt.RebuildTitlesIndex(titleEntries); err != nil {
@@ -618,4 +622,63 @@ func normalizedTagsEqual(a, b []string) bool {
 		}
 	}
 	return true
+}
+
+// validateAliasCollisions detects alias collisions and outputs warnings.
+// Returns the total number of warnings.
+func validateAliasCollisions(titleEntries map[string]vault.TitleEntry, prefix string) int {
+	aliasLower := make(map[string][]string)
+	titleLower := make(map[string][]string)
+
+	for uuid, entry := range titleEntries {
+		titleKey := strings.ToLower(entry.Title)
+		titleLower[titleKey] = append(titleLower[titleKey], uuid)
+
+		for _, alias := range entry.Aliases {
+			aliasKey := strings.ToLower(strings.TrimSpace(alias))
+			aliasLower[aliasKey] = append(aliasLower[aliasKey], uuid)
+		}
+	}
+
+	warnings := 0
+
+	sortedAliasKeys := make([]string, 0, len(aliasLower))
+	for aliasKey := range aliasLower {
+		sortedAliasKeys = append(sortedAliasKeys, aliasKey)
+	}
+	sort.Strings(sortedAliasKeys)
+
+	for _, aliasKey := range sortedAliasKeys {
+		uuids := aliasLower[aliasKey]
+		if len(uuids) > 1 {
+			fmt.Fprintf(os.Stderr, "%swarning: alias %q is shared by multiple notes:\n", prefix, aliasKey)
+			for _, uuid := range uuids {
+				fmt.Fprintf(os.Stderr, "  - %s (%s)\n", titleEntries[uuid].Title, uuid)
+			}
+			warnings++
+		}
+
+		if titleUUIDs, titleExists := titleLower[aliasKey]; titleExists {
+			for _, titleUUID := range titleUUIDs {
+				if !slices.Contains(uuids, titleUUID) {
+					fmt.Fprintf(os.Stderr, "%swarning: alias %q conflicts with title of note %s (%s)\n",
+						prefix, aliasKey, titleEntries[titleUUID].Title, titleUUID)
+					warnings++
+				}
+			}
+		}
+	}
+
+	for _, entry := range titleEntries {
+		titleLower := strings.ToLower(entry.Title)
+		for _, alias := range entry.Aliases {
+			if strings.ToLower(strings.TrimSpace(alias)) == titleLower {
+				fmt.Fprintf(os.Stderr, "%swarning: note %s has alias %q that matches its own title\n",
+					prefix, entry.Title, alias)
+				warnings++
+			}
+		}
+	}
+
+	return warnings
 }

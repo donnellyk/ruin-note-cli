@@ -7,15 +7,14 @@ import (
 
 // TestRoundTrip_PreservesKeyOrder verifies that re-saving foreign frontmatter
 // (typed fields interleaved with custom Obsidian-style keys) keeps the original
-// key order. Today's map-based encoder sorts alphabetically; Node-based encoder
-// must keep the source order.
+// key order. Node-based encoder must keep the source order.
 func TestRoundTrip_PreservesKeyOrder(t *testing.T) {
 	src := `aliases:
   - "Old Name"
 uuid: abc-123
 custom_field: hello
 tags:
-  - "#work"
+  - work
 publish: true
 `
 
@@ -249,8 +248,8 @@ tags:
 	if len(fm2.Tags) != 2 || fm2.Tags[0] != "daily" || fm2.Tags[1] != "work" {
 		t.Errorf("Tags = %v, want [daily, work]", fm2.Tags)
 	}
-	if v, _ := fm2.Extra["aliases"]; v == nil {
-		t.Errorf("aliases lost from Extra after round-trip; got %v", fm2.Extra)
+	if len(fm2.Aliases) != 1 || fm2.Aliases[0] != "Daily 2024-01-15" {
+		t.Errorf("Aliases = %v, want [Daily 2024-01-15]", fm2.Aliases)
 	}
 	if v, ok := fm2.Extra["cssclass"]; !ok || v != "daily" {
 		t.Errorf("cssclass = %v, want daily", v)
@@ -292,4 +291,209 @@ func TestSerializeWithoutNode_LegacyPathStillWorks(t *testing.T) {
 	if !strings.Contains(got, "#x") {
 		t.Errorf("missing tag, got:\n%s", got)
 	}
+}
+
+// TestAliasesFromArrayForm verifies that aliases in flow form parse correctly.
+func TestAliasesFromArrayForm(t *testing.T) {
+	src := `---
+aliases: [Foo, Bar Baz]
+uuid: abc-123
+---`
+	fm, _, err := ParseFrontmatter(src)
+	if err != nil {
+		t.Fatalf("ParseFrontmatter err = %v", err)
+	}
+	if len(fm.Aliases) != 2 || fm.Aliases[0] != "Foo" || fm.Aliases[1] != "Bar Baz" {
+		t.Errorf("Aliases = %v, want [Foo, Bar Baz]", fm.Aliases)
+	}
+}
+
+// TestAliasesFromBlockListForm verifies that aliases in block list form parse correctly.
+func TestAliasesFromBlockListForm(t *testing.T) {
+	src := `---
+aliases:
+  - Foo
+  - Bar Baz
+uuid: abc-123
+---`
+	fm, _, err := ParseFrontmatter(src)
+	if err != nil {
+		t.Fatalf("ParseFrontmatter err = %v", err)
+	}
+	if len(fm.Aliases) != 2 || fm.Aliases[0] != "Foo" || fm.Aliases[1] != "Bar Baz" {
+		t.Errorf("Aliases = %v, want [Foo, Bar Baz]", fm.Aliases)
+	}
+}
+
+// TestAliasesFromSingleScalar verifies that a single scalar alias is converted to a list.
+func TestAliasesFromSingleScalar(t *testing.T) {
+	src := `---
+aliases: SingleAlias
+uuid: abc-123
+---`
+	fm, _, err := ParseFrontmatter(src)
+	if err != nil {
+		t.Fatalf("ParseFrontmatter err = %v", err)
+	}
+	if len(fm.Aliases) != 1 || fm.Aliases[0] != "SingleAlias" {
+		t.Errorf("Aliases = %v, want [SingleAlias]", fm.Aliases)
+	}
+}
+
+// TestAliasesNormalization verifies that aliases are trimmed and deduplicated case-insensitively.
+func TestAliasesNormalization(t *testing.T) {
+	src := `---
+aliases:
+  - "  Foo  "
+  - "Bar"
+  - "foo"
+  - ""
+uuid: abc-123
+---`
+	fm, _, err := ParseFrontmatter(src)
+	if err != nil {
+		t.Fatalf("ParseFrontmatter err = %v", err)
+	}
+	// Empty strings dropped, duplicates deduplicated case-insensitively, trimmed
+	if len(fm.Aliases) != 2 {
+		t.Errorf("Aliases len = %d, want 2 (got %v)", len(fm.Aliases), fm.Aliases)
+	}
+	if fm.Aliases[0] != "Foo" {
+		t.Errorf("Aliases[0] = %q, want %q", fm.Aliases[0], "Foo")
+	}
+	if fm.Aliases[1] != "Bar" {
+		t.Errorf("Aliases[1] = %q, want %q", fm.Aliases[1], "Bar")
+	}
+}
+
+// TestAliasesOmitEmptyOnSerialize verifies that empty aliases are omitted from serialization.
+func TestAliasesOmitEmptyOnSerialize(t *testing.T) {
+	fm := &Frontmatter{
+		UUID:    "abc",
+		Aliases: []string{},
+	}
+	got, err := fm.Serialize()
+	if err != nil {
+		t.Fatalf("Serialize err = %v", err)
+	}
+	if strings.Contains(got, "aliases:") {
+		t.Errorf("expected aliases field to be omitted when empty, got:\n%s", got)
+	}
+	if !strings.Contains(got, "uuid: abc") {
+		t.Errorf("expected uuid to remain, got:\n%s", got)
+	}
+}
+
+// TestAliasesRoundTrip verifies aliases survive serialization and re-parsing.
+func TestAliasesRoundTrip(t *testing.T) {
+	src := `---
+uuid: abc-123
+aliases:
+  - OldName
+  - AnotherName
+tags:
+  - work
+---`
+	fm, _, err := ParseFrontmatter(src)
+	if err != nil {
+		t.Fatalf("ParseFrontmatter err = %v", err)
+	}
+
+	serialized, err := fm.Serialize()
+	if err != nil {
+		t.Fatalf("Serialize err = %v", err)
+	}
+
+	fm2, _, err := ParseFrontmatter(serialized + "# content")
+	if err != nil {
+		t.Fatalf("re-parse err = %v", err)
+	}
+
+	if len(fm2.Aliases) != 2 || fm2.Aliases[0] != "OldName" || fm2.Aliases[1] != "AnotherName" {
+		t.Errorf("after round-trip, Aliases = %v, want [OldName, AnotherName]", fm2.Aliases)
+	}
+}
+
+// TestNormalizeAliases_Deduplication verifies case-insensitive deduplication.
+func TestNormalizeAliases_Deduplication(t *testing.T) {
+	tests := []struct {
+		name  string
+		input []string
+		want  []string
+	}{
+		{
+			name:  "empty",
+			input: []string{},
+			want:  nil,
+		},
+		{
+			name:  "case_insensitive_dedup",
+			input: []string{"Foo", "foo", "FOO", "Bar"},
+			want:  []string{"Foo", "Bar"},
+		},
+		{
+			name:  "whitespace_trim",
+			input: []string{"  Foo  ", "Bar "},
+			want:  []string{"Foo", "Bar"},
+		},
+		{
+			name:  "empty_strings_dropped",
+			input: []string{"Foo", "", "  ", "Bar"},
+			want:  []string{"Foo", "Bar"},
+		},
+		{
+			name:  "preserves_case_of_first",
+			input: []string{"foo", "Foo"},
+			want:  []string{"foo"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := normalizeAliases(tt.input)
+			if !stringSlicesEqual(got, tt.want) {
+				t.Errorf("normalizeAliases(%v) = %v, want %v", tt.input, got, tt.want)
+			}
+		})
+	}
+}
+
+// TestDecodeStringSliceOrScalar_ScalarForm verifies scalar alias parsing.
+func TestDecodeStringSliceOrScalar_ScalarForm(t *testing.T) {
+	src := `---
+aliases: SingleAlias
+---`
+	fm, _, err := ParseFrontmatter(src)
+	if err != nil {
+		t.Fatalf("ParseFrontmatter err = %v", err)
+	}
+	if len(fm.Aliases) != 1 || fm.Aliases[0] != "SingleAlias" {
+		t.Errorf("scalar alias: got %v, want [SingleAlias]", fm.Aliases)
+	}
+}
+
+// TestDecodeStringSliceOrScalar_FlowForm verifies flow-style alias parsing.
+func TestDecodeStringSliceOrScalar_FlowForm(t *testing.T) {
+	src := `---
+aliases: [Alias1, Alias2, Alias 3]
+---`
+	fm, _, err := ParseFrontmatter(src)
+	if err != nil {
+		t.Fatalf("ParseFrontmatter err = %v", err)
+	}
+	if len(fm.Aliases) != 3 || fm.Aliases[0] != "Alias1" || fm.Aliases[2] != "Alias 3" {
+		t.Errorf("flow alias: got %v, want 3 aliases", fm.Aliases)
+	}
+}
+
+func stringSlicesEqual(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			return false
+		}
+	}
+	return true
 }
