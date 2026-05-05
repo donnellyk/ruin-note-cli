@@ -39,10 +39,10 @@ GOOS=linux GOARCH=arm64 go build -ldflags "$LDFLAGS" -o {{vars.build_dir}}/{{var
 [tasks.install]
 description = "Install to $GOPATH/bin (override version: mise run install 1.2.3)"
 usage = '''
-arg "[version]" help="Override version string (default: git describe)"
+arg "[version]" help="Override version string (default: latest from changelog.md)"
 '''
 run = """
-VERSION=${usage_version:-$(git describe --tags --always --dirty 2>/dev/null || echo "dev")}
+VERSION=${usage_version:-$(./scripts/get-version.sh)}
 go build -ldflags "-X main.version=$VERSION" -o "$(go env GOPATH)/bin/{{vars.binary_name}}" {{vars.cmd_path}}
 echo $VERSION
 """
