@@ -28,6 +28,7 @@ type suggestion struct {
 	Title   string `json:"title"`
 	Path    string `json:"path"`
 	Parent  string `json:"parent,omitempty"`
+	Alias   string `json:"alias,omitempty"`
 	Display string `json:"display"`
 }
 
@@ -83,6 +84,7 @@ index is missing.`,
 						Title:   entry.Title,
 						Path:    entry.Path,
 						Parent:  entry.Parent,
+						Alias:   matchedAlias,
 						Display: entry.Title + " (alias: " + matchedAlias + ")",
 					})
 				}
@@ -122,6 +124,7 @@ func suggestByVaultScan(vlt *vault.Vault, prefix string, limit int, jsonOutput b
 				UUID:    n.UUID,
 				Title:   n.Title,
 				Path:    n.FilePath,
+				Alias:   matchedAlias,
 				Display: n.Title + " (alias: " + matchedAlias + ")",
 			})
 		}
