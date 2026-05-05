@@ -1,6 +1,6 @@
 # Changelog
 
-## [0.5.0] - UNRELEASED
+## [0.5.0] - 2025-05-05 
 
 ### Added
 - Support for Obsidian-style aliases in frontmatter
