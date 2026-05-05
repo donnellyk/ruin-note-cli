@@ -28,6 +28,8 @@ func newNoteSetCmd(getVault func() *vault.Vault, jsonOutput *bool) *cobra.Comman
 	var (
 		addTags     []string
 		removeTags  []string
+		addAliases  []string
+		removeAliases []string
 		order       int
 		noOrder     bool
 		fields      []string
@@ -45,7 +47,7 @@ func newNoteSetCmd(getVault func() *vault.Vault, jsonOutput *bool) *cobra.Comman
 	cmd := &cobra.Command{
 		Use:   "set <note> [flags]",
 		Short: "Set metadata and tags on a note",
-		Long: `Modify a note's tags, dates, order, parent, or extra frontmatter fields.
+		Long: `Modify a note's tags, dates, order, parent, aliases, or extra frontmatter fields.
 
 At least one mutation flag is required. Multiple flags can be combined
 to batch changes in a single operation.
@@ -61,6 +63,8 @@ Without --line, tags are added globally and removed from all lines.`,
   ruin note set <uuid> --remove-dates
   ruin note set <uuid> --order 1
   ruin note set <uuid> --no-order
+  ruin note set <uuid> --add-alias "Alternative Title"
+  ruin note set <uuid> --remove-alias "Old Alias"
   ruin note set <uuid> --field "status=active"
   ruin note set <uuid> --field "status="  # deletes the field
   ruin note set <uuid> --parent "Hub Note"
@@ -90,12 +94,13 @@ Without --line, tags are added globally and removed from all lines.`,
 			}
 
 			hasMutation := len(addTags) > 0 || len(removeTags) > 0 ||
+				len(addAliases) > 0 || len(removeAliases) > 0 ||
 				cmd.Flags().Changed("order") || noOrder ||
 				len(fields) > 0 || parent != "" || noParent ||
 				len(addDates) > 0 || len(removeDates) > 0 || removeAllDt ||
 				toggleTodo
 			if !hasMutation {
-				return fmt.Errorf("at least one mutation flag is required (--add-tag, --remove-tag, --add-date, --remove-date, --remove-dates, --order, --no-order, --field, --parent, --no-parent, --toggle-todo)")
+				return fmt.Errorf("at least one mutation flag is required (--add-tag, --remove-tag, --add-alias, --remove-alias, --add-date, --remove-date, --remove-dates, --order, --no-order, --field, --parent, --no-parent, --toggle-todo)")
 			}
 
 			vlt := getVault()
@@ -155,6 +160,38 @@ Without --line, tags are added globally and removed from all lines.`,
 					}
 				}
 				changes = append(changes, noteSetChange{Field: "tag", Action: "removed", Value: tag})
+			}
+
+			for _, alias := range addAliases {
+				alias = strings.TrimSpace(alias)
+				if alias == "" {
+					continue
+				}
+				alreadyHas := false
+				for _, existing := range n.Aliases {
+					if strings.ToLower(existing) == strings.ToLower(alias) {
+						alreadyHas = true
+						break
+					}
+				}
+				if !alreadyHas {
+					n.Aliases = append(n.Aliases, alias)
+					changes = append(changes, noteSetChange{Field: "alias", Action: "added", Value: alias})
+				}
+			}
+
+			for _, alias := range removeAliases {
+				alias = strings.TrimSpace(alias)
+				if alias == "" {
+					continue
+				}
+				for i, existing := range n.Aliases {
+					if strings.ToLower(existing) == strings.ToLower(alias) {
+						n.Aliases = append(n.Aliases[:i], n.Aliases[i+1:]...)
+						changes = append(changes, noteSetChange{Field: "alias", Action: "removed", Value: alias})
+						break
+					}
+				}
 			}
 
 			for _, raw := range addDates {
@@ -345,6 +382,8 @@ Without --line, tags are added globally and removed from all lines.`,
 
 	cmd.Flags().StringArrayVar(&addTags, "add-tag", nil, "add a tag (global by default, inline with --line)")
 	cmd.Flags().StringArrayVar(&removeTags, "remove-tag", nil, "remove a tag (all lines by default, specific line with --line)")
+	cmd.Flags().StringArrayVar(&addAliases, "add-alias", nil, "add an alias")
+	cmd.Flags().StringArrayVar(&removeAliases, "remove-alias", nil, "remove an alias")
 	cmd.Flags().IntVar(&line, "line", 0, "target content line (1-indexed, after frontmatter)")
 	cmd.Flags().StringArrayVar(&addDates, "add-date", nil, "add a @YYYY-MM-DD date reference (repeatable, accepts today/tomorrow/etc)")
 	cmd.Flags().StringArrayVar(&removeDates, "remove-date", nil, "remove a specific @YYYY-MM-DD date (repeatable)")

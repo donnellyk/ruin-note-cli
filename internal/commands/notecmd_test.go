@@ -1429,3 +1429,217 @@ tags: []
 		t.Errorf("line 5 = %q, want [x] Task D", lines[4])
 	}
 }
+
+func TestNoteSet_AddAlias(t *testing.T) {
+	vlt := setupNoteTestVault(t)
+	jsonOut := true
+	cmd := NewNoteCmd(func() *vault.Vault { return vlt }, &jsonOut)
+
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	cmd.SetArgs([]string{"set", "uuid-plain", "--add-alias", "Alternative Title"})
+	err := cmd.Execute()
+
+	w.Close()
+	os.Stdout = oldStdout
+
+	if err != nil {
+		t.Fatalf("note set --add-alias error = %v", err)
+	}
+
+	var buf bytes.Buffer
+	buf.ReadFrom(r)
+
+	var result noteSetOutput
+	if err := json.Unmarshal(buf.Bytes(), &result); err != nil {
+		t.Fatalf("failed to parse JSON: %v\noutput: %s", err, buf.String())
+	}
+
+	if len(result.Changes) != 1 {
+		t.Fatalf("got %d changes, want 1", len(result.Changes))
+	}
+	if result.Changes[0].Field != "alias" || result.Changes[0].Action != "added" {
+		t.Errorf("got field=%q action=%q, want field=alias action=added", result.Changes[0].Field, result.Changes[0].Action)
+	}
+
+	// Verify alias was persisted to frontmatter
+	n, _ := ResolveNote(vlt, "uuid-plain")
+	found := false
+	for _, alias := range n.Aliases {
+		if alias == "Alternative Title" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("alias not found in note: %v", n.Aliases)
+	}
+}
+
+func TestNoteSet_AddAlias_NoDuplicateIfExists(t *testing.T) {
+	vlt := setupNoteTestVault(t)
+	jsonOut := true
+	cmd := NewNoteCmd(func() *vault.Vault { return vlt }, &jsonOut)
+
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	cmd.SetArgs([]string{"set", "uuid-plain", "--add-alias", "MyAlias", "--add-alias", "myalias"})
+	err := cmd.Execute()
+
+	w.Close()
+	os.Stdout = oldStdout
+
+	if err != nil {
+		t.Fatalf("note set --add-alias error = %v", err)
+	}
+
+	var buf bytes.Buffer
+	buf.ReadFrom(r)
+
+	var result noteSetOutput
+	if err := json.Unmarshal(buf.Bytes(), &result); err != nil {
+		t.Fatalf("failed to parse JSON: %v\noutput: %s", err, buf.String())
+	}
+
+	// Only the first alias should be added, the second is a duplicate (case-insensitive)
+	if len(result.Changes) != 1 {
+		t.Fatalf("got %d changes, want 1 (case-insensitive deduplication)", len(result.Changes))
+	}
+
+	n, _ := ResolveNote(vlt, "uuid-plain")
+	if len(n.Aliases) != 1 {
+		t.Errorf("got %d aliases, want 1", len(n.Aliases))
+	}
+}
+
+func TestNoteSet_RemoveAlias(t *testing.T) {
+	vlt := setupNoteTestVault(t)
+	// First add an alias
+	jsonOut := false
+	cmd := NewNoteCmd(func() *vault.Vault { return vlt }, &jsonOut)
+	cmd.SetArgs([]string{"set", "uuid-plain", "--add-alias", "First", "--add-alias", "Second"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("failed to add aliases: %v", err)
+	}
+
+	// Now remove one
+	jsonOut = true
+	r, w, _ := os.Pipe()
+	oldStdout := os.Stdout
+	os.Stdout = w
+
+	cmd.SetArgs([]string{"set", "uuid-plain", "--remove-alias", "First"})
+	err := cmd.Execute()
+
+	w.Close()
+	os.Stdout = oldStdout
+
+	if err != nil {
+		t.Fatalf("note set --remove-alias error = %v", err)
+	}
+
+	var buf bytes.Buffer
+	buf.ReadFrom(r)
+
+	var result noteSetOutput
+	if err := json.Unmarshal(buf.Bytes(), &result); err != nil {
+		t.Fatalf("failed to parse JSON: %v\noutput: %s", err, buf.String())
+	}
+
+	if len(result.Changes) != 1 {
+		t.Fatalf("got %d changes, want 1", len(result.Changes))
+	}
+	if result.Changes[0].Action != "removed" {
+		t.Errorf("action = %q, want removed", result.Changes[0].Action)
+	}
+
+	// Verify only "Second" remains
+	n, _ := ResolveNote(vlt, "uuid-plain")
+	if len(n.Aliases) != 1 || n.Aliases[0] != "Second" {
+		t.Errorf("got aliases %v, want [Second]", n.Aliases)
+	}
+}
+
+func TestNoteSet_RemoveAlias_CaseInsensitive(t *testing.T) {
+	vlt := setupNoteTestVault(t)
+	// First add an alias
+	jsonOut := false
+	cmd := NewNoteCmd(func() *vault.Vault { return vlt }, &jsonOut)
+	cmd.SetArgs([]string{"set", "uuid-plain", "--add-alias", "MyAlias"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("failed to add alias: %v", err)
+	}
+
+	// Remove with different casing
+	cmd.SetArgs([]string{"set", "uuid-plain", "--remove-alias", "myalias"})
+	err := cmd.Execute()
+
+	if err != nil {
+		t.Fatalf("note set --remove-alias error = %v", err)
+	}
+
+	n, _ := ResolveNote(vlt, "uuid-plain")
+	if len(n.Aliases) != 0 {
+		t.Errorf("got %d aliases, want 0 (case-insensitive removal)", len(n.Aliases))
+	}
+}
+
+func TestNoteSet_CombinedAliasAndOtherFlags(t *testing.T) {
+	vlt := setupNoteTestVault(t)
+	jsonOut := true
+	cmd := NewNoteCmd(func() *vault.Vault { return vlt }, &jsonOut)
+
+	oldStdout := os.Stdout
+	r, w, _ := os.Pipe()
+	os.Stdout = w
+
+	cmd.SetArgs([]string{"set", "uuid-plain", "--add-alias", "Alternative", "--add-tag", "#important"})
+	err := cmd.Execute()
+
+	w.Close()
+	os.Stdout = oldStdout
+
+	if err != nil {
+		t.Fatalf("note set error = %v", err)
+	}
+
+	var buf bytes.Buffer
+	buf.ReadFrom(r)
+
+	var result noteSetOutput
+	if err := json.Unmarshal(buf.Bytes(), &result); err != nil {
+		t.Fatalf("failed to parse JSON: %v\noutput: %s", err, buf.String())
+	}
+
+	if len(result.Changes) != 2 {
+		t.Fatalf("got %d changes, want 2", len(result.Changes))
+	}
+
+	// Verify both changes are recorded
+	tagFound := false
+	aliasFound := false
+	for _, change := range result.Changes {
+		if change.Field == "tag" && change.Action == "added" {
+			tagFound = true
+		}
+		if change.Field == "alias" && change.Action == "added" {
+			aliasFound = true
+		}
+	}
+	if !tagFound || !aliasFound {
+		t.Errorf("expected both tag and alias changes, got %+v", result.Changes)
+	}
+
+	// Verify both were actually persisted
+	n, _ := ResolveNote(vlt, "uuid-plain")
+	if len(n.Aliases) == 0 {
+		t.Errorf("alias not persisted")
+	}
+	if len(n.AllTags()) == 0 {
+		t.Errorf("tag not persisted")
+	}
+}
