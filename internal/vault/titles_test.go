@@ -121,10 +121,10 @@ func TestTitlesIndex_FindByAlias(t *testing.T) {
 	}
 
 	tests := []struct {
-		name    string
-		alias   string
+		name     string
+		alias    string
 		wantUUID string
-		wantOK  bool
+		wantOK   bool
 	}{
 		{"exact match", "OldName", "uuid-1", true},
 		{"case insensitive", "oldname", "uuid-1", true},
@@ -153,10 +153,10 @@ func TestTitlesIndex_FindByTitle_WithAliasFallback(t *testing.T) {
 	}
 
 	tests := []struct {
-		name    string
-		query   string
+		name     string
+		query    string
 		wantUUID string
-		wantOK  bool
+		wantOK   bool
 	}{
 		{"title match", "Main Title", "uuid-1", true},
 		{"title case insensitive", "main title", "uuid-1", true},

@@ -26,22 +26,22 @@ type noteSetOutput struct {
 
 func newNoteSetCmd(getVault func() *vault.Vault, jsonOutput *bool) *cobra.Command {
 	var (
-		addTags     []string
-		removeTags  []string
-		addAliases  []string
+		addTags       []string
+		removeTags    []string
+		addAliases    []string
 		removeAliases []string
-		order       int
-		noOrder     bool
-		fields      []string
-		parent      string
-		noParent    bool
-		force       bool
-		line        int
-		addDates    []string
-		removeDates []string
-		removeAllDt bool
-		toggleTodo  bool
-		sink        bool
+		order         int
+		noOrder       bool
+		fields        []string
+		parent        string
+		noParent      bool
+		force         bool
+		line          int
+		addDates      []string
+		removeDates   []string
+		removeAllDt   bool
+		toggleTodo    bool
+		sink          bool
 	)
 
 	cmd := &cobra.Command{
