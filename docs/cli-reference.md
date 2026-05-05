@@ -585,7 +585,11 @@ ruin suggest <prefix>
 |------|-------|-------------|
 | `--limit` | `-l` | Max results (default 10) |
 
-Case-insensitive prefix match on note titles. Default output: `<uuid>\t<title>` per line.
+Case-insensitive prefix match on note titles and aliases. Prioritizes title matches; if no title matches, searches aliases.
+
+Default output: `<uuid>\t<title>` or `<uuid>\t<title> (alias: <alias>)` per line.
+
+With `--json`, includes an optional `alias` field with the matched alias name (omitted if matched by title).
 
 ### compose
 
