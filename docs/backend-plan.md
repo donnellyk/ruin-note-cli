@@ -12,9 +12,10 @@ features against that model.
 >   Feb 2026). **Drives the running app** (focused vault); notes are plain `.md` on disk.
 >   Docs: <https://obsidian.md/cli>.
 > - **BearCLI** — `bearcli …` (`/Applications/Bear.app/Contents/MacOS/bearcli`), bundled in
->   **Bear 2.8** (Apr 2026). **Operates directly on the local Bear database in place** (no
->   x-callback, no API token, no window flashing); also exposes `bearcli mcp-server`. macOS
->   only. Docs: <https://bear.app/faq/command-line-interface/>. *(This corrects earlier
+>   **Bear 2.8** (Apr 2026). **Operates directly on the local Bear database in place** — **the
+>   Bear app does not need to be running** — with no x-callback, no API token, and no window
+>   flashing; also exposes `bearcli mcp-server`. macOS only.
+>   Docs: <https://bear.app/faq/command-line-interface/>. *(This corrects earlier
 >   analysis based on the old `bear://x-callback-url` scheme — the official `bearcli` is a
 >   native DB tool and is far more capable and headless-friendly.)*
 
@@ -48,7 +49,7 @@ headless of the two CLIs**, while Obsidian brings frontmatter, semantic tasks, a
 | Capability ruin needs | **Obsidian CLI** (`obsidian`) | **BearCLI** (`bearcli`) |
 |---|---|---|
 | Execution model | **Drives the running app** (focused vault) | **Direct on the local DB in place** — no token, no window flash |
-| Requires the app running | **Yes** | Not stated in help (works on the DB); concurrent-edit safety via `--base` |
+| Requires the app running | **Yes** | **No** — works on the DB directly; concurrent-edit safety via `--base` |
 | Platform | Where Obsidian runs (mac/win/linux) | **macOS only** |
 | Structured output | `format=json` (also csv/plain) | `--format json\|csv\|tsv` (reads); **mutations are silent, exit-code only** |
 | Create / read / list / search | ✅ | ✅ `create`, `cat`, `show`, `list`, `search`, `search-in` |
@@ -75,11 +76,11 @@ headless surface for Bear.
 
 - **Obsidian CLI requires the running app.** Its headless fallback is direct file access
   (read `.md`, `fsnotify`). So for Obsidian, "app is closed" ⇒ ruin drops to the FS path.
-- **BearCLI works on the database in place** — no token, no x-callback, no GUI flash. Whether
-  the Bear app must be *concurrently* running isn't documented; the `overwrite --base <hash>`
-  optimistic-lock and `--no-update-modified` exist precisely to make writes safe when Bear or
-  another client is also editing. So for Bear, `bearcli` is both the interactive and the
-  headless path.
+- **BearCLI works on the database in place and does *not* need the Bear app running** — no
+  token, no x-callback, no GUI flash. The `overwrite --base <hash>` optimistic-lock and
+  `--no-update-modified` exist to keep writes safe when Bear (or another client, e.g. iCloud
+  sync) *is* editing concurrently. So for Bear, `bearcli` is both the interactive and the
+  headless path — ironically the more headless-friendly of the two CLIs.
 - **Writes go through the tools, not around them.** ruin stops clobbering files/DB behind the
   app's back, which removes most cross-process races — and Bear even gives a first-class
   concurrency guard (`--base`).
@@ -276,7 +277,8 @@ writes unless suppressed/batched.
   (optimistic lock), per-note `hash`, `--no-update-modified`. Obsidian has no documented
   concurrency guard — rely on idempotent hash-compare writes and self-write suppression.
 - **App-running.** Obsidian CLI needs the app up (FS fallback when down); Bear's `bearcli`
-  does not appear to. Adapters must probe and degrade.
+  does **not** — it runs headless against the DB. So the Obsidian adapter must probe app
+  availability and degrade; the Bear adapter has no such gate.
 - **`inherited-tags`.** No backend supplies it; stays ruin-computed. On Bear, materialize it
   as real tags; retain a shadow pointer if baking removes the `parent:` scalar.
 - **Time-based staleness.** `@today`/dated `query:` embeds need a scheduled re-eval; a pure
