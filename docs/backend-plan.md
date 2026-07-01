@@ -1,368 +1,303 @@
-# Backend Direction: Obsidian / Bear as a Storage Backend (via their official CLIs)
+# Backend Direction: Bear as the v1 Storage Backend (via `bearcli`)
 
 **Status:** Investigation + plan (no code changes yet)
 **Branch:** `claude/obsidian-bear-backend-yhh1ei`
-**Scope:** Use Obsidian or Bear as a storage "backend" for ruin — driven through each app's
-**official first-party CLI** — so those apps provide polish/rendering while ruin (plus a Mac
-modal quick-capture) handles capture and generated/dynamic pages. Plan the five requested
-features against that model.
+**Scope:** Use **Bear** as ruin's storage "backend" for v1, driven through Bear's official
+`bearcli`, so Bear provides polish/rendering/sync while ruin (plus a Mac modal quick-capture)
+handles capture and generated/dynamic pages. Design the backend seam so **Obsidian can be
+added later** behind the same interface, but do not build it in v1.
 
-> Primary integration surface = the two official CLIs:
-> - **Obsidian CLI** — `obsidian …`, bundled in Obsidian **1.12+** (early access / Catalyst,
->   Feb 2026). **Drives the running app** (focused vault); notes are plain `.md` on disk.
->   Docs: <https://obsidian.md/cli>.
-> - **BearCLI** — `bearcli …` (`/Applications/Bear.app/Contents/MacOS/bearcli`), bundled in
->   **Bear 2.8** (Apr 2026). **Operates directly on the local Bear database in place** — **the
->   Bear app does not need to be running** — with no x-callback, no API token, and no window
->   flashing; also exposes `bearcli mcp-server`. macOS only.
->   Docs: <https://bear.app/faq/command-line-interface/>. *(This corrects earlier
->   analysis based on the old `bear://x-callback-url` scheme — the official `bearcli` is a
->   native DB tool and is far more capable and headless-friendly.)*
+> **`bearcli`** — `/Applications/Bear.app/Contents/MacOS/bearcli`, bundled in **Bear 2.8**
+> (Apr 2026). **Operates directly on the local Bear database in place — the Bear app does not
+> need to be running** — with no `x-callback`, no API token, and no window flashing. Reads emit
+> structured JSON; writes are surgical (`edit --find/--insert-after`, `overwrite --base`).
+> Also ships `bearcli mcp-server`. **macOS only.**
+> Docs: <https://bear.app/faq/command-line-interface/>.
 
 ---
 
 ## 1. The vision
 
 Today ruin *owns* a folder of Markdown files and treats its `.ruin/` indices as the hot-path
-source of truth. The proposal inverts the relationship: let a first-class app (Obsidian or
-Bear) own presentation and interaction, and reposition ruin as the **write/derivation
-engine** that:
+source of truth. v1 inverts that: **Bear owns the notes** (storage, rendering, sync, mobile),
+and ruin becomes the **write/derivation engine** on top of `bearcli` that:
 
 - captures input (CLI, and a Mac modal quick-capture),
-- **bakes** structure in at write time (a parent set appends/prepends the child's text into
-  the parent's section, rather than storing a pointer),
-- **materializes** dynamic pages (`pick` / embeds become real notes that regenerate when
-  their sources change),
-- keeps plaintext tag/link files as **helpers**, not sources of truth (querying the backend
-  CLI live where possible),
+- **bakes** structure in at write time — setting a parent inserts the child's text under the
+  parent's heading, rather than storing a pointer,
+- **materializes** dynamic pages — `pick` / embeds become real Bear notes that regenerate when
+  their sources change,
+- keeps plaintext tag/link files as **helpers**, not sources of truth — querying `bearcli`
+  live instead,
 - **two-way syncs** `pick`/checkbox done-state between the materialized view and origin,
-- and runs a **monitor** mode that watches the backend and refreshes generated artifacts.
+- and runs a **monitor** mode that watches Bear and refreshes generated notes.
 
-## 2. What the two official CLIs actually give us
+macOS-only is acceptable for v1: Bear is a macOS/iOS app, and `bearcli` is the point of
+integration. ruin's existing **filesystem vault stays the default** for headless/CI/non-mac
+use; the Bear backend is opt-in via config.
 
-Both CLIs speak **structured output** (JSON/CSV/TSV) and cover create/read/search/append plus
-tag management. ruin's job becomes "**shell out to `obsidian` / `bearcli`, parse the
-structured output, and route writes through targeted subcommands.**" But the two differ in
-important ways — and, correcting the earlier draft, **Bear is the more surgical and more
-headless of the two CLIs**, while Obsidian brings frontmatter, semantic tasks, and `eval`.
+## 2. Why Bear fits well as v1
 
-| Capability ruin needs | **Obsidian CLI** (`obsidian`) | **BearCLI** (`bearcli`) |
-|---|---|---|
-| Execution model | **Drives the running app** (focused vault) | **Direct on the local DB in place** — no token, no window flash |
-| Requires the app running | **Yes** | **No** — works on the DB directly; concurrent-edit safety via `--base` |
-| Platform | Where Obsidian runs (mac/win/linux) | **macOS only** |
-| Structured output | `format=json` (also csv/plain) | `--format json\|csv\|tsv` (reads); **mutations are silent, exit-code only** |
-| Create / read / list / search | ✅ | ✅ `create`, `cat`, `show`, `list`, `search`, `search-in` |
-| Rich query language | `search` | ✅ `search` (`@todo @done @task @backlinks @wikilinks @tagged @date(...)` …) |
-| **Append / prepend** | ✅ (whole file / position) | ✅ `append --position beginning\|end` |
-| **Insert at a specific heading / line** | ❌ native (needs `eval` or read-modify-write) | ✅ **`edit --find "## H" --insert-after/-before`** (also `--replace`, `--all`, `--word`) |
-| **Whole-note replace w/ concurrency guard** | (via `eval`/RMW) | ✅ **`overwrite --base <hash>`** (optimistic lock) + `--no-update-modified` |
-| Tags: list + counts + manage | ✅ `tags counts` | ✅ `tags list/add/remove/rename/delete` (`--count`) |
-| **Frontmatter / properties** | ✅ `property` get/set | ❌ Bear has **no frontmatter model** |
-| **Tasks: list + completion** | ✅ `tasks` (semantic completion) | ⚠️ no task verb, but `show --fields todos,done` + `edit --find/--replace` toggles a box; `search @todo/@done/@task` |
-| **Backlinks** | ✅ `backlinks file=…` | ✅ `search "@backlinks"` / `@wikilinks` |
-| Change-detection primitive | file mtime (disk) | ✅ per-note **`hash`** + `modified` via `show`/`list` |
-| **Arbitrary API escape hatch** | ✅ `eval "<JS>"` (full plugin API) | ✅ `bearcli mcp-server` (structured MCP interface) |
-| Note identity | file / title / path (no UUID) | note **ID** or `--title` (case-insensitive) |
-| Change events / push | ❌ (watch files) | ❌ (poll `hash`/`modified`) |
-| Encrypted notes | n/a | inaccessible via the CLI |
+The official `bearcli` turns out to be a strong backend target — it's a native DB tool, not
+the old GUI-mediated `x-callback` scheme. Concretely, everything the five features need has a
+first-class `bearcli` verb:
 
-**Secondary surface (Obsidian only):** Obsidian notes are plain `.md` on disk, so ruin can
-read them directly and use `fsnotify` for monitor mode **when the app isn't running** — the
-headless fallback for the Obsidian backend. Bear has no plain files; `bearcli` itself *is* the
-headless surface for Bear.
+| ruin needs | `bearcli` provides |
+|---|---|
+| Headless operation (no app, no token, no window flash) | Runs directly on the DB; Bear need not be running |
+| Create / read / list / search | `create`, `cat`, `show`, `list`, `search`, `search-in` (all `--format json`) |
+| Rich queries (tasks, links, dates, tags) | `search "@todo @done @task @backlinks @wikilinks @tagged @date(...)"` |
+| **Insert under a specific heading** (baking) | `edit --find "## Heading" --insert-after "…"` / `--insert-before` |
+| Find/replace a line (checkbox toggle) | `edit --find "- [ ] x" --replace "- [x] x"` (`--all`, `--word`) |
+| **Safe region rewrite** (materialize refresh) | `overwrite --base <hash>` (optimistic lock) + `--no-update-modified` |
+| Change detection (monitor) | per-note **`hash`** + `modified` via `show`/`list --fields` |
+| Task state | `show --fields todos,done` |
+| Tag list + management | `tags list/add/remove/rename/delete` (`--count`, JSON) |
+| Escape hatch for structured write results | `bearcli mcp-server` (MCP over stdio) |
+| Note identity | stable note **ID** or `--title` (case-insensitive) |
 
-### 2.1 The operational constraints, corrected
+Two alignments make Bear an especially natural v1:
 
-- **Obsidian CLI requires the running app.** Its headless fallback is direct file access
-  (read `.md`, `fsnotify`). So for Obsidian, "app is closed" ⇒ ruin drops to the FS path.
-- **BearCLI works on the database in place and does *not* need the Bear app running** — no
-  token, no x-callback, no GUI flash. The `overwrite --base <hash>` optimistic-lock and
-  `--no-update-modified` exist to keep writes safe when Bear (or another client, e.g. iCloud
-  sync) *is* editing concurrently. So for Bear, `bearcli` is both the interactive and the
-  headless path — ironically the more headless-friendly of the two CLIs.
-- **Writes go through the tools, not around them.** ruin stops clobbering files/DB behind the
-  app's back, which removes most cross-process races — and Bear even gives a first-class
-  concurrency guard (`--base`).
+- **Baking fits Bear's grain.** Bear has no frontmatter and no notion of a `parent:` pointer,
+  but it *does* have `edit --find "## H" --insert-after` — so the original vision ("setting a
+  parent bakes the text in at write time") is arguably *more* native on Bear than ruin's
+  current pointer model.
+- **Headless + concurrency-safe.** `bearcli` needs no running app, and `overwrite --base`
+  plus `--no-update-modified` give real primitives for safe rewrites and loop-free monitoring
+  even while Bear/iCloud sync is active.
 
-### Recommendation
+## 3. The one hard problem: Bear has no frontmatter
 
-Build one **BackendCLI adapter** abstraction with three impls — **FS** (default, headless,
-CI), **Obsidian** (`obsidian`), **Bear** (`bearcli`). Neither app CLI is strictly weaker;
-they're differently shaped:
+ruin keeps almost all of its state in YAML frontmatter: `uuid`, `created`, `updated`, `tags`,
+`inline-tags`, `inherited-tags`, `parent`, `order`, `linked-cards`, `url`, `aliases`, `dates`.
+**Bear notes have none of this** — a note is a title (first heading), a Markdown body with
+inline `#tags`, and Bear-managed metadata (ID, created, modified, pins, todos). So v1's
+central design task is deciding where each field lives:
 
-- **Obsidian** fits ruin's *data model* better (real **frontmatter** via `property`, which is
-  where ruin keeps uuid/parent/tags/dates; semantic **tasks**; `eval` for anything missing;
-  cross-platform; invisible `%%comments%%` for generated regions).
-- **Bear** fits ruin's *write operations* better (surgical **`edit`** for heading/line-precise
-  inserts and checkbox toggles; **`overwrite --base`** concurrency; per-note **`hash`** for
-  change detection; no app-running requirement) — but it's macOS-only and has **no
-  frontmatter**, so ruin's uuid/parent/inherited-tags model must be side-banded or expressed
-  as Bear tags/body.
+| ruin field | v1 home on Bear |
+|---|---|
+| `uuid` | Bear note **ID** is the storage identity; keep a side-band `uuid ↔ Bear-ID` map so existing ruin tooling keyed on uuid still resolves |
+| `created` / `updated` | Bear-native (`show --fields created,modified`); stop writing our own |
+| `tags` / `inline-tags` | Native Bear `#tags` in the body; classify inline-vs-global from body text as today |
+| `inherited-tags` | Apply as **real Bear tags** via `tags add`, recorded side-band so they can be recomputed/removed |
+| `parent` | Baked (inlined) by default on Bear; provenance kept in the side-band map (+ optional native `[[Parent]]` wikilink) |
+| `order` | Side-band map |
+| `linked-cards` | **Retired** — Bear has native `[[wikilinks]]` and `@backlinks`; query live |
+| `url` / `aliases` / `dates` | Side-band map (dates also re-derivable from body) |
 
-Ship both behind the same seam; let capability probing pick native paths vs fallbacks.
+**New v1 artifact: `.ruin/bear-meta.json`** — a side-band store keyed by Bear note ID holding
+the non-native fields (uuid mapping, parent, order, inherited-tag provenance, url, aliases).
+It is rebuildable by re-scanning Bear (`bearcli list --fields all`) the way `doctor` rebuilds
+`titles.json` today. This is the Bear analogue of ruin's frontmatter-as-cache model.
 
 ---
 
-## 3. Architectural seams to introduce
+## 4. Architecture seams (v1 builds the Bear + FS impls)
 
-### 3.1 `backend` config selector
+The seam is designed so Obsidian can slot in later (see §9), but v1 ships only **FS** (today's
+code, the default) and **Bear** (`bearcli`).
+
+### 4.1 `backend` config selector
 A new field on the four-field `Config` struct (`internal/config/config.go`), following the
 existing `*bool`-with-default + `RUIN_*` env + auto-surfaced-by-`config` pattern:
-`backend: ruin | obsidian | bear` (env `RUIN_BACKEND`), plus optional `backend_cli_path`.
-The value is a **profile** that also sets defaults for existing flags (e.g. both app backends
-⇒ `tag_frontmatter:false` on Bear it's moot; disable `#spaced tag#`).
+`backend: ruin | bear` for v1 (`obsidian` reserved), env `RUIN_BACKEND`, optional
+`backend_cli_path` (default the bundled `bearcli`). Selecting `bear` also sets sensible
+profile defaults (tag-frontmatter is moot; disable ruin-only formatting that Bear won't render,
+e.g. `#spaced tag#` if it clashes — verify against Bear's tag rules).
 
-### 3.2 `BackendCLI` — the adapter seam (core of the design)
-Implementations shell out to `obsidian` / `bearcli` (and the FS code) and parse structured
-output. Methods, with the native mapping noted:
+### 4.2 `BackendStore` — the adapter seam (core of v1)
+An interface with an **FS** impl (today's `note.Save`/`vault.*`) and a **Bear** impl that shells
+out to `bearcli` and parses JSON. Methods and their Bear mapping:
 
 ```
-Create(note)                       // obsidian create ; bearcli create (returns id/hash)
-Read(id) / List() / Search(q)      // obsidian read/search ; bearcli cat/show/list/search (JSON)
-Append(id, text, position)         // obsidian append ; bearcli append --position
-InsertAtHeading(id, heading, text, mode)
-     // Bear:  bearcli edit --find "<heading>" --insert-after|--insert-before
-     // Obs:   eval / read-modify-write (no native heading append yet)
-ReplaceRegion(id, oldExact, new)   // Bear: bearcli edit --find --replace ; Obs: eval / RMW
-Overwrite(id, content, baseHash?)  // Bear: bearcli overwrite --base ; Obs: create/replace
-QueryTags() / QueryBacklinks(id)   // obsidian tags counts/backlinks ; bearcli tags list / search "@backlinks"
-GetProperty/SetProperty(id,k,v)    // Obsidian only (property); Bear: emulate side-band
-ListTasks(scope) / CompleteTask(r) // Obs: tasks ; Bear: show --fields todos,done + edit --replace
-Hash(id) / Modified(id)            // Bear: show --fields hash,modified ; Obs: file hash/mtime
-Eval(js)                           // Obsidian escape hatch
-Available() / Capabilities()       // probe + advertise which of the above are native
+Create(note) -> id,hash          // bearcli create --format json (returns id, hash)
+Read(id) / Show(id)              // bearcli cat / show --fields all,content --format json
+List() / Search(query)          // bearcli list / search --format json
+Append(id, text, position)      // bearcli append --position beginning|end
+InsertAtHeading(id, h, text, m) // bearcli edit --find "## h" --insert-after|--insert-before
+ReplaceExact(id, old, new)      // bearcli edit --find old --replace new [--all]
+Overwrite(id, content, base)    // bearcli overwrite --base <hash> [--no-update-modified]
+QueryTags() / TagsOf(id)        // bearcli tags list [id] --format json
+Backlinks(id) / Links(id)       // bearcli search "@backlinks"/"@wikilinks" --format json
+Tasks(id) -> todos,done         // bearcli show --fields todos,done
+Hash(id) / Modified(id)         // bearcli show --fields hash,modified
+Trash/Archive/Restore/Pin/Tags* // bearcli trash|archive|restore|pin|tags add/remove/...
 ```
 
-Adapters **advertise capabilities**; ruin selects native vs fallback (heading-insert native
-on Bear, `eval`/RMW on Obsidian; concurrency guard native on Bear, best-effort on Obsidian).
+Notes on the Bear impl:
+- **Mutations are silent** (exit-code only). Capture post-write state with a follow-up
+  `show --fields hash` when needed; `create` and reads return JSON directly. Use
+  `bearcli mcp-server` only if a structured write-response is genuinely required.
+- **Respect Bear's body rules:** title derives from the first heading; `--tags` inserts at the
+  Bear-configured position; attachment references must be preserved on `overwrite` (or pass
+  `--force` deliberately). ruin's writers must not duplicate the H1 or drop attachment links.
 
-### 3.3 `MetadataProvider` — demote the indices, query live
+### 4.3 `MetadataProvider` — demote the indices, query Bear live
 Route the read paths that currently *trust* `.ruin` indices —
-`search_engine.go` `prefilterPathsViaTitles`/`hydrateNoteTagsFromIndex` (deep coupling: it
-skips opening matching files and trusts `titles.json`), `tags list` (reads only `tags.yml`),
-and `RefreshLinkedCards`/`ResolveNote` — through `QueryTags/QueryBacklinks/ResolveTitle`.
-Under the CLI backends this is answered **live**: `obsidian tags counts format=json` /
-`obsidian backlinks`; `bearcli tags list --format json` / `bearcli search "@backlinks" --format json`.
-`.ruin` indices survive only as an **offline cache** (Obsidian: built by disk scan when the
-app is down; Bear: `bearcli` is always available, so the cache is largely optional).
-`inherited-tags` stays ruin-computed — no backend supplies it.
+`search_engine.go` `prefilterPathsViaTitles`/`hydrateNoteTagsFromIndex`, `tags list`
+(`tags.go:61`, reads only `tags.yml`), and `RefreshLinkedCards`/`ResolveNote` — through
+`QueryTags/Backlinks/ResolveTitle`. Under the Bear backend these are answered **live** by
+`bearcli` (`tags list --format json`, `search "@backlinks"`, `show`). Because `bearcli` is
+always available (no app needed), `.ruin/tags.yml`/`titles.json` are largely **optional** on
+Bear — kept only as a convenience/offline cache. `inherited-tags` stays ruin-computed (applied
+as Bear tags). Note resolution maps title → `bearcli show --title`; uuid → `bear-meta.json` →
+Bear ID.
 
-### 3.4 `SourceWatcher` — the monitor seam
-Neither CLI emits events, so watch the **store**: `FileWatcher` (fsnotify;
-`fsnotify/fsevents` recursive on macOS) over Obsidian's `.md` files; for Bear, a
-`PollingWatcher` that diffs per-note **`hash`/`modified`** via `bearcli list --fields id,modified,hash`
-(cleaner and more official than scraping SQLite mtime). Both emit a backend-agnostic
-`ChangeSet` into a shared regen pipeline that writes back through the CLI.
+### 4.4 `SourceWatcher` — the monitor seam
+Bear is a single DB, so there are no per-note file events: use a **PollingWatcher** that runs
+`bearcli list --fields id,modified,hash --format json` on an interval and diffs against
+last-seen hashes to produce a `ChangeSet`. Regeneration writes back via `edit`/`overwrite
+--base` with `--no-update-modified` so ruin's own writes don't advance `modified` and
+self-trigger. Works with Bear closed. (The FS impl uses `fsnotify`; the interface hides
+poll-vs-watch.)
 
-### 3.5 Persisted dependency graph + generated-region markers
-`.ruin/deps.json`: `embed-id → {host note, directive, source ids, output hash}` + the reverse
-index — the attribution data ruin already computes and discards
-(`compose_dynamic.go:652 attributionEntry`, `compose_walker.go:389 sourceEntry`). Generated
-content is delimited by fenced markers so ruin replaces only its own region:
-- **Obsidian:** `%% ruin:embed id=… %% end` — comment syntax, invisible in preview.
-- **Bear:** no invisible-comment syntax; use a distinct heading/marker line (e.g.
-  `## ⚙︎ ruin:embed`) and replace the region via `edit`/`overwrite --base`. *(Open question:
-  the least-intrusive Bear-visible marker.)*
-
----
-
-## 4. Feature-by-feature plan
-
-### 4.1 Parent baking (append/prepend child into the parent's section at write time)
-**Today:** `n.Parent = parentNote.UUID` writes one scalar; the parent file is never touched.
-
-**Plan — `BackendCLI.InsertAtHeading(parentID, heading, text, mode)`:**
-- **Bear (native, clean):** `bearcli edit <parent> --find "## <heading>" --insert-after "\n<child body>"`
-  (or `--insert-before`). This is exactly heading-targeted baking, first-class. Idempotency:
-  include a fenced marker in the inserted text and re-bake via `edit --find "<marker-region>"
-  --replace …` or `overwrite --base`.
-- **Obsidian:** `append` has no heading target yet, so use `eval` (JS: locate heading, insert
-  via `vault.process`/editor) or read-modify-write (`read format=json` → splice → write back).
-  Switch to a native `heading=` flag if/when the CLI adds it (open feature request).
-- **FS:** direct splice.
-
-Wrap the block in a `<!-- ruin:baked <childUUID> -->…` fence (Obsidian) / heading marker
-(Bear) for idempotent re-bake.
-
-**Recommendation:** keep baking **opt-in**, not the default — the pointer model is strictly
-more capable/reversible, and cycle detection + the inherited-tags cascade key off the UUID
-pointer. Retain the child as provenance (`embedded-in: <parentUUID>` on Obsidian/FS; a
-side-band map entry on Bear) rather than deleting. Surface as
-`ruin note set <child> --parent <ref> --under "<heading>" --mode append|prepend` (+ on `log`).
-
-**Breaking / risk:** parent-set now writes the *parent* note; Obsidian requires the app
-running (Bear does not); `--no-parent` can't cleanly un-bake; cycle detection, the `--force`
-guard, and the inherited-tags cascade must be redesigned or gated to the pointer mode.
-
-### 4.2 Dynamic embeds → materialized notes
-**Today:** embeds expand to stdout on demand and are discarded; the marker stays verbatim.
-
-**Plan:** ruin evaluates the embed as now, then **writes the result through the backend CLI**
-— a dedicated generated note (`create`) or a fenced region inside a host note. Regenerating a
-region:
-- **Bear:** `overwrite --base <hash>` (read `show --fields hash,content` → splice region →
-  overwrite with the hash guard) or `edit --find <region> --replace`. `--no-update-modified`
-  keeps the refresh from bumping `modified` and retriggering the monitor.
-- **Obsidian:** `eval`/RMW to replace between `%% %%` sentinels.
-
-Invalidate via `.ruin/deps.json`; regenerate on source change via the monitor with
-**hash-guarded, idempotent writes** (Bear's `--base` + `hash` field make this first-class).
-Exclude generated notes/regions from `pickCandidatePaths`/search/tag-counting. Add a **clock
-tick** for time-dependent embeds (`@today`, dated `query:`).
-
-**Breaking / risk:** embeds now create/modify notes; introduces the authored-vs-generated
-boundary; `pick`/search must exclude generated content; new `.ruin/deps.json`; generated
-writes must not bump `updated`/`modified` (use `--no-update-modified`) or re-run cascades.
-
-### 4.3 Plaintext tags/links as helpers — query the CLI live
-**Fully supported by both CLIs.** `obsidian tags counts format=json` / `obsidian backlinks`;
-`bearcli tags list --format json` / `bearcli search "@backlinks|@wikilinks" --format json`.
-Route the index-trusting read paths through `MetadataProvider` (§3.3). `.ruin/tags.yml`/
-`titles.json` become a rebuildable offline cache (or, for Bear where `bearcli` is always
-available, largely optional). `inherited-tags` stays ruin-computed from the `parent:` chain;
-on Bear (no frontmatter) it's applied as real Bear tags via `tags add` and/or tracked
-side-band.
-
-**Breaking / risk:** search results and `tags list` counts change (the CLIs count differently
-than ruin's per-note-deduped body count); `linked-cards` frontmatter may be retired where the
-backend supplies links live; JSON-output consumers may see different numbers.
-
-### 4.4 `pick` two-way done-sync
-Meaningful once pick output is **materialized** (§4.2). Both CLIs can now do it:
-- **Obsidian:** the `tasks` command has completion states — list and mark complete via the
-  CLI. Identity is the crux (current `pick` uses positional line index, `pick.go:565`); anchor
-  tasks with block-refs `^ruin-<id>` (or whatever `tasks` references) so a toggle routes to
-  the right origin. `eval` is the fallback.
-- **Bear:** `show --fields todos,done` reads state; toggle a specific box with
-  `bearcli edit <id> --find "- [ ] <task text>" --replace "- [x] <task text>"`. Real per-line
-  two-way sync — **no whole-note rewrite needed** (correcting the earlier draft). Identity is
-  content-based (exact task text; ambiguous on duplicate lines — Bear has no block-ref anchor).
-- Unify ruin's two done encodings (`#done` tag vs `[x]` checkbox).
-
-**Breaking / risk:** `pick` becomes a *writer* and (on Obsidian) may inject anchors into source
-bodies; `--toggle-todo` becomes cross-note; Bear line identity is content-based (fragile on
-duplicates).
-
-### 4.5 Monitor mode
-**Plan:** `ruin monitor` watches the store (neither CLI emits events):
-- **Obsidian:** `fsnotify` on the vault `.md` files → filter, ignore `.obsidian/` →
-  **hybrid debounce** (~200ms quiet / ~500ms ceiling) → regenerate, writing back through the
-  `obsidian` CLI when the app is up (or directly to disk when it's closed).
-- **Bear:** poll `bearcli list --fields id,modified,hash` and diff against last-seen hashes
-  (official, no SQLite scraping) → regenerate via `bearcli edit`/`overwrite --base`. Can run
-  even if the app is closed. Use `--no-update-modified` so ruin's own writes don't bump
-  `modified` and self-trigger.
-
-**Loop safety is mandatory:** self-written id/path + hash suppression set, and — the strongest
-guard — **content-hash idempotency** (Bear's per-note `hash` + `--base` make this exact). Plus
-the clock tick for time-based embeds.
-
-**Breaking / risk:** ruin gains a long-lived daemon (it has been one-shot only) → lifecycle,
-locking vs foreground commands, macOS TCC; `versioning:true` would flood commits from regen
-writes unless suppressed/batched.
+### 4.5 Dependency graph + generated-region markers
+`.ruin/deps.json`: `embed-id → {host Bear-ID, directive, source IDs, output hash}` + the
+reverse index — the attribution data ruin already computes and discards
+(`compose_dynamic.go:652`, `compose_walker.go:389`). Bear has no invisible-comment syntax, so a
+generated region is delimited by a **visible marker** — a distinct heading such as
+`## ⚙︎ ruin:<embed-id>` (open question: least-intrusive marker) — and refreshed by
+`overwrite --base` or `edit` between markers.
 
 ---
 
-## 5. Cross-cutting concerns
+## 5. Feature-by-feature plan (Bear-native)
 
-- **Data-model fit differs by backend.** Obsidian has **frontmatter** (`property` get/set) —
-  a near-native home for ruin's `uuid`/`parent`/`tags`/`dates`. **Bear has no frontmatter**,
-  so ruin's metadata must be side-banded (a `.ruin` map keyed by Bear note **ID**) or expressed
-  as Bear **tags** (via `tags add`) and body markers. This is the single biggest Bear-specific
-  design task.
-- **Identity.** Obsidian: title/file/path (no UUID) — keep ruin's `google/uuid` with a
-  translation table. Bear: stable note **ID** — map `uuid ↔ Bear id` side-band.
-- **Concurrency & loop safety.** Bear gives first-class primitives: `overwrite --base <hash>`
-  (optimistic lock), per-note `hash`, `--no-update-modified`. Obsidian has no documented
-  concurrency guard — rely on idempotent hash-compare writes and self-write suppression.
-- **App-running.** Obsidian CLI needs the app up (FS fallback when down); Bear's `bearcli`
-  does **not** — it runs headless against the DB. So the Obsidian adapter must probe app
-  availability and degrade; the Bear adapter has no such gate.
-- **`inherited-tags`.** No backend supplies it; stays ruin-computed. On Bear, materialize it
-  as real tags; retain a shadow pointer if baking removes the `parent:` scalar.
-- **Time-based staleness.** `@today`/dated `query:` embeds need a scheduled re-eval; a pure
-  file/DB watch can't cover clock changes.
-- **Git versioning noise.** Daemon regen writes must be suppressed/batched under
-  `versioning:true` (only meaningful for the FS/Obsidian file backends).
-- **Escape hatches.** Obsidian `eval` (JS) and `bearcli mcp-server` (MCP) each cover gaps —
-  e.g. Obsidian heading-insert via `eval`; structured write-results on Bear via MCP (CLI
-  mutations are silent).
+### 5.1 Parent baking
+`ruin note set <child> --parent <ref> --under "<heading>" --mode append|prepend` →
+`bearcli edit <parent-id> --find "## <heading>" --insert-after "\n<child body>"`
+(or `--insert-before` for prepend). Wrap the inserted block in a fenced marker so re-bake
+replaces rather than duplicates. Provenance (child ↔ parent) recorded in `bear-meta.json`;
+optionally add a native `[[Parent Title]]` wikilink for Bear navigation.
+
+Because Bear has no pointer, **baking is the primary parent mechanism on the Bear backend**
+(unlike FS, where the reversible pointer stays default). Keep the child note as its own note
+for provenance, or fold it in — see decisions §7.
+
+*Risk:* `--no-parent`/reparent means cutting the baked region from one note and re-inserting in
+another; cycle detection and the inherited-tags cascade can't key off a pointer and must use
+`bear-meta.json`.
+
+### 5.2 Dynamic embeds → materialized Bear notes
+ruin evaluates the embed as today, then writes the result to Bear: a dedicated generated note
+via `create`, or a fenced region inside a host note. Refresh a region by reading
+`show --fields hash,content`, splicing, and `overwrite --base <hash> --no-update-modified`
+(hash guard prevents clobbering a concurrent Bear/iCloud edit). Invalidate via `.ruin/deps.json`
+on source change; exclude generated notes/regions from `pickCandidatePaths`/search/tag-counting
+so ruin never re-ingests its own output. Add a **clock tick** for time-dependent embeds
+(`@today`, dated `query:`).
+
+### 5.3 Plaintext tags/links as helpers — query `bearcli` live
+`bearcli tags list --format json` (counts via `--count`), `bearcli search "@backlinks"` /
+`"@wikilinks"`, `show --fields todos,done`. Route through `MetadataProvider` (§4.3); `.ruin`
+indices become optional. `linked-cards` frontmatter is retired on Bear (native links +
+`@backlinks`). *Risk:* `tags list` counts differ from ruin's per-note-deduped body count —
+JSON consumers may see different numbers.
+
+### 5.4 `pick` two-way done-sync
+Read state with `show --fields todos,done` (or `search "@todo"`). Toggle a specific box with
+`bearcli edit <id> --find "- [ ] <task text>" --replace "- [x] <task text>"` — real per-line
+sync, **no whole-note rewrite**. Identity is content-based (exact task text); Bear has no
+block-ref anchor, so duplicate identical task lines are ambiguous — dedupe by surrounding
+context or a short injected marker. Unify ruin's two done encodings (`#done` tag vs `[x]`).
+*Risk:* `pick` becomes a writer; `--toggle-todo` becomes cross-note.
+
+### 5.5 Monitor mode
+`ruin monitor` polls `bearcli list --fields id,modified,hash` on an interval, diffs hashes, and
+for changed notes: re-derives ruin metadata into `bear-meta.json`, refreshes dependent
+materialized embeds (via `deps.json`), and propagates checkbox toggles. **Loop safety is
+mandatory:** self-written-ID + expected-hash suppression set, and content-hash idempotency
+(skip no-op writes) — `bearcli`'s per-note `hash`, `overwrite --base`, and `--no-update-modified`
+make this exact. Add the clock tick for time-based embeds. Runs headless (Bear can be closed).
+*Risk:* a new long-lived daemon (ruin has been one-shot only) → lifecycle, single-writer
+locking vs foreground commands, poll-interval latency vs CPU.
 
 ---
 
-## 6. Phased roadmap (incremental, ship value early)
+## 6. Cross-cutting concerns (v1)
 
-1. **Backend seam, no behavior change.** Add the `backend` config field + profile defaults;
-   extract `BackendCLI` / `MetadataProvider` interfaces with FS as the sole impl. Pure refactor.
-2. **Read/metadata profiles (CLI).** Implement `obsidian` and `bearcli` read adapters
-   (`search`, `read`/`cat`/`show`, `tags`, `backlinks`) parsing JSON; route `MetadataProvider`
-   through them; demote `.ruin` indices to caches; add availability probing + FS fallback.
-   Delivers live tag/link/backlink queries immediately.
-3. **Backend writes: create + append.** `obsidian create/append`, `bearcli create/append`.
-   Wire `ruin log` through `BackendCLI.Create` under a CLI backend.
-4. **`InsertAtHeading` + opt-in parent baking.** Native on Bear (`edit --insert-after`),
-   `eval`/RMW on Obsidian; fenced idempotent bake; provenance retained. Pointer stays default.
-5. **Materialized embeds + `deps.json`.** Region markers, dependency graph, generated-content
-   exclusion; region replace via `overwrite --base` (Bear) / `eval` (Obsidian). Explicit
-   `ruin embed regen` first.
-6. **`ruin monitor`.** fsnotify (Obsidian files) / `bearcli` hash-poll (Bear) + debounce +
-   **loop guards** + clock tick; wires steps 2–5 into real-time refresh.
-7. **Two-way done-sync.** Obsidian via `tasks` + `^ruin-id`; Bear via `edit --find/--replace`
-   on checkbox lines + `show --fields todos,done`.
-8. **Hardening.** Bear frontmatter-emulation/side-band map; concurrency edge cases; encrypted-
-   note handling; document per-backend limits.
-
-Steps 1–3 are low-risk and independently valuable. Steps 4–7 are the substance; each app CLI
-has native support for most of it (Bear for surgical writes, Obsidian for frontmatter/tasks/
-`eval`), so this is far less "degraded on Bear" than the earlier draft assumed.
+- **Side-band metadata store (`.ruin/bear-meta.json`)** — the heart of v1; keyed by Bear ID,
+  holds uuid mapping, parent/order, inherited-tag provenance, url/aliases; rebuildable from
+  `bearcli list --fields all`.
+- **Identity & resolution** — Bear ID is storage identity; `ResolveNote` maps title →
+  `show --title`, uuid → `bear-meta.json`. Bear titles come from the first heading, so title
+  collisions are possible; prefer IDs internally.
+- **Concurrency & loop safety** — `overwrite --base <hash>` (re-read on rejection), per-note
+  `hash`, `--no-update-modified`. iCloud sync can change notes underneath; treat base-hash
+  rejection as "re-read and retry."
+- **Silent mutations** — `edit`/`overwrite`/`append`/`tags` print nothing; the exit code is the
+  signal. Structured write results (if needed) come from a follow-up `show` or the MCP server.
+- **Encrypted/locked notes** — content inaccessible via `bearcli`; ruin must skip them.
+- **macOS-only** — accepted for v1; the FS backend remains the cross-platform/CI/headless-ruin
+  path. Don't imply Bear works off macOS.
+- **`inherited-tags`** — no Bear equivalent; materialize as real tags and track provenance so a
+  recompute can add/remove them cleanly.
+- **Bear body conventions** — first-heading title, `#hashtags`, attachment link preservation on
+  overwrite; ruin's serializer must honor them.
 
 ---
 
 ## 7. Decisions needed before building
 
-1. **Ship both, or Obsidian-first / Bear-first?** They're differently strong: Obsidian =
-   cross-platform + frontmatter + tasks + `eval`; Bear = surgical edits + concurrency guard +
-   no-app-required, but macOS-only + no frontmatter. Recommend building the seam once and
-   enabling both, leading with whichever you use daily.
-2. **Bear metadata model:** side-band `.ruin` map keyed by Bear ID (recommended) vs encoding
-   ruin metadata as Bear tags/body markers?
-3. **App-down behavior (Obsidian):** fall back to disk reads + queue writes, hard-error, or
-   transparently use the FS backend? (Bear's `bearcli` sidesteps this.)
-4. **Bake vs pointer:** opt-in coexistence (recommended) or replace the pointer model?
-5. **Baked child fate:** delete (loses UUID identity) or keep as `embedded-in:`/side-band
-   provenance stub (recommended)?
-6. **Task/line identity:** Obsidian `^ruin-id` block-refs vs the `tasks` command's own
-   references; Bear is content-hash only (no anchors) — accept duplicate-line ambiguity?
-7. **Done-state canonical form:** `#done` tag vs `[x]` checkbox — which is authoritative, and
-   does flipping one write the other?
+1. **Baked child fate:** keep the child as its own Bear note (provenance + independent
+   editing) or fold it entirely into the parent (true merge, child ceases to exist)?
+   Recommend keeping it and recording the relationship in `bear-meta.json`.
+2. **How much ruin metadata to preserve vs adopt Bear-native:** e.g. drop ruin `uuid` in favor
+   of Bear ID entirely, or keep the `uuid ↔ ID` map for backward-compatible tooling?
+   (Recommend keeping the map in v1.)
+3. **Generated-region marker on Bear** (no invisible comments): a dedicated heading, a fenced
+   code block, or a footnote — least intrusive while reliably machine-locatable?
+4. **Task/line identity** without block-refs: content-hash of the line, or inject a short
+   trailing marker (e.g. `⟨r:ab12⟩`) to disambiguate duplicates?
+5. **Parent on Bear = baking only, or also a side-band pointer** (so `compose`/`tree`/`children`
+   and reparenting still work like today)? Recommend side-band pointer *plus* optional baking.
+6. **Monitor poll interval** and single-writer coordination between `ruin monitor` and
+   foreground `ruin` commands sharing `bear-meta.json`.
 
 ---
 
-## 8. Biggest risks
+## 8. Biggest risks (v1)
 
-- **Obsidian CLI requires the running app and is early-access (1.12+, Catalyst)** — "commands
-  and syntax are likely to change." Pin a version, probe capabilities at runtime, keep the
-  `eval` and FS fallbacks.
-- **Bear has no frontmatter and is macOS-only** — ruin's uuid/parent/inherited-tags model must
-  be re-homed side-band or as tags, and there's no cross-platform/CI path on Bear. Bear line
-  identity is content-based (no block refs), so duplicate task lines are ambiguous.
-- **Watcher feedback loops** (daemon writes retriggering regen) — mitigated by idempotent
-  hash-guarded writes + self-write suppression; Bear's `hash`/`--base`/`--no-update-modified`
-  make this tractable, Obsidian relies on hash-compare.
-- **Behavior/compat drift:** demoting the indices and flipping `tag_frontmatter` under the CLI
-  profiles changes search results, `tags list` counts, and which frontmatter keys ruin writes
-  — real breaking changes for downstream tooling (per the "avoid breaking changes" rule in
-  `CLAUDE.md`).
-- **Two CLIs, two shapes:** the abstraction must not paper over real divergences (Obsidian
-  mutations return data / Bear mutations are silent exit-code-only; Bear `overwrite` needs
-  `--base` via MCP but not via CLI; heading-insert native on Bear, `eval` on Obsidian).
+- **No frontmatter** is the defining constraint: all of ruin's state must move to
+  `bear-meta.json` and/or Bear-native tags/links. Get this model right first — everything else
+  depends on it.
+- **Content-based line identity** (no block refs) makes duplicate task lines ambiguous for
+  two-way sync; needs a disambiguation scheme.
+- **macOS-only, opaque store** — no plain files, no CI path on Bear; the FS backend must remain
+  first-class for those cases.
+- **Monitor feedback loops** — mitigated by `hash`/`--base`/`--no-update-modified` + self-write
+  suppression; build the guard in from day one.
+- **iCloud sync races** — Bear may rewrite notes underneath ruin; rely on `--base` and re-read,
+  don't assume single-writer.
+- **Behavior/compat drift** — demoting `.ruin` indices and retiring `linked-cards` changes
+  search results and `tags list` counts (per the "avoid breaking changes" rule in `CLAUDE.md`);
+  gate behind the `bear` profile.
+
+---
+
+## 9. Later: Obsidian (design for it, don't build it yet)
+
+The seams above (`BackendStore`, `MetadataProvider`, `SourceWatcher`, `deps.json`, generated-
+region markers) are backend-agnostic, so Obsidian can be added later as a third impl without
+reworking the core. What Obsidian would add when we want it:
+
+- **Cross-platform** and **plain `.md` on disk** (headless read + `fsnotify` monitor without
+  the app; the `obsidian` CLI itself requires the running app).
+- **Native frontmatter** via `obsidian property` get/set — a closer home for ruin's uuid/parent/
+  tags/dates than Bear's side-band map (potentially no `*-meta.json` needed).
+- **Semantic tasks** (`obsidian tasks` with completion) and **`eval`** (arbitrary plugin-API JS)
+  as an escape hatch — e.g. heading-targeted insert, which the Obsidian CLI lacks natively.
+- **Invisible `%%…%%` markers** for generated regions.
+
+Trade-offs to revisit then: the Obsidian CLI needs the app running (FS fallback when closed),
+it's early-access (1.12+, syntax may change), and it has no native heading-insert or concurrency
+guard (Bear's `edit`/`--base` are stronger there). Net: Bear is the better *write engine* and
+the better *headless* target for v1; Obsidian is the better *data-model fit* and *cross-platform*
+option to layer on afterward.
 
 ---
 
 *Investigation conducted via a 13-agent workflow (5 codebase readers, 3 research agents, 5
-per-feature design agents), then revised against the two official CLIs — including the full
-`bearcli help all` reference, which corrected the Bear analysis from the obsolete
-`bear://x-callback-url` model to the native `bearcli` DB tool. Code references are current as
-of this branch. CLI details should still be re-verified against `obsidian help` /
-`bearcli help all` at implementation time, as both CLIs are new (2026) and evolving.*
+per-feature design agents), then focused on Bear as v1 against the full `bearcli help all`
+reference. Code references are current as of this branch. Re-verify `bearcli` specifics against
+`bearcli help all` at implementation time, as the CLI is new (2026) and evolving.*
